@@ -364,74 +364,344 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+	scheduledCount := 0
+	publishedCount := 0
+	failedCount := 0
+	var nextRun *time.Time
+	for _, item := range items {
+		switch item.Status {
+		case domain.PostStatusScheduled:
+			scheduledCount++
+			if !item.ScheduledAt.IsZero() && (nextRun == nil || item.ScheduledAt.Before(*nextRun)) {
+				t := item.ScheduledAt
+				nextRun = &t
+			}
+		case domain.PostStatusPublished:
+			publishedCount++
+		case domain.PostStatusFailed:
+			failedCount++
+		}
+	}
+	nextRunLabel := "Sin próxima ejecución"
+	if nextRun != nil {
+		nextRunLabel = nextRun.Local().Format("2006-01-02 15:04 MST")
+	}
 	const tpl = `<!doctype html>
 <html lang="es">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>publisher · schedule</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Sora:wght@500;600;700&display=swap" rel="stylesheet">
   <style>
-    :root { --bg:#f7f7f8; --card:#fff; --text:#111; --muted:#666; --border:#e6e6e6; }
-    body { font-family: ui-sans-serif, -apple-system, sans-serif; margin: 24px; color:var(--text); background:var(--bg); }
-    h1 { margin:0 0 8px 0; }
-    p.lead { margin:0 0 20px 0; color:var(--muted); }
-    .grid { display:grid; grid-template-columns: 1fr; gap:16px; }
-    @media(min-width:1000px){ .grid { grid-template-columns: 2fr 1fr; } }
-    .card { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:14px; }
-    .card h2 { margin:0 0 12px 0; font-size:16px; }
-    table { width:100%; border-collapse: collapse; background:#fff; }
-    th, td { border:1px solid #ddd; padding:8px; font-size:14px; text-align:left; vertical-align: top; }
-    th { background:#f5f5f5; }
-    .badge { padding:2px 8px; border-radius:999px; background:#f0f0f0; display:inline-block; font-size:12px; }
-    .draft-item { border:1px solid var(--border); border-radius:10px; padding:10px; margin-bottom:10px; background:#fff; }
-    .meta { color:var(--muted); font-size:12px; margin-top:4px; }
-    .row { display:flex; gap:8px; align-items:center; margin-top:8px; flex-wrap:wrap; }
-    input[type=datetime-local]{ padding:7px; border:1px solid var(--border); border-radius:8px; }
-    button { border:1px solid #d0d0d0; background:#111; color:#fff; border-radius:8px; padding:7px 10px; cursor:pointer; }
+    :root {
+      --bg: #f3f5fb;
+      --text: #10142a;
+      --muted: #59617c;
+      --card: #ffffff;
+      --border: #dde3f2;
+      --accent: #356dff;
+      --accent-soft: #e9efff;
+      --ok: #0b9f74;
+      --warn: #d97706;
+      --danger: #d64045;
+      --shadow: 0 18px 40px rgba(28, 44, 108, 0.08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Instrument Sans", ui-sans-serif, -apple-system, sans-serif;
+      margin: 0;
+      color: var(--text);
+      background:
+        radial-gradient(1200px 600px at 0% -20%, #e1ebff 0%, transparent 55%),
+        radial-gradient(900px 500px at 100% -10%, #efe7ff 0%, transparent 45%),
+        var(--bg);
+      min-height: 100vh;
+    }
+    .shell {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 28px 20px 36px;
+    }
+    .hero {
+      background: linear-gradient(135deg, #101c49 0%, #192f77 60%, #3357d6 100%);
+      color: #eef2ff;
+      border-radius: 24px;
+      padding: 24px;
+      box-shadow: var(--shadow);
+      margin-bottom: 16px;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::after {
+      content: "";
+      position: absolute;
+      width: 320px;
+      height: 320px;
+      right: -110px;
+      top: -120px;
+      background: radial-gradient(circle, rgba(255,255,255,0.18) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      background: rgba(255,255,255,0.14);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 999px;
+      padding: 4px 10px;
+      margin-bottom: 10px;
+    }
+    h1 {
+      font-family: "Sora", "Instrument Sans", sans-serif;
+      font-size: 28px;
+      letter-spacing: -0.03em;
+      margin: 0 0 8px 0;
+    }
+    p.lead {
+      margin: 0;
+      font-size: 15px;
+      color: #d9e3ff;
+      max-width: 760px;
+    }
+    .stats {
+      margin-top: 16px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    @media(min-width: 860px) {
+      .stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    }
+    .stat {
+      border-radius: 14px;
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.22);
+      padding: 10px 12px;
+    }
+    .stat .label { font-size: 12px; color: #cfdbff; margin-bottom: 3px; }
+    .stat .value { font-size: 18px; font-weight: 700; }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+    @media(min-width: 1040px){
+      .grid { grid-template-columns: minmax(0, 2fr) minmax(340px, 1fr); }
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .card-head {
+      padding: 16px 18px 12px;
+      border-bottom: 1px solid #edf1fb;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .card h2 {
+      margin: 0;
+      font-family: "Sora", "Instrument Sans", sans-serif;
+      font-size: 16px;
+      letter-spacing: -0.01em;
+    }
+    .hint { font-size: 12px; color: var(--muted); }
+    .table-wrap { overflow: auto; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+    }
+    th, td {
+      padding: 11px 12px;
+      font-size: 13px;
+      text-align: left;
+      vertical-align: top;
+      border-bottom: 1px solid #edf1fb;
+    }
+    th {
+      position: sticky;
+      top: 0;
+      background: #f8faff;
+      color: #3f4a69;
+      font-size: 12px;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      z-index: 1;
+    }
+    tr:hover td { background: #fbfcff; }
+    .badge {
+      padding: 3px 9px;
+      border-radius: 999px;
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      border: 1px solid transparent;
+      text-transform: capitalize;
+    }
+    .status-scheduled { background: #eef4ff; color: #2255d8; border-color: #d9e5ff; }
+    .status-published { background: #e8fbf3; color: var(--ok); border-color: #c9f3e2; }
+    .status-failed { background: #ffeef0; color: var(--danger); border-color: #ffd6db; }
+    .status-canceled { background: #f3f4f6; color: #5d6375; border-color: #e4e7ee; }
+    .status-publishing { background: #fff6e7; color: var(--warn); border-color: #ffe4ba; }
+    .status-draft { background: #f0ecff; color: #6a4cd8; border-color: #dfd5ff; }
+    .text-cell { max-width: 520px; line-height: 1.4; }
+    .draft-list {
+      padding: 14px;
+      max-height: 640px;
+      overflow: auto;
+    }
+    .draft-item {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px;
+      margin-bottom: 10px;
+      background: linear-gradient(180deg, #ffffff 0%, #fdfdff 100%);
+    }
+    .draft-title {
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 1.35;
+      margin-bottom: 6px;
+      color: #141a33;
+    }
+    .meta {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 2px;
+    }
+    .row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+    input[type=datetime-local]{
+      min-width: 210px;
+      padding: 8px 10px;
+      border: 1px solid #cfd7ea;
+      border-radius: 9px;
+      background: #fff;
+      color: #11162f;
+      font: inherit;
+      font-size: 13px;
+    }
+    input[type=datetime-local]:focus {
+      outline: none;
+      border-color: #7ca2ff;
+      box-shadow: 0 0 0 3px rgba(75, 127, 255, 0.14);
+    }
+    button {
+      border: 1px solid #2d54c7;
+      background: linear-gradient(180deg, #4b7fff 0%, #356dff 100%);
+      color: #fff;
+      border-radius: 9px;
+      padding: 8px 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
+    }
+    button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 24px rgba(53,109,255,0.22);
+      filter: brightness(1.02);
+    }
+    .empty {
+      border: 1px dashed var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+      color: var(--muted);
+      background: #fbfcff;
+      font-size: 13px;
+    }
   </style>
 </head>
 <body>
-  <h1>Publisher schedule</h1>
-  <p class="lead">Calendario + borradores para preparar ideas sin fecha.</p>
-  <div class="grid">
-    <section class="card">
-      <h2>Programadas</h2>
-      <table>
-        <thead>
-          <tr><th>Fecha</th><th>Plataforma</th><th>Estado</th><th>Texto</th><th>Media</th></tr>
-        </thead>
-        <tbody>
-          {{range .Items}}
-          <tr>
-            <td>{{if .ScheduledAt.IsZero}}-{{else}}{{.ScheduledAt.Format "2006-01-02 15:04:05Z07:00"}}{{end}}</td>
-            <td>{{.Platform}}</td>
-            <td><span class="badge">{{.Status}}</span></td>
-            <td>{{.Text}}</td>
-            <td>{{len .Media}}</td>
-          </tr>
-          {{else}}
-          <tr><td colspan="5">No hay publicaciones en este rango.</td></tr>
-          {{end}}
-        </tbody>
-      </table>
-    </section>
-    <section class="card">
-      <h2>Borradores</h2>
-      {{range .Drafts}}
-      <div class="draft-item">
-        <div><strong>{{.Text}}</strong></div>
-        <div class="meta">ID: {{.ID}} · {{len .Media}} media</div>
-        <form method="post" action="/posts/{{.ID}}/schedule">
-          <div class="row">
-            <input type="datetime-local" name="scheduled_at_local" required />
-            <button type="submit">Programar</button>
-          </div>
-        </form>
+  <div class="shell">
+    <section class="hero">
+      <div class="eyebrow">Publisher Mock Studio</div>
+      <h1>Calendario editorial + banco de ideas</h1>
+      <p class="lead">Guarda ideas como borradores, asígnales fecha cuando estén listas y mantén el calendario controlado en un solo panel.</p>
+      <div class="stats">
+        <div class="stat">
+          <div class="label">Programadas</div>
+          <div class="value">{{.ScheduledCount}}</div>
+        </div>
+        <div class="stat">
+          <div class="label">Borradores</div>
+          <div class="value">{{.DraftCount}}</div>
+        </div>
+        <div class="stat">
+          <div class="label">Publicadas</div>
+          <div class="value">{{.PublishedCount}}</div>
+        </div>
+        <div class="stat">
+          <div class="label">Siguiente ejecución</div>
+          <div class="value" style="font-size:14px;line-height:1.2;">{{.NextRunLabel}}</div>
+        </div>
       </div>
-      {{else}}
-      <div class="meta">No hay borradores aún.</div>
-      {{end}}
     </section>
+    <div class="grid">
+      <section class="card">
+        <div class="card-head">
+          <h2>Programadas</h2>
+          <span class="hint">{{len .Items}} en ventana actual</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Fecha</th><th>Plataforma</th><th>Estado</th><th>Texto</th><th>Media</th></tr>
+            </thead>
+            <tbody>
+              {{range .Items}}
+              <tr>
+                <td>{{if .ScheduledAt.IsZero}}-{{else}}{{.ScheduledAt.Format "2006-01-02 15:04:05Z07:00"}}{{end}}</td>
+                <td>{{.Platform}}</td>
+                <td><span class="badge status-{{.Status}}">{{.Status}}</span></td>
+                <td class="text-cell">{{.Text}}</td>
+                <td>{{len .Media}}</td>
+              </tr>
+              {{else}}
+              <tr><td colspan="5"><div class="empty">No hay publicaciones en este rango todavía.</div></td></tr>
+              {{end}}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <section class="card">
+        <div class="card-head">
+          <h2>Borradores</h2>
+          <span class="hint">Ideas sin fecha</span>
+        </div>
+        <div class="draft-list">
+          {{range .Drafts}}
+          <div class="draft-item">
+            <div class="draft-title">{{.Text}}</div>
+            <div class="meta">ID: {{.ID}} · {{len .Media}} media</div>
+            <form method="post" action="/posts/{{.ID}}/schedule">
+              <div class="row">
+                <input type="datetime-local" name="scheduled_at_local" required />
+                <button type="submit">Programar</button>
+              </div>
+            </form>
+          </div>
+          {{else}}
+          <div class="empty">No hay borradores aún. Crea ideas desde API y aparecerán aquí.</div>
+          {{end}}
+        </div>
+      </section>
+    </div>
   </div>
 </body>
 </html>`
@@ -442,10 +712,23 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	type pageData struct {
-		Items  []domain.Post
-		Drafts []domain.Post
+		Items          []domain.Post
+		Drafts         []domain.Post
+		ScheduledCount int
+		DraftCount     int
+		PublishedCount int
+		FailedCount    int
+		NextRunLabel   string
 	}
-	_ = t.Execute(w, pageData{Items: items, Drafts: drafts})
+	_ = t.Execute(w, pageData{
+		Items:          items,
+		Drafts:         drafts,
+		ScheduledCount: scheduledCount,
+		DraftCount:     len(drafts),
+		PublishedCount: publishedCount,
+		FailedCount:    failedCount,
+		NextRunLabel:   nextRunLabel,
+	})
 }
 
 func parseRange(_ context.Context, fromRaw, toRaw string) (time.Time, time.Time, error) {
