@@ -8,10 +8,21 @@ import (
 )
 
 type Config struct {
-	Port           string
-	DatabasePath   string
-	DataDir        string
-	WorkerInterval time.Duration
+	Port            string
+	DatabasePath    string
+	DataDir         string
+	WorkerInterval  time.Duration
+	PublisherDriver string
+	X               XConfig
+}
+
+type XConfig struct {
+	APIBaseURL        string
+	UploadBaseURL     string
+	APIKey            string
+	APIKeySecret      string
+	AccessToken       string
+	AccessTokenSecret string
 }
 
 func Load() (Config, error) {
@@ -25,10 +36,19 @@ func Load() (Config, error) {
 	}
 
 	cfg := Config{
-		Port:           getenv("PORT", "8080"),
-		DatabasePath:   getenv("DATABASE_PATH", "publisher.db"),
-		DataDir:        getenv("DATA_DIR", "data"),
-		WorkerInterval: interval,
+		Port:            getenv("PORT", "8080"),
+		DatabasePath:    getenv("DATABASE_PATH", "publisher.db"),
+		DataDir:         getenv("DATA_DIR", "data"),
+		WorkerInterval:  interval,
+		PublisherDriver: getenv("PUBLISHER_DRIVER", "mock"),
+		X: XConfig{
+			APIBaseURL:        getenv("X_API_BASE_URL", "https://api.twitter.com"),
+			UploadBaseURL:     getenv("X_UPLOAD_BASE_URL", "https://upload.twitter.com"),
+			APIKey:            os.Getenv("X_API_KEY"),
+			APIKeySecret:      os.Getenv("X_API_SECRET"),
+			AccessToken:       os.Getenv("X_ACCESS_TOKEN"),
+			AccessTokenSecret: os.Getenv("X_ACCESS_TOKEN_SECRET"),
+		},
 	}
 	return cfg, nil
 }

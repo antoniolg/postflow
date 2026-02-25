@@ -50,8 +50,8 @@ Estados de post:
 4. UI y API muestran el calendario actualizado
 
 ## Roadmap inmediato (v1.1)
-- Publicación real en X (OAuth user context)
 - Upload chunked de media para vídeos largos
 - Reintentos con política configurable y DLQ
 - Idempotency key en `POST /posts`
 - Auth por token para API
+- Migración de `statuses/update` a endpoint de creación en X API v2 cuando el entorno esté listo

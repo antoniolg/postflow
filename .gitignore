@@ -1,5 +1,5 @@
 .env
-publisher
+/publisher
 publisher.db
 publisher.db-*
 data/
