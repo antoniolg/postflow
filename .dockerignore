@@ -1,0 +1,9 @@
+.git
+.gitignore
+publisher
+publisher.db
+publisher.db-*
+data/
+.tmp/
+.DS_Store
+*.log

@@ -1,0 +1,39 @@
+services:
+  publisher:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: antoniolg/publisher:latest
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: "8080"
+      DATABASE_PATH: /srv/data/publisher.db
+      DATA_DIR: /srv/data/media
+      LOG_LEVEL: info
+      WORKER_INTERVAL_SECONDS: "30"
+      RETRY_BACKOFF_SECONDS: "30"
+      DEFAULT_MAX_RETRIES: "3"
+      RATE_LIMIT_RPM: "120"
+      API_TOKEN: ${API_TOKEN:-}
+      UI_BASIC_USER: ${UI_BASIC_USER:-}
+      UI_BASIC_PASS: ${UI_BASIC_PASS:-}
+      PUBLISHER_DRIVER: ${PUBLISHER_DRIVER:-mock}
+      X_API_KEY: ${X_API_KEY:-}
+      X_API_SECRET: ${X_API_SECRET:-}
+      X_ACCESS_TOKEN: ${X_ACCESS_TOKEN:-}
+      X_ACCESS_TOKEN_SECRET: ${X_ACCESS_TOKEN_SECRET:-}
+      X_API_BASE_URL: ${X_API_BASE_URL:-https://api.twitter.com}
+      X_UPLOAD_BASE_URL: ${X_UPLOAD_BASE_URL:-https://upload.twitter.com}
+    volumes:
+      - publisher_data:/srv/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  publisher_data:
