@@ -149,3 +149,9 @@ go run ./cmd/publisher
 
 - MVP: `docs/specs/mvp.md`
 - OpenAPI: `docs/specs/openapi.yaml`
+- Coolify deploy runbook: `docs/coolify-deploy.md`
+
+## Backup scripts
+
+- Backup: `scripts/backup.sh`
+- Restore: `scripts/restore.sh`
