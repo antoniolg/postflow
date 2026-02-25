@@ -8,12 +8,14 @@ import (
 )
 
 type Config struct {
-	Port            string
-	DatabasePath    string
-	DataDir         string
-	WorkerInterval  time.Duration
-	PublisherDriver string
-	X               XConfig
+	Port              string
+	DatabasePath      string
+	DataDir           string
+	WorkerInterval    time.Duration
+	RetryBackoff      time.Duration
+	DefaultMaxRetries int
+	PublisherDriver   string
+	X                 XConfig
 }
 
 type XConfig struct {
@@ -35,12 +37,32 @@ func Load() (Config, error) {
 		interval = time.Duration(v) * time.Second
 	}
 
+	retryBackoff := 30 * time.Second
+	if raw := os.Getenv("RETRY_BACKOFF_SECONDS"); raw != "" {
+		v, err := strconv.Atoi(raw)
+		if err != nil || v <= 0 {
+			return Config{}, fmt.Errorf("invalid RETRY_BACKOFF_SECONDS: %q", raw)
+		}
+		retryBackoff = time.Duration(v) * time.Second
+	}
+
+	defaultMaxRetries := 3
+	if raw := os.Getenv("DEFAULT_MAX_RETRIES"); raw != "" {
+		v, err := strconv.Atoi(raw)
+		if err != nil || v <= 0 {
+			return Config{}, fmt.Errorf("invalid DEFAULT_MAX_RETRIES: %q", raw)
+		}
+		defaultMaxRetries = v
+	}
+
 	cfg := Config{
-		Port:            getenv("PORT", "8080"),
-		DatabasePath:    getenv("DATABASE_PATH", "publisher.db"),
-		DataDir:         getenv("DATA_DIR", "data"),
-		WorkerInterval:  interval,
-		PublisherDriver: getenv("PUBLISHER_DRIVER", "mock"),
+		Port:              getenv("PORT", "8080"),
+		DatabasePath:      getenv("DATABASE_PATH", "publisher.db"),
+		DataDir:           getenv("DATA_DIR", "data"),
+		WorkerInterval:    interval,
+		RetryBackoff:      retryBackoff,
+		DefaultMaxRetries: defaultMaxRetries,
+		PublisherDriver:   getenv("PUBLISHER_DRIVER", "mock"),
 		X: XConfig{
 			APIBaseURL:        getenv("X_API_BASE_URL", "https://api.twitter.com"),
 			UploadBaseURL:     getenv("X_UPLOAD_BASE_URL", "https://upload.twitter.com"),

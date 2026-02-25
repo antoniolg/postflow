@@ -20,6 +20,8 @@ Variables opcionales:
 - `DATABASE_PATH` (default: `publisher.db`)
 - `DATA_DIR` (default: `data`)
 - `WORKER_INTERVAL_SECONDS` (default: `30`)
+- `RETRY_BACKOFF_SECONDS` (default: `30`)
+- `DEFAULT_MAX_RETRIES` (default: `3`)
 - `PUBLISHER_DRIVER` (`mock` por defecto, `x` para publicar real)
 - `X_API_BASE_URL` (default: `https://api.twitter.com`)
 - `X_UPLOAD_BASE_URL` (default: `https://upload.twitter.com`)
@@ -44,11 +46,13 @@ curl -X POST http://localhost:8080/media \
 ```bash
 curl -X POST http://localhost:8080/posts \
   -H 'content-type: application/json' \
+  -H 'Idempotency-Key: short-2026-02-25-001' \
   -d '{
     "platform": "x",
     "text": "Nuevo short",
     "scheduled_at": "2026-02-26T10:00:00Z",
-    "media_ids": ["med_xxx"]
+    "media_ids": ["med_xxx"],
+    "max_attempts": 3
   }'
 ```
 
@@ -82,6 +86,12 @@ go run ./cmd/publisher
 Notas:
 - Usa flujo chunked para media (`INIT`/`APPEND`/`FINALIZE`/`STATUS`) y luego `statuses/update`.
 - Si falta cualquier credencial, el proceso falla al arrancar (fail fast).
+
+## Fiabilidad (v0.2)
+
+- Reintentos con backoff exponencial (`RETRY_BACKOFF_SECONDS`).
+- DLQ local en SQLite (`dead_letters`) cuando se supera `max_attempts`.
+- Idempotencia en `POST /posts` usando header `Idempotency-Key`.
 
 ## Specs
 

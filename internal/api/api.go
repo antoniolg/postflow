@@ -19,8 +19,9 @@ import (
 )
 
 type Server struct {
-	Store   *db.Store
-	DataDir string
+	Store             *db.Store
+	DataDir           string
+	DefaultMaxRetries int
 }
 
 func (s Server) Handler() http.Handler {
@@ -119,6 +120,7 @@ type createPostRequest struct {
 	Text        string   `json:"text"`
 	ScheduledAt string   `json:"scheduled_at"`
 	MediaIDs    []string `json:"media_ids"`
+	MaxAttempts int      `json:"max_attempts"`
 }
 
 func (s Server) handleCreatePost(w http.ResponseWriter, r *http.Request) {
@@ -148,17 +150,38 @@ func (s Server) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	created, err := s.Store.CreatePost(r.Context(), domain.Post{
-		Platform:    platform,
-		Text:        req.Text,
-		Status:      domain.PostStatusScheduled,
-		ScheduledAt: scheduledAt.UTC(),
-	}, req.MediaIDs)
+	maxAttempts := req.MaxAttempts
+	if maxAttempts <= 0 {
+		maxAttempts = s.DefaultMaxRetries
+		if maxAttempts <= 0 {
+			maxAttempts = 3
+		}
+	}
+	idempotencyKey := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
+	if len(idempotencyKey) > 128 {
+		writeError(w, http.StatusBadRequest, errors.New("Idempotency-Key too long (max 128 chars)"))
+		return
+	}
+	result, err := s.Store.CreatePost(r.Context(), db.CreatePostParams{
+		Post: domain.Post{
+			Platform:    platform,
+			Text:        req.Text,
+			Status:      domain.PostStatusScheduled,
+			ScheduledAt: scheduledAt.UTC(),
+			MaxAttempts: maxAttempts,
+		},
+		MediaIDs:       req.MediaIDs,
+		IdempotencyKey: idempotencyKey,
+	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, created)
+	if result.Created {
+		writeJSON(w, http.StatusCreated, result.Post)
+		return
+	}
+	writeJSON(w, http.StatusOK, result.Post)
 }
 
 func (s Server) handleScheduleJSON(w http.ResponseWriter, r *http.Request) {

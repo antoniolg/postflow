@@ -23,8 +23,8 @@ const (
 )
 
 type XConfig struct {
-	APIBaseURL    string
-	UploadBaseURL string
+	APIBaseURL        string
+	UploadBaseURL     string
 	APIKey            string
 	APIKeySecret      string
 	AccessToken       string
@@ -86,9 +86,9 @@ func (c *XClient) uploadChunked(ctx context.Context, media domain.Media) (string
 
 	mediaCategory := mediaCategoryFor(media)
 	initParams := map[string]string{
-		"command":       "INIT",
-		"total_bytes":   fmt.Sprintf("%d", media.SizeBytes),
-		"media_type":    media.MimeType,
+		"command":        "INIT",
+		"total_bytes":    fmt.Sprintf("%d", media.SizeBytes),
+		"media_type":     media.MimeType,
 		"media_category": mediaCategory,
 	}
 
@@ -130,7 +130,7 @@ func (c *XClient) uploadChunked(ctx context.Context, media domain.Media) (string
 }
 
 type uploadResponse struct {
-	MediaIDString string           `json:"media_id_string"`
+	MediaIDString  string          `json:"media_id_string"`
 	ProcessingInfo *processingInfo `json:"processing_info"`
 }
 

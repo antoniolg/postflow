@@ -16,7 +16,7 @@ import (
 	"github.com/antoniolg/publisher/internal/db"
 	"github.com/antoniolg/publisher/internal/publisher"
 	"github.com/antoniolg/publisher/internal/worker"
-	)
+)
 
 func main() {
 	cfg, err := config.Load()
@@ -35,8 +35,9 @@ func main() {
 	defer store.Close()
 
 	apiServer := api.Server{
-		Store:   store,
-		DataDir: cfg.DataDir,
+		Store:             store,
+		DataDir:           cfg.DataDir,
+		DefaultMaxRetries: cfg.DefaultMaxRetries,
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -48,9 +49,10 @@ func main() {
 	}
 
 	w := worker.Worker{
-		Store:    store,
-		Client:   client,
-		Interval: cfg.WorkerInterval,
+		Store:        store,
+		Client:       client,
+		Interval:     cfg.WorkerInterval,
+		RetryBackoff: cfg.RetryBackoff,
 	}
 	go w.Start(ctx)
 
@@ -81,8 +83,8 @@ func buildPublisherClient(cfg config.Config) (publisher.Client, error) {
 		return publisher.MockClient{}, nil
 	case "x":
 		client, err := publisher.NewXClient(publisher.XConfig{
-			APIBaseURL:    cfg.X.APIBaseURL,
-			UploadBaseURL: cfg.X.UploadBaseURL,
+			APIBaseURL:        cfg.X.APIBaseURL,
+			UploadBaseURL:     cfg.X.UploadBaseURL,
 			APIKey:            cfg.X.APIKey,
 			APIKeySecret:      cfg.X.APIKeySecret,
 			AccessToken:       cfg.X.AccessToken,

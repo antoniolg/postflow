@@ -10,9 +10,10 @@ import (
 )
 
 type Worker struct {
-	Store    *db.Store
-	Client   publisher.Client
-	Interval time.Duration
+	Store        *db.Store
+	Client       publisher.Client
+	Interval     time.Duration
+	RetryBackoff time.Duration
 }
 
 func (w Worker) Start(ctx context.Context) {
@@ -39,7 +40,7 @@ func (w Worker) runOnce(ctx context.Context) {
 	for _, p := range posts {
 		externalID, err := w.Client.Publish(ctx, p)
 		if err != nil {
-			_ = w.Store.MarkFailed(ctx, p.ID, err)
+			_ = w.Store.RecordPublishFailure(ctx, p.ID, err, w.RetryBackoff)
 			log.Printf("worker: publish %s failed: %v", p.ID, err)
 			continue
 		}

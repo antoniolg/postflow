@@ -10,6 +10,8 @@ Servicio mínimo para programar publicaciones en redes, optimizado para recursos
 - Worker que ejecuta publicaciones pendientes
 - Vista de calendario informativa (solo lectura)
 - Cancelación de publicaciones futuras
+- Reintentos con backoff + DLQ
+- Idempotency key en creación de posts
 
 ## No objetivo v1
 - Editor web completo
@@ -51,7 +53,5 @@ Estados de post:
 
 ## Roadmap inmediato (v1.1)
 - Upload chunked de media para vídeos largos
-- Reintentos con política configurable y DLQ
-- Idempotency key en `POST /posts`
 - Auth por token para API
 - Migración de `statuses/update` a endpoint de creación en X API v2 cuando el entorno esté listo

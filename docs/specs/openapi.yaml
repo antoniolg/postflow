@@ -54,6 +54,13 @@ paths:
   /posts:
     post:
       summary: Crea una publicación programada
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: false
+          schema:
+            type: string
+            maxLength: 128
       requestBody:
         required: true
         content:
@@ -70,6 +77,10 @@ paths:
                 scheduled_at:
                   type: string
                   format: date-time
+                max_attempts:
+                  type: integer
+                  minimum: 1
+                  default: 3
                 media_ids:
                   type: array
                   items:
@@ -77,6 +88,12 @@ paths:
       responses:
         '201':
           description: Post creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Post'
+        '200':
+          description: Repetición idempotente (devuelve el post existente)
           content:
             application/json:
               schema:
@@ -188,6 +205,17 @@ components:
         scheduled_at:
           type: string
           format: date-time
+        next_retry_at:
+          type: string
+          format: date-time
+          nullable: true
+        attempts:
+          type: integer
+        max_attempts:
+          type: integer
+        idempotency_key:
+          type: string
+          nullable: true
         published_at:
           type: string
           format: date-time
