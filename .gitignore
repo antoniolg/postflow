@@ -1,0 +1,7 @@
+.env
+publisher
+publisher.db
+publisher.db-*
+data/
+.tmp/
+.DS_Store

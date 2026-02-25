@@ -1,0 +1,210 @@
+openapi: 3.1.0
+info:
+  title: Publisher API
+  version: 0.1.0
+  description: API mínima para programación de publicaciones en X orientada a consumo por LLMs.
+servers:
+  - url: http://localhost:8080
+paths:
+  /healthz:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+  /media:
+    post:
+      summary: Sube un archivo multimedia
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                platform:
+                  type: string
+                  enum: [x]
+                  default: x
+                kind:
+                  type: string
+                  enum: [video, image]
+                  default: video
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: Media creada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Media'
+        '400':
+          $ref: '#/components/responses/Error'
+  /posts:
+    post:
+      summary: Crea una publicación programada
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [platform, text, scheduled_at]
+              properties:
+                platform:
+                  type: string
+                  enum: [x]
+                text:
+                  type: string
+                scheduled_at:
+                  type: string
+                  format: date-time
+                media_ids:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '201':
+          description: Post creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Post'
+        '400':
+          $ref: '#/components/responses/Error'
+  /schedule:
+    get:
+      summary: Lista publicaciones por rango
+      parameters:
+        - in: query
+          name: from
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: to
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Lista de publicaciones
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  from:
+                    type: string
+                    format: date-time
+                  to:
+                    type: string
+                    format: date-time
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Post'
+        '400':
+          $ref: '#/components/responses/Error'
+  /posts/{id}/cancel:
+    post:
+      summary: Cancela una publicación en estado scheduled
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Cancelado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  status:
+                    type: string
+                    example: canceled
+        '409':
+          $ref: '#/components/responses/Error'
+components:
+  responses:
+    Error:
+      description: Error de validación o negocio
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+  schemas:
+    Media:
+      type: object
+      properties:
+        id:
+          type: string
+        platform:
+          type: string
+        kind:
+          type: string
+        original_name:
+          type: string
+        storage_path:
+          type: string
+        mime_type:
+          type: string
+        size_bytes:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+    Post:
+      type: object
+      properties:
+        id:
+          type: string
+        platform:
+          type: string
+        text:
+          type: string
+        status:
+          type: string
+          enum: [scheduled, publishing, published, failed, canceled]
+        scheduled_at:
+          type: string
+          format: date-time
+        published_at:
+          type: string
+          format: date-time
+          nullable: true
+        external_id:
+          type: string
+          nullable: true
+        error:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        media:
+          type: array
+          items:
+            $ref: '#/components/schemas/Media'
