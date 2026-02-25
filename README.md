@@ -23,6 +23,15 @@ La app carga automáticamente variables desde `.env` si existe.
 - Las variables exportadas en shell tienen prioridad sobre `.env`.
 - Puedes usar otro fichero con `ENV_FILE=/ruta/a/otro.env`.
 
+## Desarrollo con hot reload
+
+Con `air` el servidor recompila/reinicia al guardar cambios:
+
+```bash
+go install github.com/air-verse/air@latest
+air
+```
+
 Variables opcionales:
 - `PORT` (default: `8080`)
 - `DATABASE_PATH` (default: `publisher.db`)
