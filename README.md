@@ -122,7 +122,7 @@ go run ./cmd/publisher
 ```
 
 Notas:
-- Usa flujo chunked para media (`INIT`/`APPEND`/`FINALIZE`/`STATUS`) y luego `statuses/update`.
+- Usa flujo chunked para media (`INIT`/`APPEND`/`FINALIZE`/`STATUS`) y luego `POST /2/tweets`.
 - Si falta cualquier credencial, el proceso falla al arrancar (fail fast).
 
 ## Fiabilidad (v0.2)

@@ -59,4 +59,4 @@ Estados de post:
 ## Roadmap inmediato (v1.1)
 - Upload chunked de media para vídeos largos
 - Auth por token para API
-- Migración de `statuses/update` a endpoint de creación en X API v2 cuando el entorno esté listo
+- Publicación por `POST /2/tweets` con upload multimedia v1.1 compatible

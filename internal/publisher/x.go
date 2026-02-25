@@ -263,25 +263,26 @@ func (c *XClient) waitForProcessing(ctx context.Context, mediaID string, info *p
 }
 
 func (c *XClient) createStatus(ctx context.Context, text string, mediaIDs []string) (string, error) {
-	form := url.Values{}
-	form.Set("status", text)
-	if len(mediaIDs) > 0 {
-		form.Set("media_ids", strings.Join(mediaIDs, ","))
+	payload := map[string]any{
+		"text": text,
 	}
-
-	endpoint := c.apiBaseURL + "/1.1/statuses/update.json"
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(form.Encode()))
+	if len(mediaIDs) > 0 {
+		payload["media"] = map[string]any{
+			"media_ids": mediaIDs,
+		}
+	}
+	bodyJSON, err := json.Marshal(payload)
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	sigParams := map[string]string{}
-	for k, v := range form {
-		if len(v) > 0 {
-			sigParams[k] = v[0]
-		}
+
+	endpoint := c.apiBaseURL + "/2/tweets"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(bodyJSON))
+	if err != nil {
+		return "", err
 	}
-	if err := signRequest(req, c.signer, sigParams); err != nil {
+	req.Header.Set("Content-Type", "application/json")
+	if err := signRequest(req, c.signer, nil); err != nil {
 		return "", err
 	}
 
@@ -293,14 +294,20 @@ func (c *XClient) createStatus(ctx context.Context, text string, mediaIDs []stri
 
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 	if resp.StatusCode >= 300 {
-		return "", fmt.Errorf("x create status failed: status=%d body=%s", resp.StatusCode, string(body))
+		return "", fmt.Errorf("x create tweet failed: status=%d body=%s", resp.StatusCode, string(body))
 	}
 	var out struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
 		IDStr string `json:"id_str"`
 		ID    any    `json:"id"`
 	}
 	if err := json.Unmarshal(body, &out); err != nil {
 		return "", err
+	}
+	if out.Data.ID != "" {
+		return out.Data.ID, nil
 	}
 	if out.IDStr != "" {
 		return out.IDStr, nil
@@ -308,7 +315,7 @@ func (c *XClient) createStatus(ctx context.Context, text string, mediaIDs []stri
 	if out.ID != nil {
 		return fmt.Sprintf("%v", out.ID), nil
 	}
-	return "", errors.New("x create status response missing id")
+	return "", errors.New("x create tweet response missing id")
 }
 
 func mediaCategoryFor(m domain.Media) string {
