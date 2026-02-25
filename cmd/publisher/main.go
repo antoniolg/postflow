@@ -38,6 +38,10 @@ func main() {
 		Store:             store,
 		DataDir:           cfg.DataDir,
 		DefaultMaxRetries: cfg.DefaultMaxRetries,
+		RateLimitRPM:      cfg.RateLimitRPM,
+		APIToken:          cfg.APIToken,
+		UIBasicUser:       cfg.UIBasicUser,
+		UIBasicPass:       cfg.UIBasicPass,
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

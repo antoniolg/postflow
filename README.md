@@ -22,6 +22,10 @@ Variables opcionales:
 - `WORKER_INTERVAL_SECONDS` (default: `30`)
 - `RETRY_BACKOFF_SECONDS` (default: `30`)
 - `DEFAULT_MAX_RETRIES` (default: `3`)
+- `RATE_LIMIT_RPM` (default: `120`, `0` para desactivar)
+- `API_TOKEN` (Bearer o `X-API-Key`)
+- `UI_BASIC_USER`
+- `UI_BASIC_PASS`
 - `PUBLISHER_DRIVER` (`mock` por defecto, `x` para publicar real)
 - `X_API_BASE_URL` (default: `https://api.twitter.com`)
 - `X_UPLOAD_BASE_URL` (default: `https://upload.twitter.com`)
@@ -47,6 +51,20 @@ curl -X POST http://localhost:8080/media \
 curl -X POST http://localhost:8080/posts \
   -H 'content-type: application/json' \
   -H 'Idempotency-Key: short-2026-02-25-001' \
+  -d '{
+    "platform": "x",
+    "text": "Nuevo short",
+    "scheduled_at": "2026-02-26T10:00:00Z",
+    "media_ids": ["med_xxx"],
+    "max_attempts": 3
+  }'
+```
+
+### 2.1) Validar post (dry-run, no guarda)
+
+```bash
+curl -X POST http://localhost:8080/posts/validate \
+  -H 'content-type: application/json' \
   -d '{
     "platform": "x",
     "text": "Nuevo short",
@@ -105,6 +123,20 @@ Notas:
 - DLQ local en SQLite (`dead_letters`) cuando se supera `max_attempts`.
 - API de rescate: `GET /dlq` y `POST /dlq/{id}/requeue`.
 - Idempotencia en `POST /posts` usando header `Idempotency-Key`.
+
+## Cerrar interfaz pública (simple)
+
+Sin login completo, pero cerrada y funcional:
+
+```bash
+export API_TOKEN='pon-aqui-un-token-largo'
+export UI_BASIC_USER='antonio'
+export UI_BASIC_PASS='otra-clave-larga'
+go run ./cmd/publisher
+```
+
+- UI en navegador: pedirá Basic Auth.
+- API para LLMs/scripts: `Authorization: Bearer $API_TOKEN` o `X-API-Key: $API_TOKEN`.
 
 ## Specs
 

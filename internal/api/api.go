@@ -23,6 +23,10 @@ type Server struct {
 	Store             *db.Store
 	DataDir           string
 	DefaultMaxRetries int
+	RateLimitRPM      int
+	APIToken          string
+	UIBasicUser       string
+	UIBasicPass       string
 }
 
 func (s Server) Handler() http.Handler {
@@ -30,12 +34,13 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("GET /healthz", s.handleHealthz)
 	mux.HandleFunc("POST /media", s.handleUploadMedia)
 	mux.HandleFunc("POST /posts", s.handleCreatePost)
+	mux.HandleFunc("POST /posts/validate", s.handleValidatePost)
 	mux.HandleFunc("GET /schedule", s.handleScheduleJSON)
 	mux.HandleFunc("POST /posts/", s.handleCancelPost)
 	mux.HandleFunc("GET /dlq", s.handleListDLQ)
 	mux.HandleFunc("POST /dlq/", s.handleRequeueDLQ)
 	mux.HandleFunc("GET /", s.handleScheduleHTML)
-	return mux
+	return s.withMiddlewares(mux)
 }
 
 func (s Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {

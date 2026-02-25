@@ -14,6 +14,10 @@ type Config struct {
 	WorkerInterval    time.Duration
 	RetryBackoff      time.Duration
 	DefaultMaxRetries int
+	RateLimitRPM      int
+	APIToken          string
+	UIBasicUser       string
+	UIBasicPass       string
 	PublisherDriver   string
 	X                 XConfig
 }
@@ -54,6 +58,14 @@ func Load() (Config, error) {
 		}
 		defaultMaxRetries = v
 	}
+	rateLimitRPM := 120
+	if raw := os.Getenv("RATE_LIMIT_RPM"); raw != "" {
+		v, err := strconv.Atoi(raw)
+		if err != nil || v < 0 {
+			return Config{}, fmt.Errorf("invalid RATE_LIMIT_RPM: %q", raw)
+		}
+		rateLimitRPM = v
+	}
 
 	cfg := Config{
 		Port:              getenv("PORT", "8080"),
@@ -62,6 +74,10 @@ func Load() (Config, error) {
 		WorkerInterval:    interval,
 		RetryBackoff:      retryBackoff,
 		DefaultMaxRetries: defaultMaxRetries,
+		RateLimitRPM:      rateLimitRPM,
+		APIToken:          os.Getenv("API_TOKEN"),
+		UIBasicUser:       os.Getenv("UI_BASIC_USER"),
+		UIBasicPass:       os.Getenv("UI_BASIC_PASS"),
 		PublisherDriver:   getenv("PUBLISHER_DRIVER", "mock"),
 		X: XConfig{
 			APIBaseURL:        getenv("X_API_BASE_URL", "https://api.twitter.com"),

@@ -5,6 +5,10 @@ info:
   description: API mínima para programación de publicaciones en X orientada a consumo por LLMs.
 servers:
   - url: http://localhost:8080
+security:
+  - bearerAuth: []
+  - apiKeyAuth: []
+  - basicAuth: []
 paths:
   /healthz:
     get:
@@ -100,6 +104,73 @@ paths:
                 $ref: '#/components/schemas/Post'
         '400':
           $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+  /posts/validate:
+    post:
+      summary: Valida una publicación sin persistirla (dry-run)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [platform, text, scheduled_at]
+              properties:
+                platform:
+                  type: string
+                  enum: [x]
+                text:
+                  type: string
+                scheduled_at:
+                  type: string
+                  format: date-time
+                max_attempts:
+                  type: integer
+                  minimum: 1
+                  default: 3
+                media_ids:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Validación correcta
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valid:
+                    type: boolean
+                  normalized:
+                    type: object
+                    properties:
+                      platform:
+                        type: string
+                      text:
+                        type: string
+                      scheduled_at:
+                        type: string
+                        format: date-time
+                      media_ids:
+                        type: array
+                        items:
+                          type: string
+                      max_attempts:
+                        type: integer
+                  warnings:
+                    type: array
+                    items:
+                      type: string
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
   /schedule:
     get:
       summary: Lista publicaciones por rango
@@ -158,6 +229,8 @@ paths:
                     example: canceled
         '409':
           $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
   /dlq:
     get:
       summary: Lista entradas en dead-letter queue
@@ -186,6 +259,8 @@ paths:
                       $ref: '#/components/schemas/DeadLetter'
         '400':
           $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
   /dlq/{id}/requeue:
     post:
       summary: Reencola un post que estaba en DLQ
@@ -211,7 +286,20 @@ paths:
           $ref: '#/components/responses/Error'
         '409':
           $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+    basicAuth:
+      type: http
+      scheme: basic
   responses:
     Error:
       description: Error de validación o negocio

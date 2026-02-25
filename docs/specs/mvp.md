@@ -12,6 +12,8 @@ Servicio mínimo para programar publicaciones en redes, optimizado para recursos
 - Cancelación de publicaciones futuras
 - Reintentos con backoff + DLQ
 - Idempotency key en creación de posts
+- Auth simple por token / Basic Auth
+- Rate limit básico por cliente
 
 ## No objetivo v1
 - Editor web completo
@@ -40,6 +42,7 @@ Estados de post:
 ## Endpoints MVP
 - `POST /media`
 - `POST /posts`
+- `POST /posts/validate`
 - `GET /schedule`
 - `POST /posts/{id}/cancel`
 - `GET /dlq`
