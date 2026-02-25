@@ -97,3 +97,22 @@ func TestRateLimitMiddlewareLimitsRequests(t *testing.T) {
 		t.Fatalf("expected second request 429, got %d", w.Code)
 	}
 }
+
+func TestRequestIDHeaderIsAlwaysPresent(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	req := httptest.NewRequest(http.MethodGet, "/schedule", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Header().Get("X-Request-Id") == "" {
+		t.Fatalf("expected X-Request-Id header to be set")
+	}
+}

@@ -18,6 +18,7 @@ type Config struct {
 	APIToken          string
 	UIBasicUser       string
 	UIBasicPass       string
+	LogLevel          string
 	PublisherDriver   string
 	X                 XConfig
 }
@@ -78,6 +79,7 @@ func Load() (Config, error) {
 		APIToken:          os.Getenv("API_TOKEN"),
 		UIBasicUser:       os.Getenv("UI_BASIC_USER"),
 		UIBasicPass:       os.Getenv("UI_BASIC_PASS"),
+		LogLevel:          getenv("LOG_LEVEL", "info"),
 		PublisherDriver:   getenv("PUBLISHER_DRIVER", "mock"),
 		X: XConfig{
 			APIBaseURL:        getenv("X_API_BASE_URL", "https://api.twitter.com"),

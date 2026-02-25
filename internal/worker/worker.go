@@ -2,7 +2,7 @@ package worker
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/antoniolg/publisher/internal/db"
@@ -34,18 +34,23 @@ func (w Worker) Start(ctx context.Context) {
 func (w Worker) runOnce(ctx context.Context) {
 	posts, err := w.Store.ClaimDuePosts(ctx, 25)
 	if err != nil {
-		log.Printf("worker: claim due posts: %v", err)
+		slog.Error("worker claim due posts failed", "error", err)
 		return
+	}
+	if len(posts) > 0 {
+		slog.Info("worker claimed posts", "count", len(posts))
 	}
 	for _, p := range posts {
 		externalID, err := w.Client.Publish(ctx, p)
 		if err != nil {
 			_ = w.Store.RecordPublishFailure(ctx, p.ID, err, w.RetryBackoff)
-			log.Printf("worker: publish %s failed: %v", p.ID, err)
+			slog.Error("worker publish failed", "post_id", p.ID, "platform", p.Platform, "attempt", p.Attempts+1, "error", err)
 			continue
 		}
 		if err := w.Store.MarkPublished(ctx, p.ID, externalID); err != nil {
-			log.Printf("worker: mark published %s failed: %v", p.ID, err)
+			slog.Error("worker mark published failed", "post_id", p.ID, "external_id", externalID, "error", err)
+			continue
 		}
+		slog.Info("worker published post", "post_id", p.ID, "platform", p.Platform, "external_id", externalID)
 	}
 }

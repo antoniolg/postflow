@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -14,6 +14,7 @@ import (
 	"github.com/antoniolg/publisher/internal/api"
 	"github.com/antoniolg/publisher/internal/config"
 	"github.com/antoniolg/publisher/internal/db"
+	"github.com/antoniolg/publisher/internal/observability"
 	"github.com/antoniolg/publisher/internal/publisher"
 	"github.com/antoniolg/publisher/internal/worker"
 )
@@ -21,16 +22,19 @@ import (
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("load config: %v", err)
+		panic(fmt.Sprintf("load config: %v", err))
 	}
+	observability.Setup(cfg.LogLevel)
 
 	if err := os.MkdirAll(cfg.DataDir, 0o755); err != nil {
-		log.Fatalf("mkdir data dir: %v", err)
+		slog.Error("mkdir data dir", "error", err, "data_dir", cfg.DataDir)
+		os.Exit(1)
 	}
 
 	store, err := db.Open(cfg.DatabasePath)
 	if err != nil {
-		log.Fatalf("open database: %v", err)
+		slog.Error("open database", "error", err, "database_path", cfg.DatabasePath)
+		os.Exit(1)
 	}
 	defer store.Close()
 
@@ -49,7 +53,8 @@ func main() {
 
 	client, err := buildPublisherClient(cfg)
 	if err != nil {
-		log.Fatalf("publisher client: %v", err)
+		slog.Error("build publisher client", "error", err, "publisher_driver", cfg.PublisherDriver)
+		os.Exit(1)
 	}
 
 	w := worker.Worker{
@@ -75,9 +80,10 @@ func main() {
 		_ = httpServer.Shutdown(shutdownCtx)
 	}()
 
-	log.Printf("publisher listening on http://localhost:%s", cfg.Port)
+	slog.Info("publisher listening", "addr", ":"+cfg.Port, "log_level", cfg.LogLevel)
 	if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("http server: %v", err)
+		slog.Error("http server failed", "error", err)
+		os.Exit(1)
 	}
 }
 

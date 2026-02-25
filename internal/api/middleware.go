@@ -1,7 +1,10 @@
 package api
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"strings"
@@ -33,7 +36,30 @@ func (s Server) withMiddlewares(next http.Handler) http.Handler {
 	h := next
 	h = s.authMiddleware(h)
 	h = s.rateLimitMiddleware(h)
+	h = s.requestLoggingMiddleware(h)
 	return h
+}
+
+func (s Server) requestLoggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		startedAt := time.Now().UTC()
+		requestID := strings.TrimSpace(r.Header.Get("X-Request-Id"))
+		if requestID == "" {
+			requestID = generateRequestID()
+		}
+		w.Header().Set("X-Request-Id", requestID)
+		rec := &responseRecorder{ResponseWriter: w, statusCode: http.StatusOK}
+		next.ServeHTTP(rec, r)
+
+		slog.Info("http request",
+			"request_id", requestID,
+			"method", r.Method,
+			"path", r.URL.Path,
+			"status", rec.statusCode,
+			"duration_ms", time.Since(startedAt).Milliseconds(),
+			"client", rateLimitKey(r),
+		)
+	})
 }
 
 func (s Server) authMiddleware(next http.Handler) http.Handler {
@@ -150,4 +176,22 @@ func basicMatches(r *http.Request, user, pass string) bool {
 		return false
 	}
 	return u == user && p == pass
+}
+
+type responseRecorder struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (r *responseRecorder) WriteHeader(statusCode int) {
+	r.statusCode = statusCode
+	r.ResponseWriter.WriteHeader(statusCode)
+}
+
+func generateRequestID() string {
+	var b [12]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return fmt.Sprintf("req_%d", time.Now().UnixNano())
+	}
+	return "req_" + hex.EncodeToString(b[:])
 }

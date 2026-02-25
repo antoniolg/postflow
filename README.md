@@ -26,6 +26,7 @@ Variables opcionales:
 - `API_TOKEN` (Bearer o `X-API-Key`)
 - `UI_BASIC_USER`
 - `UI_BASIC_PASS`
+- `LOG_LEVEL` (`debug|info|warn|error`, default: `info`)
 - `PUBLISHER_DRIVER` (`mock` por defecto, `x` para publicar real)
 - `X_API_BASE_URL` (default: `https://api.twitter.com`)
 - `X_UPLOAD_BASE_URL` (default: `https://upload.twitter.com`)
@@ -123,6 +124,12 @@ Notas:
 - DLQ local en SQLite (`dead_letters`) cuando se supera `max_attempts`.
 - API de rescate: `GET /dlq` y `POST /dlq/{id}/requeue`.
 - Idempotencia en `POST /posts` usando header `Idempotency-Key`.
+
+## Logs y trazabilidad
+
+- Logs estructurados en JSON por stdout (listo para Coolify).
+- Campos de request: `request_id`, `method`, `path`, `status`, `duration_ms`, `client`.
+- Header `X-Request-Id` en todas las respuestas.
 
 ## Cerrar interfaz pública (simple)
 
