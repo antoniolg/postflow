@@ -35,6 +35,11 @@ For real X publishing:
 - `X_ACCESS_TOKEN=...`
 - `X_ACCESS_TOKEN_SECRET=...`
 
+Notes:
+
+- For local development, use `.env` (template available at `.env.example`).
+- In Coolify, configure secrets in the service environment UI, not in a committed `.env`.
+
 ## 3) Post-deploy smoke test
 
 Run these from local terminal against your public URL:

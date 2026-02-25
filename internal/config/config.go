@@ -1,10 +1,14 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
+
+	"github.com/joho/godotenv"
 )
 
 type Config struct {
@@ -33,6 +37,10 @@ type XConfig struct {
 }
 
 func Load() (Config, error) {
+	if err := loadDotEnv(); err != nil {
+		return Config{}, err
+	}
+
 	interval := 30 * time.Second
 	if raw := os.Getenv("WORKER_INTERVAL_SECONDS"); raw != "" {
 		v, err := strconv.Atoi(raw)
@@ -91,6 +99,21 @@ func Load() (Config, error) {
 		},
 	}
 	return cfg, nil
+}
+
+func loadDotEnv() error {
+	envFile := strings.TrimSpace(os.Getenv("ENV_FILE"))
+	if envFile == "" {
+		envFile = ".env"
+	}
+
+	if err := godotenv.Load(envFile); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return fmt.Errorf("load %s: %w", envFile, err)
+	}
+	return nil
 }
 
 func getenv(key, fallback string) string {

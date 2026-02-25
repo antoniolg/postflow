@@ -10,10 +10,17 @@ Estado actual (MVP v0):
 ## Quickstart
 
 ```bash
+# opcional: copia el example y rellena secretos locales
+cp .env.example .env
+
 go run ./cmd/publisher
 ```
 
 Servidor en `http://localhost:8080`.
+
+La app carga automáticamente variables desde `.env` si existe.
+- Las variables exportadas en shell tienen prioridad sobre `.env`.
+- Puedes usar otro fichero con `ENV_FILE=/ruta/a/otro.env`.
 
 Variables opcionales:
 - `PORT` (default: `8080`)
