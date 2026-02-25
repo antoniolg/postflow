@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -31,6 +32,8 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("POST /posts", s.handleCreatePost)
 	mux.HandleFunc("GET /schedule", s.handleScheduleJSON)
 	mux.HandleFunc("POST /posts/", s.handleCancelPost)
+	mux.HandleFunc("GET /dlq", s.handleListDLQ)
+	mux.HandleFunc("POST /dlq/", s.handleRequeueDLQ)
 	mux.HandleFunc("GET /", s.handleScheduleHTML)
 	return mux
 }
@@ -219,6 +222,65 @@ func (s Server) handleCancelPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"id": id, "status": string(domain.PostStatusCanceled)})
+}
+
+func (s Server) handleListDLQ(w http.ResponseWriter, r *http.Request) {
+	limit := 100
+	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+		var parsed int
+		_, err := fmt.Sscanf(raw, "%d", &parsed)
+		if err != nil || parsed <= 0 {
+			writeError(w, http.StatusBadRequest, errors.New("limit must be a positive integer"))
+			return
+		}
+		if parsed > 500 {
+			parsed = 500
+		}
+		limit = parsed
+	}
+
+	items, err := s.Store.ListDeadLetters(r.Context(), limit)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"items": items,
+		"count": len(items),
+	})
+}
+
+func (s Server) handleRequeueDLQ(w http.ResponseWriter, r *http.Request) {
+	if !strings.HasPrefix(r.URL.Path, "/dlq/") || !strings.HasSuffix(r.URL.Path, "/requeue") {
+		writeError(w, http.StatusNotFound, errors.New("not found"))
+		return
+	}
+	trimmed := strings.TrimPrefix(r.URL.Path, "/dlq/")
+	id := strings.TrimSuffix(trimmed, "/requeue")
+	id = strings.TrimSuffix(id, "/")
+	if id == "" {
+		writeError(w, http.StatusBadRequest, errors.New("invalid dead letter id"))
+		return
+	}
+
+	post, err := s.Store.RequeueDeadLetter(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeError(w, http.StatusNotFound, errors.New("dead letter not found"))
+			return
+		}
+		if strings.Contains(err.Error(), "not requeueable") {
+			writeError(w, http.StatusConflict, err)
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"dead_letter_id": id,
+		"post":           post,
+	})
 }
 
 func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {

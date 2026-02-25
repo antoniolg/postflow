@@ -68,6 +68,18 @@ curl 'http://localhost:8080/schedule'
 curl -X POST http://localhost:8080/posts/pst_xxx/cancel
 ```
 
+### 5) Ver DLQ
+
+```bash
+curl 'http://localhost:8080/dlq?limit=50'
+```
+
+### 6) Requeue de una entrada DLQ
+
+```bash
+curl -X POST http://localhost:8080/dlq/dlq_xxx/requeue
+```
+
 ## UI mínima
 
 Abre `http://localhost:8080/` para ver una tabla de publicaciones (solo lectura).
@@ -91,6 +103,7 @@ Notas:
 
 - Reintentos con backoff exponencial (`RETRY_BACKOFF_SECONDS`).
 - DLQ local en SQLite (`dead_letters`) cuando se supera `max_attempts`.
+- API de rescate: `GET /dlq` y `POST /dlq/{id}/requeue`.
 - Idempotencia en `POST /posts` usando header `Idempotency-Key`.
 
 ## Specs

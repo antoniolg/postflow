@@ -158,6 +158,59 @@ paths:
                     example: canceled
         '409':
           $ref: '#/components/responses/Error'
+  /dlq:
+    get:
+      summary: Lista entradas en dead-letter queue
+      parameters:
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 100
+      responses:
+        '200':
+          description: Lista de elementos DLQ
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DeadLetter'
+        '400':
+          $ref: '#/components/responses/Error'
+  /dlq/{id}/requeue:
+    post:
+      summary: Reencola un post que estaba en DLQ
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Post reencolado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dead_letter_id:
+                    type: string
+                  post:
+                    $ref: '#/components/schemas/Post'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
 components:
   responses:
     Error:
@@ -236,3 +289,17 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Media'
+    DeadLetter:
+      type: object
+      properties:
+        id:
+          type: string
+        post_id:
+          type: string
+        reason:
+          type: string
+        last_error:
+          type: string
+        attempted_at:
+          type: string
+          format: date-time
