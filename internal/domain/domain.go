@@ -11,6 +11,7 @@ const (
 type PostStatus string
 
 const (
+	PostStatusDraft      PostStatus = "draft"
 	PostStatusScheduled  PostStatus = "scheduled"
 	PostStatusPublishing PostStatus = "publishing"
 	PostStatusPublished  PostStatus = "published"

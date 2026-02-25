@@ -5,6 +5,7 @@ Publicador minimalista orientado a LLMs: API first, worker ligero y UI informati
 Estado actual (MVP v0):
 - Plataforma soportada: `x`
 - Flujo soportado: subir media, programar posts, listar calendario, cancelar
+- Borradores sin fecha (ideas) y programación posterior
 - Ejecución: worker interno con `mock` o publicación real en X (`PUBLISHER_DRIVER=x`)
 
 ## Quickstart
@@ -65,6 +66,17 @@ curl -X POST http://localhost:8080/posts \
     "scheduled_at": "2026-02-26T10:00:00Z",
     "media_ids": ["med_xxx"],
     "max_attempts": 3
+  }'
+```
+
+### 2.1) Crear borrador (sin fecha)
+
+```bash
+curl -X POST http://localhost:8080/posts \
+  -H 'content-type: application/json' \
+  -d '{
+    "platform": "x",
+    "text": "Idea para pulir más tarde"
   }'
 ```
 

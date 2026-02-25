@@ -47,10 +47,14 @@ func (s Server) handleValidatePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	scheduledAt, err := time.Parse(time.RFC3339, req.ScheduledAt)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, fmt.Errorf("scheduled_at must be RFC3339: %w", err))
-		return
+	var scheduledAt time.Time
+	if strings.TrimSpace(req.ScheduledAt) != "" {
+		parsed, err := time.Parse(time.RFC3339, req.ScheduledAt)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, fmt.Errorf("scheduled_at must be RFC3339: %w", err))
+			return
+		}
+		scheduledAt = parsed
 	}
 
 	if _, err := s.Store.GetMediaByIDs(r.Context(), req.MediaIDs); err != nil {
@@ -73,8 +77,16 @@ func (s Server) handleValidatePost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	warnings := make([]string, 0)
-	if scheduledAt.UTC().Before(time.Now().UTC()) {
+	if scheduledAt.IsZero() {
+		warnings = append(warnings, "draft mode: no scheduled_at provided")
+	}
+	if !scheduledAt.IsZero() && scheduledAt.UTC().Before(time.Now().UTC()) {
 		warnings = append(warnings, "scheduled_at is in the past; post may publish immediately")
+	}
+
+	normalizedScheduledAt := ""
+	if !scheduledAt.IsZero() {
+		normalizedScheduledAt = scheduledAt.UTC().Format(time.RFC3339)
 	}
 
 	writeJSON(w, http.StatusOK, validatePostResponse{
@@ -82,7 +94,7 @@ func (s Server) handleValidatePost(w http.ResponseWriter, r *http.Request) {
 		Normalized: normalizedPost{
 			Platform:    string(platform),
 			Text:        text,
-			ScheduledAt: scheduledAt.UTC().Format(time.RFC3339),
+			ScheduledAt: normalizedScheduledAt,
 			MediaIDs:    req.MediaIDs,
 			MaxAttempts: maxAttempts,
 		},

@@ -140,3 +140,28 @@ func TestRecordPublishFailureRetriesThenMovesToDLQ(t *testing.T) {
 		t.Fatalf("expected 1 dead letter, got %d", dlqCount)
 	}
 }
+
+func TestCreateDraftDefaultsToDraftStatus(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	created, err := store.CreatePost(context.Background(), CreatePostParams{
+		Post: domain.Post{
+			Platform:    domain.PlatformX,
+			Text:        "draft",
+			MaxAttempts: 3,
+		},
+	})
+	if err != nil {
+		t.Fatalf("create post: %v", err)
+	}
+	if created.Post.Status != domain.PostStatusDraft {
+		t.Fatalf("expected status draft, got %s", created.Post.Status)
+	}
+	if !created.Post.ScheduledAt.IsZero() {
+		t.Fatalf("expected zero scheduled_at for draft")
+	}
+}

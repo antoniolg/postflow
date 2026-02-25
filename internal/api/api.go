@@ -34,9 +34,9 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("GET /healthz", s.handleHealthz)
 	mux.HandleFunc("POST /media", s.handleUploadMedia)
 	mux.HandleFunc("POST /posts", s.handleCreatePost)
+	mux.HandleFunc("POST /posts/", s.handlePostActions)
 	mux.HandleFunc("POST /posts/validate", s.handleValidatePost)
 	mux.HandleFunc("GET /schedule", s.handleScheduleJSON)
-	mux.HandleFunc("POST /posts/", s.handleCancelPost)
 	mux.HandleFunc("GET /dlq", s.handleListDLQ)
 	mux.HandleFunc("POST /dlq/", s.handleRequeueDLQ)
 	mux.HandleFunc("GET /", s.handleScheduleHTML)
@@ -149,10 +149,14 @@ func (s Server) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, errors.New("text is required"))
 		return
 	}
-	scheduledAt, err := time.Parse(time.RFC3339, req.ScheduledAt)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, fmt.Errorf("scheduled_at must be RFC3339: %w", err))
-		return
+	var scheduledAt time.Time
+	if strings.TrimSpace(req.ScheduledAt) != "" {
+		parsed, err := time.Parse(time.RFC3339, req.ScheduledAt)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, fmt.Errorf("scheduled_at must be RFC3339: %w", err))
+			return
+		}
+		scheduledAt = parsed.UTC()
 	}
 	if _, err := s.Store.GetMediaByIDs(r.Context(), req.MediaIDs); err != nil {
 		writeError(w, http.StatusBadRequest, err)
@@ -174,8 +178,8 @@ func (s Server) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 		Post: domain.Post{
 			Platform:    platform,
 			Text:        req.Text,
-			Status:      domain.PostStatusScheduled,
-			ScheduledAt: scheduledAt.UTC(),
+			Status:      defaultStatusForScheduledAt(scheduledAt),
+			ScheduledAt: scheduledAt,
 			MaxAttempts: maxAttempts,
 		},
 		MediaIDs:       req.MediaIDs,
@@ -210,23 +214,78 @@ func (s Server) handleScheduleJSON(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s Server) handleCancelPost(w http.ResponseWriter, r *http.Request) {
-	if !strings.HasPrefix(r.URL.Path, "/posts/") || !strings.HasSuffix(r.URL.Path, "/cancel") {
+func (s Server) handlePostActions(w http.ResponseWriter, r *http.Request) {
+	if !strings.HasPrefix(r.URL.Path, "/posts/") {
 		writeError(w, http.StatusNotFound, errors.New("not found"))
 		return
 	}
-	trimmed := strings.TrimPrefix(r.URL.Path, "/posts/")
-	id := strings.TrimSuffix(trimmed, "/cancel")
-	id = strings.TrimSuffix(id, "/")
-	if id == "" {
-		writeError(w, http.StatusBadRequest, errors.New("invalid post id"))
+	switch {
+	case strings.HasSuffix(r.URL.Path, "/cancel"):
+		s.handleCancelPost(w, r)
+	case strings.HasSuffix(r.URL.Path, "/schedule"):
+		s.handleScheduleDraftPost(w, r)
+	default:
+		writeError(w, http.StatusNotFound, errors.New("not found"))
+	}
+}
+
+func (s Server) handleCancelPost(w http.ResponseWriter, r *http.Request) {
+	postID, err := extractPostIDFromPath(r.URL.Path, "cancel")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	if err := s.Store.CancelPost(r.Context(), id); err != nil {
+	if err := s.Store.CancelPost(r.Context(), postID); err != nil {
 		writeError(w, http.StatusConflict, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"id": id, "status": string(domain.PostStatusCanceled)})
+	writeJSON(w, http.StatusOK, map[string]string{"id": postID, "status": string(domain.PostStatusCanceled)})
+}
+
+func (s Server) handleScheduleDraftPost(w http.ResponseWriter, r *http.Request) {
+	postID, err := extractPostIDFromPath(r.URL.Path, "schedule")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	scheduledAtRaw := strings.TrimSpace(r.FormValue("scheduled_at"))
+	if scheduledAtRaw == "" {
+		localRaw := strings.TrimSpace(r.FormValue("scheduled_at_local"))
+		if localRaw != "" {
+			localTime, err := time.ParseInLocation("2006-01-02T15:04", localRaw, time.Local)
+			if err == nil {
+				scheduledAtRaw = localTime.UTC().Format(time.RFC3339)
+			}
+		}
+	}
+	if scheduledAtRaw == "" {
+		var body struct {
+			ScheduledAt string `json:"scheduled_at"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err == nil {
+			scheduledAtRaw = strings.TrimSpace(body.ScheduledAt)
+		}
+	}
+	if scheduledAtRaw == "" {
+		writeError(w, http.StatusBadRequest, errors.New("scheduled_at is required"))
+		return
+	}
+	scheduledAt, err := time.Parse(time.RFC3339, scheduledAtRaw)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("scheduled_at must be RFC3339: %w", err))
+		return
+	}
+	if err := s.Store.ScheduleDraftPost(r.Context(), postID, scheduledAt.UTC()); err != nil {
+		writeError(w, http.StatusConflict, err)
+		return
+	}
+	post, err := s.Store.GetPost(r.Context(), postID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"id": postID, "status": string(post.Status), "post": post})
 }
 
 func (s Server) handleListDLQ(w http.ResponseWriter, r *http.Request) {
@@ -300,6 +359,11 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+	drafts, err := s.Store.ListDrafts(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
 	const tpl = `<!doctype html>
 <html lang="es">
 <head>
@@ -307,35 +371,68 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>publisher · schedule</title>
   <style>
-    body { font-family: ui-sans-serif, -apple-system, sans-serif; margin: 24px; color:#111; }
-    h1 { margin:0 0 16px 0; }
-    table { width:100%; border-collapse: collapse; }
+    :root { --bg:#f7f7f8; --card:#fff; --text:#111; --muted:#666; --border:#e6e6e6; }
+    body { font-family: ui-sans-serif, -apple-system, sans-serif; margin: 24px; color:var(--text); background:var(--bg); }
+    h1 { margin:0 0 8px 0; }
+    p.lead { margin:0 0 20px 0; color:var(--muted); }
+    .grid { display:grid; grid-template-columns: 1fr; gap:16px; }
+    @media(min-width:1000px){ .grid { grid-template-columns: 2fr 1fr; } }
+    .card { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:14px; }
+    .card h2 { margin:0 0 12px 0; font-size:16px; }
+    table { width:100%; border-collapse: collapse; background:#fff; }
     th, td { border:1px solid #ddd; padding:8px; font-size:14px; text-align:left; vertical-align: top; }
     th { background:#f5f5f5; }
-    .badge { padding:2px 8px; border-radius:999px; background:#f0f0f0; display:inline-block; }
+    .badge { padding:2px 8px; border-radius:999px; background:#f0f0f0; display:inline-block; font-size:12px; }
+    .draft-item { border:1px solid var(--border); border-radius:10px; padding:10px; margin-bottom:10px; background:#fff; }
+    .meta { color:var(--muted); font-size:12px; margin-top:4px; }
+    .row { display:flex; gap:8px; align-items:center; margin-top:8px; flex-wrap:wrap; }
+    input[type=datetime-local]{ padding:7px; border:1px solid var(--border); border-radius:8px; }
+    button { border:1px solid #d0d0d0; background:#111; color:#fff; border-radius:8px; padding:7px 10px; cursor:pointer; }
   </style>
 </head>
 <body>
   <h1>Publisher schedule</h1>
-  <p>Vista informativa (solo lectura).</p>
-  <table>
-    <thead>
-      <tr><th>Fecha</th><th>Plataforma</th><th>Estado</th><th>Texto</th><th>Media</th></tr>
-    </thead>
-    <tbody>
-      {{range .}}
-      <tr>
-        <td>{{.ScheduledAt.Format "2006-01-02 15:04:05Z07:00"}}</td>
-        <td>{{.Platform}}</td>
-        <td><span class="badge">{{.Status}}</span></td>
-        <td>{{.Text}}</td>
-        <td>{{len .Media}}</td>
-      </tr>
+  <p class="lead">Calendario + borradores para preparar ideas sin fecha.</p>
+  <div class="grid">
+    <section class="card">
+      <h2>Programadas</h2>
+      <table>
+        <thead>
+          <tr><th>Fecha</th><th>Plataforma</th><th>Estado</th><th>Texto</th><th>Media</th></tr>
+        </thead>
+        <tbody>
+          {{range .Items}}
+          <tr>
+            <td>{{if .ScheduledAt.IsZero}}-{{else}}{{.ScheduledAt.Format "2006-01-02 15:04:05Z07:00"}}{{end}}</td>
+            <td>{{.Platform}}</td>
+            <td><span class="badge">{{.Status}}</span></td>
+            <td>{{.Text}}</td>
+            <td>{{len .Media}}</td>
+          </tr>
+          {{else}}
+          <tr><td colspan="5">No hay publicaciones en este rango.</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+    </section>
+    <section class="card">
+      <h2>Borradores</h2>
+      {{range .Drafts}}
+      <div class="draft-item">
+        <div><strong>{{.Text}}</strong></div>
+        <div class="meta">ID: {{.ID}} · {{len .Media}} media</div>
+        <form method="post" action="/posts/{{.ID}}/schedule">
+          <div class="row">
+            <input type="datetime-local" name="scheduled_at_local" required />
+            <button type="submit">Programar</button>
+          </div>
+        </form>
+      </div>
       {{else}}
-      <tr><td colspan="5">No hay publicaciones en este rango.</td></tr>
+      <div class="meta">No hay borradores aún.</div>
       {{end}}
-    </tbody>
-  </table>
+    </section>
+  </div>
 </body>
 </html>`
 	t, err := template.New("schedule").Parse(tpl)
@@ -344,7 +441,11 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_ = t.Execute(w, items)
+	type pageData struct {
+		Items  []domain.Post
+		Drafts []domain.Post
+	}
+	_ = t.Execute(w, pageData{Items: items, Drafts: drafts})
 }
 
 func parseRange(_ context.Context, fromRaw, toRaw string) (time.Time, time.Time, error) {
@@ -389,6 +490,26 @@ func sanitizeName(s string) string {
 		}
 	}, s)
 	return s
+}
+
+func extractPostIDFromPath(path, action string) (string, error) {
+	if !strings.HasPrefix(path, "/posts/") || !strings.HasSuffix(path, "/"+action) {
+		return "", errors.New("not found")
+	}
+	trimmed := strings.TrimPrefix(path, "/posts/")
+	id := strings.TrimSuffix(trimmed, "/"+action)
+	id = strings.TrimSuffix(id, "/")
+	if id == "" {
+		return "", errors.New("invalid post id")
+	}
+	return id, nil
+}
+
+func defaultStatusForScheduledAt(t time.Time) domain.PostStatus {
+	if t.IsZero() {
+		return domain.PostStatusDraft
+	}
+	return domain.PostStatusScheduled
 }
 
 func writeJSON(w http.ResponseWriter, code int, payload any) {

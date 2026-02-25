@@ -39,6 +39,86 @@ func TestCreatePostValidation(t *testing.T) {
 	}
 }
 
+func TestCreateDraftWithoutScheduledAt(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	body := map[string]any{
+		"platform": "x",
+		"text":     "idea de borrador",
+	}
+	payload, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(payload))
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", w.Code)
+	}
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if status, _ := resp["status"].(string); status != "draft" {
+		t.Fatalf("expected status=draft, got %q", status)
+	}
+}
+
+func TestScheduleDraftPost(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	createPayload, _ := json.Marshal(map[string]any{
+		"platform": "x",
+		"text":     "draft to schedule",
+	})
+	createReq := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(createPayload))
+	createW := httptest.NewRecorder()
+	h.ServeHTTP(createW, createReq)
+	if createW.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", createW.Code)
+	}
+	var created map[string]any
+	if err := json.Unmarshal(createW.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode create response: %v", err)
+	}
+	postID, _ := created["id"].(string)
+	if postID == "" {
+		t.Fatalf("missing post id")
+	}
+
+	schedulePayload, _ := json.Marshal(map[string]any{
+		"scheduled_at": time.Now().UTC().Add(5 * time.Minute).Format(time.RFC3339),
+	})
+	scheduleReq := httptest.NewRequest(http.MethodPost, "/posts/"+postID+"/schedule", bytes.NewReader(schedulePayload))
+	scheduleReq.Header.Set("content-type", "application/json")
+	scheduleW := httptest.NewRecorder()
+	h.ServeHTTP(scheduleW, scheduleReq)
+	if scheduleW.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", scheduleW.Code)
+	}
+	var scheduled map[string]any
+	if err := json.Unmarshal(scheduleW.Body.Bytes(), &scheduled); err != nil {
+		t.Fatalf("decode schedule response: %v", err)
+	}
+	if status, _ := scheduled["status"].(string); status != "scheduled" {
+		t.Fatalf("expected status=scheduled, got %q", status)
+	}
+}
+
 func TestScheduleEndpointReturnsCreatedPost(t *testing.T) {
 	tempDir := t.TempDir()
 	store, err := db.Open(filepath.Join(tempDir, "test.db"))

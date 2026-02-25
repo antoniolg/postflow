@@ -208,7 +208,11 @@ func (s *Store) CreatePost(ctx context.Context, params CreatePostParams) (Create
 	p.CreatedAt = now
 	p.UpdatedAt = now
 	if p.Status == "" {
-		p.Status = domain.PostStatusScheduled
+		if p.ScheduledAt.IsZero() {
+			p.Status = domain.PostStatusDraft
+		} else {
+			p.Status = domain.PostStatusScheduled
+		}
 	}
 	if p.MaxAttempts <= 0 {
 		p.MaxAttempts = 3
@@ -226,7 +230,7 @@ func (s *Store) CreatePost(ctx context.Context, params CreatePostParams) (Create
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO posts (id, platform, text, status, scheduled_at, next_retry_at, attempts, max_attempts, idempotency_key, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, p.ID, p.Platform, p.Text, p.Status, p.ScheduledAt.UTC().Format(time.RFC3339Nano), sqlNullTimeString(p.NextRetryAt), p.Attempts, p.MaxAttempts, sqlNullString(p.IdempotencyKey), p.CreatedAt.Format(time.RFC3339Nano), p.UpdatedAt.Format(time.RFC3339Nano))
+	`, p.ID, p.Platform, p.Text, p.Status, formatScheduledAt(p.ScheduledAt), sqlNullTimeString(p.NextRetryAt), p.Attempts, p.MaxAttempts, sqlNullString(p.IdempotencyKey), p.CreatedAt.Format(time.RFC3339Nano), p.UpdatedAt.Format(time.RFC3339Nano))
 	if err != nil {
 		if idempotencyKey != "" && strings.Contains(strings.ToLower(err.Error()), "unique") {
 			existing, findErr := s.GetPostByIdempotencyKey(ctx, idempotencyKey)
@@ -355,6 +359,57 @@ func (s *Store) ListSchedule(ctx context.Context, from, to time.Time) ([]domain.
 		out = append(out, p)
 	}
 	return out, nil
+}
+
+func (s *Store) ListDrafts(ctx context.Context) ([]domain.Post, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id
+		FROM posts
+		WHERE status = ?
+		ORDER BY updated_at DESC
+	`, domain.PostStatusDraft)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	out := make([]domain.Post, 0, len(ids))
+	for _, id := range ids {
+		p, err := s.GetPost(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, nil
+}
+
+func (s *Store) ScheduleDraftPost(ctx context.Context, id string, scheduledAt time.Time) error {
+	result, err := s.db.ExecContext(ctx, `
+		UPDATE posts
+		SET status = ?, scheduled_at = ?, next_retry_at = NULL, attempts = 0, error = NULL, updated_at = ?
+		WHERE id = ? AND status = ?
+	`, domain.PostStatusScheduled, formatScheduledAt(scheduledAt.UTC()), time.Now().UTC().Format(time.RFC3339Nano), id, domain.PostStatusDraft)
+	if err != nil {
+		return err
+	}
+	n, _ := result.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("post not schedulable")
+	}
+	return nil
 }
 
 func (s *Store) CancelPost(ctx context.Context, id string) error {
@@ -492,6 +547,13 @@ func sqlNullString(v *string) any {
 func sqlNullTimeString(v *time.Time) any {
 	if v == nil {
 		return nil
+	}
+	return v.UTC().Format(time.RFC3339Nano)
+}
+
+func formatScheduledAt(v time.Time) string {
+	if v.IsZero() {
+		return ""
 	}
 	return v.UTC().Format(time.RFC3339Nano)
 }
