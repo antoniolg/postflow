@@ -1170,6 +1170,12 @@ func TestCreateViewIncludesComposerPreviewUploadAndNetworks(t *testing.T) {
 	if !strings.Contains(body, "input[type=\"date\"], input[type=\"datetime-local\"], input[data-date-picker]") {
 		t.Fatalf("expected reusable date picker script to target all date/datetime inputs")
 	}
+	if !strings.Contains(body, "date-picker-popover") || !strings.Contains(body, "date-display") {
+		t.Fatalf("expected custom dark date picker UI instead of native browser picker")
+	}
+	if strings.Contains(body, "showPicker(") {
+		t.Fatalf("expected no reliance on native showPicker popups")
+	}
 	if !strings.Contains(body, "class=\"btn-primary\" type=\"submit\" name=\"intent\" value=\"publish_now\"") {
 		t.Fatalf("expected publish now button to use primary action style")
 	}

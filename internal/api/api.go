@@ -2000,34 +2000,54 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     .date-input {
       position: relative;
       display: inline-flex;
-      align-items: center;
-      width: min(100%, 300px);
+      align-items: stretch;
+      width: min(100%, 320px);
+      min-height: 36px;
     }
-    .date-input input[type=datetime-local],
-    .date-input input[type=date] {
+    .date-native-value {
+      position: absolute !important;
+      inset: 0 !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
+      width: 100% !important;
+      height: 100% !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      border: 0 !important;
+    }
+    .date-display {
       width: 100%;
-      min-width: 0;
-      padding-right: 36px;
+      min-height: 36px;
+      border-radius: 12px;
+      border: 0;
+      background: #2d2d2d;
+      color: #f2f2f2;
+      font: inherit;
+      font-size: 13px;
+      text-align: left;
+      padding: 0 38px 0 12px;
+      line-height: 1;
+      display: inline-flex;
+      align-items: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
-    .date-input.is-focus input[type=datetime-local],
-    .date-input.is-focus input[type=date] {
-      outline: none;
+    .date-display[data-empty="1"] {
+      color: #a8a8a8;
+    }
+    .date-input.is-focus .date-display,
+    .date-input.is-open .date-display {
       box-shadow: 0 0 0 2px rgba(255, 107, 53, 0.22);
     }
-    .date-input input[type=datetime-local]::-webkit-calendar-picker-indicator,
-    .date-input input[type=date]::-webkit-calendar-picker-indicator {
-      opacity: 0;
-      position: absolute;
-      right: 0;
-      width: 36px;
-      height: 100%;
-      cursor: pointer;
+    .date-input.is-invalid .date-display {
+      box-shadow: 0 0 0 2px rgba(255, 107, 53, 0.35);
     }
     .date-trigger {
       position: absolute;
       top: 4px;
       right: 4px;
-      width: 26px;
+      width: 28px;
       height: calc(100% - 8px);
       border-radius: 8px;
       border: 0;
@@ -2039,6 +2059,137 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       align-items: center;
       justify-content: center;
       padding: 0;
+    }
+    .date-picker-popover {
+      position: fixed;
+      z-index: 80;
+      width: min(360px, calc(100vw - 24px));
+      background: #212121;
+      border-radius: 16px;
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55), inset 0 0 0 1px #2f2f2f;
+      padding: 12px;
+      color: #f2f2f2;
+    }
+    .date-picker-popover[hidden] {
+      display: none;
+    }
+    .date-picker-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .date-picker-month {
+      font-size: 13px;
+      font-weight: 600;
+      color: #f2f2f2;
+      text-transform: lowercase;
+      letter-spacing: 0.02em;
+    }
+    .date-picker-nav {
+      width: 30px;
+      height: 30px;
+      border-radius: 10px;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      line-height: 1;
+      background: #2d2d2d;
+      color: #d0d0d0;
+    }
+    .date-picker-weekdays {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 4px;
+      margin-bottom: 4px;
+    }
+    .date-picker-weekday {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #a8a8a8;
+      text-align: center;
+      padding: 4px 0;
+    }
+    .date-picker-days {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 4px;
+    }
+    .date-picker-day {
+      height: 34px;
+      border-radius: 10px;
+      background: #2d2d2d;
+      color: #e8e8e8;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 500;
+      text-transform: none;
+    }
+    .date-picker-day.outside {
+      color: #7d7d7d;
+      background: #252525;
+    }
+    .date-picker-day.today {
+      box-shadow: inset 0 0 0 1px rgba(255, 107, 53, 0.4);
+    }
+    .date-picker-day.selected {
+      background: #ff6b35;
+      color: #101010;
+      font-weight: 700;
+    }
+    .date-picker-time {
+      margin-top: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #d0d0d0;
+    }
+    .date-picker-time select {
+      min-width: 0;
+      border: 0;
+      border-radius: 10px;
+      background: #2d2d2d;
+      color: #f2f2f2;
+      font: inherit;
+      font-size: 12px;
+      padding: 6px 10px;
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      box-shadow: none;
+    }
+    .date-picker-time-divider {
+      color: #a8a8a8;
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1;
+    }
+    .date-picker-actions {
+      margin-top: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .date-picker-actions-left,
+    .date-picker-actions-right {
+      display: inline-flex;
+      gap: 8px;
+    }
+    .date-picker-actions button {
+      min-height: 30px;
+      padding: 0 10px;
+      border-radius: 10px;
+    }
+    .date-picker-popover[data-mode="date"] .date-picker-time {
+      display: none;
     }
     button {
       border: 0;
@@ -3017,19 +3168,397 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 })();
 
 (() => {
-  const openDatePicker = (input) => {
+  const monthNames = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+  const weekdayNames = ["L", "M", "X", "J", "V", "S", "D"];
+  const pad2 = (value) => String(value).padStart(2, "0");
+
+  const parseInputValue = (raw, mode) => {
+    const value = String(raw || "").trim();
+    if (value === "") {
+      return null;
+    }
+    if (mode === "date") {
+      const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (!match) {
+        return null;
+      }
+      const d = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12, 0, 0, 0);
+      if (Number.isNaN(d.getTime())) {
+        return null;
+      }
+      return d;
+    }
+    const match = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+    if (!match) {
+      return null;
+    }
+    const d = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), Number(match[4]), Number(match[5]), 0, 0);
+    if (Number.isNaN(d.getTime())) {
+      return null;
+    }
+    return d;
+  };
+
+  const toInputValue = (date, mode) => {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+      return "";
+    }
+    const y = String(date.getFullYear());
+    const m = pad2(date.getMonth() + 1);
+    const d = pad2(date.getDate());
+    if (mode === "date") {
+      return y + "-" + m + "-" + d;
+    }
+    const h = pad2(date.getHours());
+    const min = pad2(date.getMinutes());
+    return y + "-" + m + "-" + d + "T" + h + ":" + min;
+  };
+
+  const formatDisplay = (raw, mode) => {
+    const parsed = parseInputValue(raw, mode);
+    if (!parsed) {
+      return mode === "date" ? "dd/mm/aaaa" : "dd/mm/aaaa, --:--";
+    }
+    const dd = pad2(parsed.getDate());
+    const mm = pad2(parsed.getMonth() + 1);
+    const yyyy = parsed.getFullYear();
+    if (mode === "date") {
+      return dd + "/" + mm + "/" + yyyy;
+    }
+    return dd + "/" + mm + "/" + yyyy + ", " + pad2(parsed.getHours()) + ":" + pad2(parsed.getMinutes());
+  };
+
+  const isSameDay = (a, b) => (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+
+  const isToday = (date) => {
+    const now = new Date();
+    return isSameDay(date, now);
+  };
+
+  const popover = document.createElement("div");
+  popover.className = "date-picker-popover";
+  popover.hidden = true;
+  popover.innerHTML =
+    '<div class="date-picker-head">' +
+      '<button type="button" class="date-picker-nav" data-date-nav="-1" aria-label="previous month">‹</button>' +
+      '<div class="date-picker-month" data-date-month></div>' +
+      '<button type="button" class="date-picker-nav" data-date-nav="1" aria-label="next month">›</button>' +
+    "</div>" +
+    '<div class="date-picker-weekdays" data-date-weekdays></div>' +
+    '<div class="date-picker-days" data-date-days></div>' +
+    '<div class="date-picker-time">' +
+      '<select data-date-hour></select>' +
+      '<span class="date-picker-time-divider">:</span>' +
+      '<select data-date-minute></select>' +
+    "</div>" +
+    '<div class="date-picker-actions">' +
+      '<div class="date-picker-actions-left">' +
+        '<button type="button" class="btn-secondary" data-date-clear>clear</button>' +
+        '<button type="button" class="btn-secondary" data-date-now>today</button>' +
+      "</div>" +
+      '<div class="date-picker-actions-right">' +
+        '<button type="button" class="btn-primary" data-date-apply>apply</button>' +
+      "</div>" +
+    "</div>";
+  document.body.appendChild(popover);
+
+  const monthLabel = popover.querySelector("[data-date-month]");
+  const weekdaysRoot = popover.querySelector("[data-date-weekdays]");
+  const daysRoot = popover.querySelector("[data-date-days]");
+  const hourSelect = popover.querySelector("[data-date-hour]");
+  const minuteSelect = popover.querySelector("[data-date-minute]");
+  const prevBtn = popover.querySelector('[data-date-nav="-1"]');
+  const nextBtn = popover.querySelector('[data-date-nav="1"]');
+  const clearBtn = popover.querySelector("[data-date-clear]");
+  const nowBtn = popover.querySelector("[data-date-now]");
+  const applyBtn = popover.querySelector("[data-date-apply]");
+
+  if (!(monthLabel instanceof HTMLElement) ||
+      !(weekdaysRoot instanceof HTMLElement) ||
+      !(daysRoot instanceof HTMLElement) ||
+      !(hourSelect instanceof HTMLSelectElement) ||
+      !(minuteSelect instanceof HTMLSelectElement) ||
+      !(prevBtn instanceof HTMLButtonElement) ||
+      !(nextBtn instanceof HTMLButtonElement) ||
+      !(clearBtn instanceof HTMLButtonElement) ||
+      !(nowBtn instanceof HTMLButtonElement) ||
+      !(applyBtn instanceof HTMLButtonElement)) {
+    return;
+  }
+
+  const state = {
+    input: null,
+    wrapper: null,
+    mode: "datetime-local",
+    selected: null,
+    viewYear: 0,
+    viewMonth: 0
+  };
+
+  const positionPopover = () => {
+    if (popover.hidden || !(state.wrapper instanceof HTMLElement)) {
+      return;
+    }
+    const rect = state.wrapper.getBoundingClientRect();
+    const margin = 8;
+    const width = popover.offsetWidth || 320;
+    const height = popover.offsetHeight || 360;
+
+    let left = rect.left;
+    if (left + width > window.innerWidth - margin) {
+      left = window.innerWidth - width - margin;
+    }
+    if (left < margin) {
+      left = margin;
+    }
+
+    let top = rect.bottom + margin;
+    if (top + height > window.innerHeight - margin) {
+      top = rect.top - height - margin;
+    }
+    if (top < margin) {
+      top = margin;
+    }
+
+    popover.style.left = Math.round(left) + "px";
+    popover.style.top = Math.round(top) + "px";
+  };
+
+  const closePicker = () => {
+    if (state.wrapper instanceof HTMLElement) {
+      state.wrapper.classList.remove("is-open");
+    }
+    popover.hidden = true;
+    state.input = null;
+    state.wrapper = null;
+    state.selected = null;
+  };
+
+  const updateDisplayForInput = (input) => {
     if (!(input instanceof HTMLInputElement)) {
       return;
     }
-    if (typeof input.showPicker === "function") {
-      try {
-        input.showPicker();
-        return;
-      } catch (_) {}
+    const mode = input.dataset.datePickerMode || "datetime-local";
+    const wrapper = input.closest(".date-input");
+    if (!(wrapper instanceof HTMLElement)) {
+      return;
     }
-    input.focus();
-    input.click();
+    const display = wrapper.querySelector("[data-date-display]");
+    if (!(display instanceof HTMLButtonElement)) {
+      return;
+    }
+    const raw = String(input.value || "").trim();
+    display.textContent = formatDisplay(raw, mode);
+    display.setAttribute("data-empty", raw === "" ? "1" : "0");
+    wrapper.classList.toggle("is-empty", raw === "");
   };
+
+  const applyCurrentSelection = () => {
+    if (!(state.input instanceof HTMLInputElement)) {
+      return;
+    }
+    const nextValue = state.selected ? toInputValue(state.selected, state.mode) : "";
+    state.input.value = nextValue;
+    state.input.dispatchEvent(new Event("input", { bubbles: true }));
+    state.input.dispatchEvent(new Event("change", { bubbles: true }));
+    closePicker();
+  };
+
+  const renderPicker = () => {
+    const displayMonth = monthNames[state.viewMonth] || "";
+    monthLabel.textContent = displayMonth + " de " + String(state.viewYear);
+    popover.setAttribute("data-mode", state.mode === "date" ? "date" : "datetime-local");
+
+    weekdaysRoot.innerHTML = "";
+    weekdayNames.forEach((name) => {
+      const day = document.createElement("div");
+      day.className = "date-picker-weekday";
+      day.textContent = name;
+      weekdaysRoot.appendChild(day);
+    });
+
+    daysRoot.innerHTML = "";
+    const firstOfMonth = new Date(state.viewYear, state.viewMonth, 1);
+    const firstOffset = (firstOfMonth.getDay() + 6) % 7;
+    const gridStart = new Date(state.viewYear, state.viewMonth, 1 - firstOffset);
+
+    for (let i = 0; i < 42; i += 1) {
+      const dayDate = new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + i);
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "date-picker-day";
+      if (dayDate.getMonth() !== state.viewMonth) {
+        btn.classList.add("outside");
+      }
+      if (isToday(dayDate)) {
+        btn.classList.add("today");
+      }
+      if (state.selected && isSameDay(dayDate, state.selected)) {
+        btn.classList.add("selected");
+      }
+      btn.textContent = String(dayDate.getDate());
+      btn.addEventListener("click", () => {
+        const next = state.selected instanceof Date ? new Date(state.selected.getTime()) : new Date();
+        next.setFullYear(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate());
+        if (!(state.selected instanceof Date)) {
+          if (state.mode === "date") {
+            next.setHours(12, 0, 0, 0);
+          } else {
+            next.setHours(9, 0, 0, 0);
+          }
+        }
+        state.selected = next;
+        if (state.mode === "date") {
+          applyCurrentSelection();
+          return;
+        }
+        renderPicker();
+      });
+      daysRoot.appendChild(btn);
+    }
+
+    if (!(state.selected instanceof Date)) {
+      const now = new Date();
+      state.selected = new Date(state.viewYear, state.viewMonth, now.getDate(), now.getHours(), now.getMinutes(), 0, 0);
+    }
+    hourSelect.value = pad2(state.selected.getHours());
+    minuteSelect.value = pad2(state.selected.getMinutes());
+  };
+
+  for (let hour = 0; hour < 24; hour += 1) {
+    const option = document.createElement("option");
+    option.value = pad2(hour);
+    option.textContent = pad2(hour);
+    hourSelect.appendChild(option);
+  }
+  for (let minute = 0; minute < 60; minute += 1) {
+    const option = document.createElement("option");
+    option.value = pad2(minute);
+    option.textContent = pad2(minute);
+    minuteSelect.appendChild(option);
+  }
+
+  const openPicker = (input, wrapper) => {
+    if (!(input instanceof HTMLInputElement) || !(wrapper instanceof HTMLElement)) {
+      return;
+    }
+    wrapper.classList.remove("is-invalid");
+    state.input = input;
+    state.wrapper = wrapper;
+    state.mode = input.dataset.datePickerMode || "datetime-local";
+    state.selected = parseInputValue(input.value, state.mode);
+    const baseDate = state.selected instanceof Date ? state.selected : new Date();
+    state.viewYear = baseDate.getFullYear();
+    state.viewMonth = baseDate.getMonth();
+
+    renderPicker();
+    popover.hidden = false;
+    wrapper.classList.add("is-open");
+    positionPopover();
+  };
+
+  prevBtn.addEventListener("click", () => {
+    state.viewMonth -= 1;
+    if (state.viewMonth < 0) {
+      state.viewMonth = 11;
+      state.viewYear -= 1;
+    }
+    renderPicker();
+  });
+
+  nextBtn.addEventListener("click", () => {
+    state.viewMonth += 1;
+    if (state.viewMonth > 11) {
+      state.viewMonth = 0;
+      state.viewYear += 1;
+    }
+    renderPicker();
+  });
+
+  hourSelect.addEventListener("change", () => {
+    if (!(state.selected instanceof Date)) {
+      state.selected = new Date();
+    }
+    state.selected.setHours(Number(hourSelect.value), state.selected.getMinutes(), 0, 0);
+  });
+
+  minuteSelect.addEventListener("change", () => {
+    if (!(state.selected instanceof Date)) {
+      state.selected = new Date();
+    }
+    state.selected.setHours(state.selected.getHours(), Number(minuteSelect.value), 0, 0);
+  });
+
+  clearBtn.addEventListener("click", () => {
+    state.selected = null;
+    applyCurrentSelection();
+  });
+
+  nowBtn.addEventListener("click", () => {
+    const now = new Date();
+    state.selected = now;
+    state.viewYear = now.getFullYear();
+    state.viewMonth = now.getMonth();
+    if (state.mode === "date") {
+      applyCurrentSelection();
+      return;
+    }
+    renderPicker();
+  });
+
+  applyBtn.addEventListener("click", () => {
+    applyCurrentSelection();
+  });
+
+  document.addEventListener("mousedown", (event) => {
+    if (popover.hidden) {
+      return;
+    }
+    const target = event.target;
+    if (!(target instanceof Node)) {
+      return;
+    }
+    if (popover.contains(target)) {
+      return;
+    }
+    if (state.wrapper instanceof HTMLElement && state.wrapper.contains(target)) {
+      return;
+    }
+    closePicker();
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || popover.hidden) {
+      return;
+    }
+    event.preventDefault();
+    closePicker();
+  });
+
+  window.addEventListener("resize", positionPopover);
+  window.addEventListener("scroll", positionPopover, true);
+
+  document.addEventListener("submit", (event) => {
+    const form = event.target;
+    if (!(form instanceof HTMLFormElement)) {
+      return;
+    }
+    const requiredDateInput = Array.from(form.querySelectorAll("input[data-date-picker][required]"))
+      .find((node) => node instanceof HTMLInputElement && !node.disabled && String(node.value || "").trim() === "");
+    if (!(requiredDateInput instanceof HTMLInputElement)) {
+      return;
+    }
+    event.preventDefault();
+    const wrapper = requiredDateInput.closest(".date-input");
+    if (wrapper instanceof HTMLElement) {
+      wrapper.classList.add("is-invalid");
+      openPicker(requiredDateInput, wrapper);
+    }
+  });
 
   const setupDatePickerInput = (input) => {
     if (!(input instanceof HTMLInputElement)) {
@@ -3039,6 +3568,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       return;
     }
     input.dataset.datePickerReady = "1";
+    input.dataset.datePickerMode = input.type === "date" ? "date" : "datetime-local";
 
     let wrapper = input.parentElement;
     if (!(wrapper instanceof HTMLElement) || !wrapper.classList.contains("date-input")) {
@@ -3046,6 +3576,19 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       wrapper.className = "date-input";
       input.replaceWith(wrapper);
       wrapper.appendChild(input);
+    }
+
+    input.classList.add("date-native-value");
+    input.setAttribute("tabindex", "-1");
+    input.setAttribute("aria-hidden", "true");
+
+    let display = wrapper.querySelector("[data-date-display]");
+    if (!(display instanceof HTMLButtonElement)) {
+      display = document.createElement("button");
+      display.type = "button";
+      display.className = "date-display";
+      display.setAttribute("data-date-display", "1");
+      wrapper.appendChild(display);
     }
 
     let trigger = wrapper.querySelector("[data-date-trigger]");
@@ -3059,29 +3602,32 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       wrapper.appendChild(trigger);
     }
 
-    trigger.addEventListener("click", () => openDatePicker(input));
-    input.addEventListener("focus", () => wrapper.classList.add("is-focus"));
-    input.addEventListener("blur", () => wrapper.classList.remove("is-focus"));
-    input.addEventListener("keydown", (event) => {
-      if ((event.key === "Enter" || event.key === "ArrowDown") && (event.altKey || event.metaKey || event.ctrlKey)) {
-        event.preventDefault();
-        openDatePicker(input);
+    const open = (event) => {
+      event.preventDefault();
+      if (input.disabled) {
+        return;
       }
-    });
+      openPicker(input, wrapper);
+    };
+
+    display.addEventListener("click", open);
+    display.addEventListener("focus", () => wrapper.classList.add("is-focus"));
+    display.addEventListener("blur", () => wrapper.classList.remove("is-focus"));
+    trigger.addEventListener("click", open);
+
+    input.addEventListener("input", () => updateDisplayForInput(input));
+    input.addEventListener("change", () => updateDisplayForInput(input));
+    updateDisplayForInput(input);
   };
 
-  const initDatePickers = () => {
-    document.querySelectorAll('input[type="date"], input[type="datetime-local"], input[data-date-picker]').forEach((node) => {
-      if (node instanceof HTMLInputElement) {
-        if (node.disabled || node.readOnly) {
-          return;
-        }
-        setupDatePickerInput(node);
+  document.querySelectorAll('input[type="date"], input[type="datetime-local"], input[data-date-picker]').forEach((node) => {
+    if (node instanceof HTMLInputElement) {
+      if (node.disabled) {
+        return;
       }
-    });
-  };
-
-  initDatePickers();
+      setupDatePickerInput(node);
+    }
+  });
 })();
 
 (() => {
@@ -3674,6 +4220,8 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     const submitter = event.submitter;
     if (submitter instanceof HTMLButtonElement && submitter.value === "publish_now" && scheduleInput.value.trim() === "") {
       scheduleInput.value = toDatetimeLocal(new Date());
+      scheduleInput.dispatchEvent(new Event("input", { bubbles: true }));
+      scheduleInput.dispatchEvent(new Event("change", { bubbles: true }));
     }
   });
 
