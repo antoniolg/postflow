@@ -1098,15 +1098,20 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       height: 18px;
       padding: 0 6px;
       border-radius: 999px;
-      background: #ff5f70;
-      color: #fff;
+      background: rgba(126, 138, 168, 0.26);
+      color: var(--text-secondary);
       display: inline-flex;
       align-items: center;
       justify-content: center;
       font-size: 10px;
       font-weight: 700;
       line-height: 1;
-      border: 1px solid rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(126, 138, 168, 0.35);
+    }
+    .nav-badge-danger {
+      background: #ff5f70;
+      color: #fff;
+      border-color: rgba(255, 255, 255, 0.15);
     }
     .nav-item.active {
       color: var(--text-primary);
@@ -1876,7 +1881,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         <a class="nav-item {{if eq .ActiveNavView "calendar"}}active{{end}}" href="/?view=calendar&month={{.CurrentMonthParam}}&day={{.SelectedDayKey}}">// calendar</a>
         <a class="nav-item {{if eq .ActiveNavView "publications"}}active{{end}}" href="/?view=publications"><span>// scheduled</span>{{if gt .ScheduledCount 0}}<span class="nav-badge">{{.ScheduledCount}}</span>{{end}}</a>
         <a class="nav-item {{if eq .ActiveNavView "drafts"}}active{{end}}" href="/?view=drafts"><span>// drafts</span>{{if gt .DraftCount 0}}<span class="nav-badge">{{.DraftCount}}</span>{{end}}</a>
-        <a class="nav-item {{if eq .ActiveNavView "failed"}}active{{end}}" href="/?view=failed"><span>// failed</span>{{if gt .FailedCount 0}}<span class="nav-badge">{{.FailedCount}}</span>{{end}}</a>
+        <a class="nav-item {{if eq .ActiveNavView "failed"}}active{{end}}" href="/?view=failed"><span>// failed</span>{{if gt .FailedCount 0}}<span class="nav-badge nav-badge-danger">{{.FailedCount}}</span>{{end}}</a>
         <a class="nav-item {{if eq .ActiveNavView "settings"}}active{{end}}" href="/?view=settings">// settings</a>
       </nav>
     </aside>

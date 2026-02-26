@@ -604,6 +604,83 @@ func TestPublicationsViewShowsOnlyScheduledInNext14Days(t *testing.T) {
 	}
 }
 
+func TestNavBadgesUseNeutralForScheduledAndDraftsAndRedForFailed(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	createDraftBody, _ := json.Marshal(map[string]any{
+		"platform": "x",
+		"text":     "draft badge",
+	})
+	createDraftReq := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(createDraftBody))
+	createDraftW := httptest.NewRecorder()
+	h.ServeHTTP(createDraftW, createDraftReq)
+	if createDraftW.Code != http.StatusCreated {
+		t.Fatalf("expected 201 for draft, got %d", createDraftW.Code)
+	}
+
+	createScheduledBody, _ := json.Marshal(map[string]any{
+		"platform":     "x",
+		"text":         "scheduled badge",
+		"scheduled_at": time.Now().UTC().Add(2 * time.Hour).Format(time.RFC3339),
+	})
+	createScheduledReq := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(createScheduledBody))
+	createScheduledW := httptest.NewRecorder()
+	h.ServeHTTP(createScheduledW, createScheduledReq)
+	if createScheduledW.Code != http.StatusCreated {
+		t.Fatalf("expected 201 for scheduled, got %d", createScheduledW.Code)
+	}
+
+	createFailedBody, _ := json.Marshal(map[string]any{
+		"platform":     "x",
+		"text":         "failed badge",
+		"scheduled_at": time.Now().UTC().Add(20 * 24 * time.Hour).Format(time.RFC3339),
+		"max_attempts": 1,
+	})
+	createFailedReq := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(createFailedBody))
+	createFailedW := httptest.NewRecorder()
+	h.ServeHTTP(createFailedW, createFailedReq)
+	if createFailedW.Code != http.StatusCreated {
+		t.Fatalf("expected 201 for failed seed post, got %d", createFailedW.Code)
+	}
+	var failedResp map[string]any
+	if err := json.Unmarshal(createFailedW.Body.Bytes(), &failedResp); err != nil {
+		t.Fatalf("decode failed seed response: %v", err)
+	}
+	failedPostID, _ := failedResp["id"].(string)
+	if failedPostID == "" {
+		t.Fatalf("expected failed seed post id")
+	}
+	if err := store.RecordPublishFailure(t.Context(), failedPostID, errors.New("boom"), 30*time.Second); err != nil {
+		t.Fatalf("record publish failure: %v", err)
+	}
+
+	publicationsReq := httptest.NewRequest(http.MethodGet, "/?view=publications", nil)
+	publicationsW := httptest.NewRecorder()
+	h.ServeHTTP(publicationsW, publicationsReq)
+	if publicationsW.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", publicationsW.Code)
+	}
+
+	body := publicationsW.Body.String()
+	if !strings.Contains(body, "<span>// scheduled</span><span class=\"nav-badge\">1</span>") {
+		t.Fatalf("expected scheduled nav badge with neutral style")
+	}
+	if !strings.Contains(body, "<span>// drafts</span><span class=\"nav-badge\">1</span>") {
+		t.Fatalf("expected drafts nav badge with neutral style")
+	}
+	if !strings.Contains(body, "<span>// failed</span><span class=\"nav-badge nav-badge-danger\">1</span>") {
+		t.Fatalf("expected failed nav badge with danger style")
+	}
+}
+
 func TestDefaultViewIsCalendar(t *testing.T) {
 	tempDir := t.TempDir()
 	store, err := db.Open(filepath.Join(tempDir, "test.db"))
