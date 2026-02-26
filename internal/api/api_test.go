@@ -836,7 +836,10 @@ func TestDefaultViewIsCalendar(t *testing.T) {
 	if !strings.Contains(body, "const syncDayPanelHeightToCalendar = () => {") || !strings.Contains(body, "dayPanel.style.height = calendarWrap.offsetHeight + \"px\";") {
 		t.Fatalf("expected day detail height to be synced from calendar height")
 	}
-	if !strings.Contains(body, "calendarWrap.style.minHeight = availableHeight + \"px\";") {
+	if !strings.Contains(body, "const bottomPadding = mainStyles ? parseFloat(mainStyles.paddingBottom || \"0\") : 0;") {
+		t.Fatalf("expected calendar height calculation to account for main bottom padding")
+	}
+	if !strings.Contains(body, "calendarWrap.style.height = availableHeight + \"px\";") {
 		t.Fatalf("expected calendar to expand to available viewport height")
 	}
 	if strings.Contains(body, ".calendar-wrap {\n      margin-top: 12px;") {

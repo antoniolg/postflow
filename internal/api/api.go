@@ -2294,6 +2294,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
   }
 
   const storageKey = "publisher.ui.calendar.scroll.v1";
+  const main = document.querySelector(".main");
   const layout = document.querySelector(".calendar-layout");
   const calendarWrap = document.querySelector(".calendar-wrap");
   const dayPanel = document.querySelector(".day-panel");
@@ -2306,6 +2307,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       return;
     }
     if (mobileQuery.matches) {
+      calendarWrap.style.height = "";
       calendarWrap.style.minHeight = "";
       dayPanel.style.height = "";
       return;
@@ -2313,9 +2315,18 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 
     const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
     const top = layout.getBoundingClientRect().top;
-    const availableHeight = Math.max(460, Math.floor(viewportHeight - top - 16));
-    calendarWrap.style.minHeight = availableHeight + "px";
-    dayPanel.style.height = calendarWrap.offsetHeight + "px";
+    const mainStyles = main ? window.getComputedStyle(main) : null;
+    const bottomPadding = mainStyles ? parseFloat(mainStyles.paddingBottom || "0") : 0;
+    const availableHeight = Math.max(0, Math.floor(viewportHeight - top - bottomPadding - 4));
+    if (availableHeight > 0) {
+      calendarWrap.style.height = availableHeight + "px";
+      calendarWrap.style.minHeight = "";
+      dayPanel.style.height = calendarWrap.offsetHeight + "px";
+      return;
+    }
+    calendarWrap.style.height = "";
+    calendarWrap.style.minHeight = "";
+    dayPanel.style.height = "";
   };
 
   let syncFrame = 0;
