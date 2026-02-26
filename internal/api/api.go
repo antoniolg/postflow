@@ -865,7 +865,11 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       border: 1px solid var(--border);
       background: #141923;
       border-radius: 14px;
-      overflow: auto;
+      overflow: hidden;
+    }
+    .calendar-grid-scroll {
+      overflow-x: auto;
+      overflow-y: hidden;
     }
     .calendar-layout {
       margin-top: 12px;
@@ -1490,38 +1494,40 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
             <a class="month-link" href="/?view=calendar&month={{.NextMonthParam}}&day={{.SelectedDayKey}}">&gt;</a>
           </div>
         </div>
-        <div class="weekday-row">
-          <div class="weekday">Mon</div>
-          <div class="weekday">Tue</div>
-          <div class="weekday">Wed</div>
-          <div class="weekday">Thu</div>
-          <div class="weekday">Fri</div>
-          <div class="weekday">Sat</div>
-          <div class="weekday">Sun</div>
-        </div>
-        {{range .CalendarWeeks}}
-        <div class="week-row">
-          {{range .}}
-          <div class="day-cell {{if not .InCurrentMonth}}outside{{end}} {{if .IsSelected}}selected{{end}}">
-            <a class="day-link" href="/?view=calendar&month={{$.CurrentMonthParam}}&day={{.DateKey}}">
-              <div class="day-head">
-                <span class="day-num {{if .IsToday}}today{{end}}">{{.DayNumber}}</span>
-              </div>
-              <div class="day-events">
-                {{range .Events}}
-                <div class="day-event {{.StatusClass}}" data-status="{{.StatusKey}}">
-                  <span class="event-time">{{.TimeLabel}}</span>{{.TextPreview}}
+        <div class="calendar-grid-scroll">
+          <div class="weekday-row">
+            <div class="weekday">Mon</div>
+            <div class="weekday">Tue</div>
+            <div class="weekday">Wed</div>
+            <div class="weekday">Thu</div>
+            <div class="weekday">Fri</div>
+            <div class="weekday">Sat</div>
+            <div class="weekday">Sun</div>
+          </div>
+          {{range .CalendarWeeks}}
+          <div class="week-row">
+            {{range .}}
+            <div class="day-cell {{if not .InCurrentMonth}}outside{{end}} {{if .IsSelected}}selected{{end}}">
+              <a class="day-link" href="/?view=calendar&month={{$.CurrentMonthParam}}&day={{.DateKey}}">
+                <div class="day-head">
+                  <span class="day-num {{if .IsToday}}today{{end}}">{{.DayNumber}}</span>
                 </div>
-                {{end}}
-                {{if gt .OverflowCount 0}}
-                <div class="more">+{{.OverflowCount}} more</div>
-                {{end}}
-              </div>
-            </a>
+                <div class="day-events">
+                  {{range .Events}}
+                  <div class="day-event {{.StatusClass}}" data-status="{{.StatusKey}}">
+                    <span class="event-time">{{.TimeLabel}}</span>{{.TextPreview}}
+                  </div>
+                  {{end}}
+                  {{if gt .OverflowCount 0}}
+                  <div class="more">+{{.OverflowCount}} more</div>
+                  {{end}}
+                </div>
+              </a>
+            </div>
+            {{end}}
           </div>
           {{end}}
         </div>
-        {{end}}
       </div>
       <aside class="day-panel">
         <div class="day-panel-head">
