@@ -913,7 +913,7 @@ func TestCalendarDayDetailShowsPendingBeforePublished(t *testing.T) {
 	}
 
 	body := calendarW.Body.String()
-	panelStart := strings.Index(body, "<aside class=\"day-panel\">")
+	panelStart := strings.Index(body, "<aside class=\"day-panel\" aria-label=\"Day detail\">")
 	if panelStart == -1 {
 		t.Fatalf("expected day panel in calendar view")
 	}
@@ -989,6 +989,15 @@ func TestDefaultViewIsCalendar(t *testing.T) {
 	if !strings.Contains(body, "body[data-view=\"calendar\"] .day-cell {\n      min-height: 0;\n      height: 100%;") {
 		t.Fatalf("expected calendar cells to stretch vertically with available height")
 	}
+	if !strings.Contains(body, ".weekday {\n      padding: 8px 8px;\n      font-size: 11px;") {
+		t.Fatalf("expected larger calendar weekday labels for accessibility")
+	}
+	if !strings.Contains(body, ".content .text {\n      font-size: 13px;") {
+		t.Fatalf("expected larger body text size for accessibility")
+	}
+	if !strings.Contains(body, ".nav-item.active .nav-badge {\n      background: #2f384d;\n      color: #d9e4ff;") {
+		t.Fatalf("expected improved active nav badge contrast")
+	}
 	if !strings.Contains(body, ".day-event {\n      flex: 0 0 auto;") {
 		t.Fatalf("expected calendar event rows to keep fixed height without shrinking")
 	}
@@ -1000,6 +1009,112 @@ func TestDefaultViewIsCalendar(t *testing.T) {
 	}
 	if strings.Contains(body, ".calendar-wrap {\n      margin-top: 12px;") {
 		t.Fatalf("calendar and day detail cards should align at the same top edge")
+	}
+}
+
+func TestAccessibilityMarkupAddsLabelsAndLandmarks(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	createDraftBody, _ := json.Marshal(map[string]any{
+		"platform": "x",
+		"text":     "draft for accessibility labels",
+	})
+	createDraftReq := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(createDraftBody))
+	createDraftW := httptest.NewRecorder()
+	h.ServeHTTP(createDraftW, createDraftReq)
+	if createDraftW.Code != http.StatusCreated {
+		t.Fatalf("expected 201 for draft seed post, got %d", createDraftW.Code)
+	}
+
+	createFailedBody, _ := json.Marshal(map[string]any{
+		"platform":     "x",
+		"text":         "failed for accessibility labels",
+		"scheduled_at": time.Now().UTC().Add(1 * time.Minute).Format(time.RFC3339),
+		"max_attempts": 1,
+	})
+	createFailedReq := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(createFailedBody))
+	createFailedW := httptest.NewRecorder()
+	h.ServeHTTP(createFailedW, createFailedReq)
+	if createFailedW.Code != http.StatusCreated {
+		t.Fatalf("expected 201 for failed seed post, got %d", createFailedW.Code)
+	}
+	var failedResp map[string]any
+	if err := json.Unmarshal(createFailedW.Body.Bytes(), &failedResp); err != nil {
+		t.Fatalf("decode failed seed response: %v", err)
+	}
+	failedPostID, _ := failedResp["id"].(string)
+	if failedPostID == "" {
+		t.Fatalf("expected failed seed post id")
+	}
+	if err := store.RecordPublishFailure(t.Context(), failedPostID, errors.New("boom"), 30*time.Second); err != nil {
+		t.Fatalf("record publish failure: %v", err)
+	}
+
+	calendarReq := httptest.NewRequest(http.MethodGet, "/?view=calendar", nil)
+	calendarW := httptest.NewRecorder()
+	h.ServeHTTP(calendarW, calendarReq)
+	if calendarW.Code != http.StatusOK {
+		t.Fatalf("expected 200 for calendar view, got %d", calendarW.Code)
+	}
+	calendarBody := calendarW.Body.String()
+	if !strings.Contains(calendarBody, "<aside class=\"sidebar\" aria-label=\"Primary navigation\">") {
+		t.Fatalf("expected labeled primary navigation landmark")
+	}
+	if !strings.Contains(calendarBody, "<aside class=\"day-panel\" aria-label=\"Day detail\">") {
+		t.Fatalf("expected labeled day detail landmark")
+	}
+
+	draftsReq := httptest.NewRequest(http.MethodGet, "/?view=drafts", nil)
+	draftsW := httptest.NewRecorder()
+	h.ServeHTTP(draftsW, draftsReq)
+	if draftsW.Code != http.StatusOK {
+		t.Fatalf("expected 200 for drafts view, got %d", draftsW.Code)
+	}
+	draftsBody := draftsW.Body.String()
+	if !strings.Contains(draftsBody, "aria-label=\"scheduled at for draft ") {
+		t.Fatalf("expected accessible label on draft schedule datetime input")
+	}
+
+	failedReq := httptest.NewRequest(http.MethodGet, "/?view=failed", nil)
+	failedW := httptest.NewRecorder()
+	h.ServeHTTP(failedW, failedReq)
+	if failedW.Code != http.StatusOK {
+		t.Fatalf("expected 200 for failed view, got %d", failedW.Code)
+	}
+	failedBody := failedW.Body.String()
+	failedLabelRe := regexp.MustCompile(`data-failed-checkbox[^>]*aria-label="select failed publication[^"]*"`)
+	if !failedLabelRe.MatchString(failedBody) {
+		t.Fatalf("expected accessible label on failed selection checkbox")
+	}
+
+	createReq := httptest.NewRequest(http.MethodGet, "/?view=create", nil)
+	createW := httptest.NewRecorder()
+	h.ServeHTTP(createW, createReq)
+	if createW.Code != http.StatusOK {
+		t.Fatalf("expected 200 for create view, got %d", createW.Code)
+	}
+	createBody := createW.Body.String()
+	if !strings.Contains(createBody, "<label for=\"create-scheduled-at\">") || !strings.Contains(createBody, "id=\"create-scheduled-at\"") {
+		t.Fatalf("expected create scheduled datetime label association")
+	}
+
+	settingsReq := httptest.NewRequest(http.MethodGet, "/?view=settings", nil)
+	settingsW := httptest.NewRecorder()
+	h.ServeHTTP(settingsW, settingsReq)
+	if settingsW.Code != http.StatusOK {
+		t.Fatalf("expected 200 for settings view, got %d", settingsW.Code)
+	}
+	settingsBody := settingsW.Body.String()
+	if !strings.Contains(settingsBody, "<label for=\"timezone-select\">Timezone (IANA)</label>") {
+		t.Fatalf("expected explicit label association for timezone select")
 	}
 }
 

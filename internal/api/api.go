@@ -1090,7 +1090,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     .nav-item {
       border-radius: 10px;
       padding: 10px 12px;
-      font-size: 12px;
+      font-size: 13px;
       color: var(--text-secondary);
       border: 1px solid transparent;
       display: flex;
@@ -1122,13 +1122,13 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      font-size: 10px;
+      font-size: 11px;
       font-weight: 700;
       line-height: 1;
       border: 1px solid rgba(126, 138, 168, 0.35);
     }
     .nav-badge-danger {
-      background: #ff5f70;
+      background: #c93d4f;
       color: #fff;
       border-color: rgba(255, 255, 255, 0.15);
     }
@@ -1136,6 +1136,11 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       color: var(--text-primary);
       background: var(--bg-elevated);
       border-color: #31394b;
+    }
+    .nav-item.active .nav-badge {
+      background: #2f384d;
+      color: #d9e4ff;
+      border-color: #4d5b7a;
     }
     .nav-item-settings {
       margin-top: auto;
@@ -1194,7 +1199,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       color: #111;
       border: 0;
       padding: 10px 16px;
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 700;
       text-transform: lowercase;
       letter-spacing: 0.03em;
@@ -1209,7 +1214,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     .tab {
       border-radius: 999px;
       padding: 7px 12px;
-      font-size: 11px;
+      font-size: 12px;
       color: var(--text-secondary);
       background: transparent;
       border: 1px solid var(--border);
@@ -1258,7 +1263,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       border-radius: 10px;
       padding: 8px 10px;
     }
-    .stat .k { color: var(--text-secondary); font-size: 10px; margin-bottom: 4px; }
+    .stat .k { color: var(--text-secondary); font-size: 12px; margin-bottom: 4px; }
     .stat .v { font-size: 16px; }
     .calendar-wrap {
       border: 1px solid var(--border);
@@ -1341,7 +1346,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       background: #171d28;
     }
     .day-panel-title {
-      font-size: 11px;
+      font-size: 12px;
       letter-spacing: 0.08em;
       text-transform: uppercase;
       color: #c7d1e8;
@@ -1349,7 +1354,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       margin-bottom: 3px;
     }
     .day-panel-sub {
-      font-size: 10px;
+      font-size: 12px;
       color: var(--text-secondary);
     }
     .day-panel-body {
@@ -1361,7 +1366,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       overflow: auto;
     }
     .day-group-title {
-      font-size: 9px;
+      font-size: 11px;
       letter-spacing: 0.08em;
       text-transform: uppercase;
       color: #90a1c2;
@@ -1372,7 +1377,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       display: flex;
       align-items: center;
       gap: 8px;
-      font-size: 9px;
+      font-size: 11px;
       letter-spacing: 0.08em;
       text-transform: uppercase;
       color: #7f8ca8;
@@ -1402,12 +1407,12 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     }
     .day-item-time {
       color: #c7d1e8;
-      font-size: 10px;
+      font-size: 12px;
       font-weight: 700;
       letter-spacing: 0.06em;
     }
     .day-item-text {
-      font-size: 11px;
+      font-size: 13px;
       line-height: 1.35;
       color: #dee5f6;
       margin-bottom: 5px;
@@ -1417,7 +1422,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       display: flex;
       gap: 8px;
       flex-wrap: wrap;
-      font-size: 9px;
+      font-size: 11px;
       color: #8fa0c1;
     }
     .calendar-head {
@@ -1429,14 +1434,14 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       background: #171d28;
     }
     .calendar-title {
-      font-size: 11px;
+      font-size: 12px;
       letter-spacing: 0.08em;
       text-transform: uppercase;
       color: #c7d1e8;
       font-weight: 700;
     }
     .calendar-sub {
-      font-size: 10px;
+      font-size: 12px;
       color: var(--text-secondary);
     }
     .calendar-controls {
@@ -1450,7 +1455,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       border: 1px solid #34405a;
       border-radius: 8px;
       padding: 4px 7px;
-      font-size: 10px;
+      font-size: 12px;
       line-height: 1;
       background: #202839;
     }
@@ -1463,7 +1468,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       color: #161616;
       border-radius: 7px;
       padding: 4px 7px;
-      font-size: 10px;
+      font-size: 12px;
       font-weight: 700;
       text-transform: lowercase;
       line-height: 1;
@@ -1476,10 +1481,10 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     }
     .weekday {
       padding: 8px 8px;
-      font-size: 9px;
+      font-size: 11px;
       letter-spacing: 0.08em;
       text-transform: uppercase;
-      color: #7080a1;
+      color: #7c8db2;
       border-right: 1px solid #1e2534;
       background: #151b26;
     }
@@ -1517,7 +1522,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       margin-bottom: 5px;
     }
     .day-num {
-      font-size: 10px;
+      font-size: 12px;
       color: #a8b4cf;
     }
     .day-num.today {
@@ -1540,9 +1545,9 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       padding: 4px 5px;
       background: #1d2432;
       border: 1px solid #2a3244;
-      font-size: 9px;
+      font-size: 11px;
       color: #bdc8e0;
-      line-height: 1.25;
+      line-height: 1.3;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -1554,7 +1559,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       margin-right: 4px;
     }
     .more {
-      font-size: 9px;
+      font-size: 11px;
       color: #7f8fad;
       margin-top: 1px;
     }
@@ -1612,14 +1617,14 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       min-width: 0;
     }
     .content .text {
-      font-size: 11px;
+      font-size: 13px;
       line-height: 1.4;
       color: var(--text-primary);
       word-break: break-word;
     }
     .meta {
       margin-top: 5px;
-      font-size: 10px;
+      font-size: 12px;
       color: var(--text-secondary);
       display: flex;
       gap: 14px;
@@ -1638,7 +1643,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       color: var(--text-secondary);
       border-radius: 999px;
       padding: 6px 10px;
-      font-size: 10px;
+      font-size: 12px;
       font-weight: 600;
       text-transform: lowercase;
     }
@@ -1660,7 +1665,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       padding: 10px 12px;
       border-bottom: 1px solid #242b3b;
       background: #171d28;
-      font-size: 11px;
+      font-size: 13px;
       letter-spacing: 0.08em;
       text-transform: uppercase;
       color: #c7d1e8;
@@ -1680,7 +1685,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       gap: 6px;
     }
     .field label {
-      font-size: 10px;
+      font-size: 12px;
       color: #9aa8c7;
       text-transform: uppercase;
       letter-spacing: 0.08em;
@@ -1693,7 +1698,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       background: #11141b;
       color: var(--text-primary);
       font: inherit;
-      font-size: 12px;
+      font-size: 14px;
       line-height: 1.45;
       padding: 10px;
     }
@@ -1712,7 +1717,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       background-color: #11141b;
       color: var(--text-primary);
       font: inherit;
-      font-size: 12px;
+      font-size: 14px;
       appearance: none;
       -webkit-appearance: none;
       -moz-appearance: none;
@@ -1744,7 +1749,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     .alert {
       border-radius: 10px;
       padding: 8px 10px;
-      font-size: 11px;
+      font-size: 13px;
       border: 1px solid transparent;
     }
     .alert.error {
@@ -1763,7 +1768,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       background: #1b2230;
       border-radius: 999px;
       padding: 6px 10px;
-      font-size: 10px;
+      font-size: 12px;
       text-transform: lowercase;
       text-decoration: none;
       font-weight: 700;
@@ -1857,7 +1862,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       background: #11141b;
       color: var(--text-primary);
       font: inherit;
-      font-size: 11px;
+      font-size: 13px;
     }
     button {
       border: 1px solid #8a4a1f;
@@ -1865,7 +1870,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       color: #161616;
       border-radius: 999px;
       padding: 6px 10px;
-      font-size: 10px;
+      font-size: 12px;
       font-weight: 700;
       text-transform: lowercase;
       cursor: pointer;
@@ -1883,7 +1888,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       margin-top: 14px;
       margin-bottom: 8px;
       color: var(--text-secondary);
-      font-size: 11px;
+      font-size: 12px;
       text-transform: uppercase;
       letter-spacing: 0.06em;
     }
@@ -1928,7 +1933,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       h1 { font-size: 34px; }
       .create-pill {
         padding: 8px 12px;
-        font-size: 10px;
+        font-size: 11px;
       }
       .tabs {
         flex-wrap: nowrap;
@@ -1952,7 +1957,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       }
       .month-link, .month-go {
         padding: 4px 6px;
-        font-size: 9px;
+        font-size: 11px;
       }
       body[data-view="calendar"] .calendar-grid-scroll {
         display: block;
@@ -2008,14 +2013,14 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     @media (max-width: 520px) {
       h1 { font-size: 30px; }
       .stats { grid-template-columns: 1fr; }
-      .content .text { font-size: 10px; }
-      .meta { font-size: 9px; gap: 8px; }
+      .content .text { font-size: 12px; }
+      .meta { font-size: 11px; gap: 8px; }
     }
   </style>
 </head>
 <body data-view="{{.View}}" data-ui-timezone="{{.UITimezone}}">
   <div class="app">
-    <aside class="sidebar">
+    <aside class="sidebar" aria-label="Primary navigation">
       <div class="logo">
         <span class="logo-dot"></span>
         <span>post_flow</span>
@@ -2113,7 +2118,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
           {{end}}
         </div>
       </div>
-      <aside class="day-panel">
+      <aside class="day-panel" aria-label="Day detail">
         <div class="day-panel-head">
           <div class="day-panel-title">DAY DETAIL</div>
           <div class="day-panel-sub">{{.SelectedDayLabel}}</div>
@@ -2202,7 +2207,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
           </div>
           <div class="card-actions">
             <form method="post" action="/posts/{{.ID}}/schedule">
-              <input type="datetime-local" name="scheduled_at_local" required />
+              <input type="datetime-local" name="scheduled_at_local" required aria-label="scheduled at for draft {{.ID}}" />
               <button type="submit">schedule</button>
             </form>
           </div>
@@ -2229,7 +2234,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         <article class="card failed card-editable" data-edit-url="/?view=create&edit_id={{.PostID}}&return_to={{urlquery $.CurrentViewURL}}">
           <div class="card-left">
             <div class="failed-select">
-              <input class="failed-checkbox" type="checkbox" value="{{.DeadLetterID}}" data-failed-checkbox />
+              <input class="failed-checkbox" type="checkbox" value="{{.DeadLetterID}}" data-failed-checkbox aria-label="select failed publication {{.PostID}}" />
             </div>
             <div class="content">
               <div class="text">{{.Text}}</div>
@@ -2265,12 +2270,12 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
           {{if .CreateError}}<div class="alert error">{{.CreateError}}</div>{{end}}
           {{if .CreateSuccess}}<div class="alert success">{{.CreateSuccess}}</div>{{end}}
           <div class="field">
-            <label>Text</label>
-            <textarea name="text" required placeholder="Write your post...">{{.CreateText}}</textarea>
+            <label for="create-text">Text</label>
+            <textarea id="create-text" name="text" required placeholder="Write your post...">{{.CreateText}}</textarea>
           </div>
           <div class="field">
-            <label>Scheduled At ({{.UITimezone}})</label>
-            <input type="datetime-local" name="scheduled_at_local" value="{{.CreateScheduledLocal}}" />
+            <label for="create-scheduled-at">Scheduled At ({{.UITimezone}})</label>
+            <input id="create-scheduled-at" type="datetime-local" name="scheduled_at_local" value="{{.CreateScheduledLocal}}" />
           </div>
           <div class="editor-actions">
             <button class="btn-secondary" type="submit" name="intent" value="draft">save_draft</button>
@@ -2289,7 +2294,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
           {{if .SettingsError}}<div class="alert error">{{.SettingsError}}</div>{{end}}
           {{if .SettingsSuccess}}<div class="alert success">{{.SettingsSuccess}}</div>{{end}}
           <div class="field">
-            <label>Timezone (IANA)</label>
+            <label for="timezone-select">Timezone (IANA)</label>
             <select name="timezone" id="timezone-select" data-current-timezone="{{.UITimezone}}" required>
               <option value="UTC">UTC</option>
               <option value="Europe/Madrid">Europe/Madrid</option>
