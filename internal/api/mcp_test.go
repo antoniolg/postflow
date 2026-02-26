@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -45,13 +46,27 @@ func TestMCPStreamableHTTPExposesToolsAndCreatesPost(t *testing.T) {
 		"publisher_list_drafts",
 		"publisher_list_failed",
 		"publisher_create_post",
+		"publisher_upload_media",
 	} {
 		if !strings.Contains(string(listToolsRaw), expected) {
 			t.Fatalf("expected tools/list to include %q", expected)
 		}
 	}
 
-	createPostBody := `{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"publisher_create_post","arguments":{"platform":"x","text":"draft from mcp tool"}}}`
+	uploadBody := `{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"publisher_upload_media","arguments":{"platform":"x","kind":"image","original_name":"hello.txt","content_base64":"aGVsbG8gd29ybGQ="}}}`
+	uploadResp, uploadRaw := postMCPRequest(t, mcpURL, sessionID, uploadBody)
+	if uploadResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected upload tools/call status 200, got %d: %s", uploadResp.StatusCode, string(uploadRaw))
+	}
+	if strings.Contains(string(uploadRaw), `"isError":true`) {
+		t.Fatalf("expected upload media tool call without isError=true, got: %s", string(uploadRaw))
+	}
+	mediaID := extractToolStructuredString(uploadRaw, "media_id")
+	if mediaID == "" {
+		t.Fatalf("expected media_id in upload tool response: %s", string(uploadRaw))
+	}
+
+	createPostBody := `{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"publisher_create_post","arguments":{"platform":"x","text":"draft from mcp tool","media_ids":["` + mediaID + `"]}}}`
 	createPostResp, createPostRaw := postMCPRequest(t, mcpURL, sessionID, createPostBody)
 	if createPostResp.StatusCode != http.StatusOK {
 		t.Fatalf("expected tools/call status 200, got %d: %s", createPostResp.StatusCode, string(createPostRaw))
@@ -69,6 +84,12 @@ func TestMCPStreamableHTTPExposesToolsAndCreatesPost(t *testing.T) {
 	}
 	if strings.TrimSpace(drafts[0].Text) != "draft from mcp tool" {
 		t.Fatalf("unexpected draft text %q", drafts[0].Text)
+	}
+	if len(drafts[0].Media) != 1 {
+		t.Fatalf("expected draft with one media attachment, got %d", len(drafts[0].Media))
+	}
+	if drafts[0].Media[0].ID != mediaID {
+		t.Fatalf("expected attached media id %q, got %q", mediaID, drafts[0].Media[0].ID)
 	}
 }
 
@@ -146,5 +167,47 @@ func postMCPRequest(t *testing.T, endpoint, sessionID, payload string) (*http.Re
 	if err != nil {
 		t.Fatalf("read response body: %v", err)
 	}
-	return resp, body
+	return resp, normalizeMCPResponseBody(body)
+}
+
+func extractToolStructuredString(raw []byte, key string) string {
+	var response struct {
+		Result struct {
+			StructuredContent map[string]any `json:"structuredContent"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(raw, &response); err != nil {
+		return ""
+	}
+	value, ok := response.Result.StructuredContent[key]
+	if !ok {
+		return ""
+	}
+	out, _ := value.(string)
+	return strings.TrimSpace(out)
+}
+
+func normalizeMCPResponseBody(raw []byte) []byte {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || bytes.HasPrefix(trimmed, []byte("{")) {
+		return trimmed
+	}
+
+	lines := strings.Split(string(trimmed), "\n")
+	dataLines := make([]string, 0, len(lines))
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "data:") {
+			continue
+		}
+		data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+		if data == "" {
+			continue
+		}
+		dataLines = append(dataLines, data)
+	}
+	if len(dataLines) == 0 {
+		return trimmed
+	}
+	return []byte(strings.Join(dataLines, "\n"))
 }

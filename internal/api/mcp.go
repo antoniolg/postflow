@@ -59,6 +59,14 @@ func (s Server) newMCPHandler() http.Handler {
 		},
 	}, s.mcpCreatePostTool)
 
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "publisher_upload_media",
+		Description: "Upload media and return media_id. Provide either content_base64 or file_path.",
+		Annotations: &mcp.ToolAnnotations{
+			IdempotentHint: false,
+		},
+	}, s.mcpUploadMediaTool)
+
 	return mcp.NewStreamableHTTPHandler(func(_ *http.Request) *mcp.Server {
 		return server
 	}, nil)

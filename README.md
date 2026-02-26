@@ -197,6 +197,7 @@ Soporta transporte streamable HTTP y expone estas tools:
 - `publisher_list_drafts`
 - `publisher_list_failed`
 - `publisher_create_post`
+- `publisher_upload_media`
 
 Ejemplo para Claude Code:
 
