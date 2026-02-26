@@ -1818,11 +1818,44 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       cursor: pointer;
     }
     .failed-checkbox {
-      margin-top: 3px;
-      width: 14px;
-      height: 14px;
-      accent-color: var(--accent-orange);
+      margin-top: 2px;
+      width: 16px;
+      height: 16px;
+      appearance: none;
+      -webkit-appearance: none;
+      border-radius: 5px;
+      border: 1px solid #3c465e;
+      background: #11141b;
+      display: inline-grid;
+      place-content: center;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+      transition: border-color .12s ease, background .12s ease, box-shadow .12s ease;
       cursor: pointer;
+    }
+    .failed-checkbox::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 2px;
+      background: linear-gradient(180deg, #ff904f 0%, #ff7a30 100%);
+      transform: scale(0);
+      transition: transform .12s ease;
+      box-shadow: 0 0 10px rgba(255,122,48,0.45);
+    }
+    .failed-checkbox:hover {
+      border-color: #55627f;
+      background: #131824;
+    }
+    .failed-checkbox:checked {
+      border-color: #ff7a30;
+      background: #231a1f;
+    }
+    .failed-checkbox:checked::before {
+      transform: scale(1);
+    }
+    .failed-checkbox:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 2px rgba(255,122,48,0.25);
     }
     .meta-accent { color: var(--accent-orange); }
     .meta-soft { color: #7f8ca8; }

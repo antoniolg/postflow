@@ -435,6 +435,56 @@ func TestBulkRequeueDeadLettersFromForm(t *testing.T) {
 	}
 }
 
+func TestFailedViewUsesStyledCheckboxes(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	payload, _ := json.Marshal(map[string]any{
+		"platform":     "x",
+		"text":         "failed checkbox style",
+		"scheduled_at": time.Now().UTC().Add(2 * time.Minute).Format(time.RFC3339),
+		"max_attempts": 1,
+	})
+	createReq := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(payload))
+	createW := httptest.NewRecorder()
+	h.ServeHTTP(createW, createReq)
+	if createW.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", createW.Code)
+	}
+	var created map[string]any
+	if err := json.Unmarshal(createW.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode create response: %v", err)
+	}
+	postID, _ := created["id"].(string)
+	if postID == "" {
+		t.Fatalf("missing post id")
+	}
+	if err := store.RecordPublishFailure(t.Context(), postID, errors.New("boom"), 30*time.Second); err != nil {
+		t.Fatalf("record publish failure: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/?view=failed", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, ".failed-checkbox {\n      margin-top: 2px;\n      width: 16px;\n      height: 16px;\n      appearance: none;") {
+		t.Fatalf("expected custom failed checkbox base style")
+	}
+	if !strings.Contains(body, ".failed-checkbox:checked::before {\n      transform: scale(1);") {
+		t.Fatalf("expected custom failed checkbox checked style")
+	}
+}
+
 func TestCreatePostFromFormUsesConfiguredTimezone(t *testing.T) {
 	tempDir := t.TempDir()
 	store, err := db.Open(filepath.Join(tempDir, "test.db"))
