@@ -1464,14 +1464,14 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         </div>
         <a class="create-pill" href="/?view=create">create_post</a>
       </header>
-      {{if ne .View "calendar"}}
+      {{if eq .View "publications"}}
       <div class="tabs">
         <button type="button" class="tab filter-chip active" data-filter="published" aria-pressed="true"><span class="dot live"></span> published</button>
         <button type="button" class="tab filter-chip active" data-filter="scheduled" aria-pressed="true"><span class="dot scheduled"></span> scheduled</button>
         <button type="button" class="tab filter-chip active" data-filter="draft" aria-pressed="true"><span class="dot draft"></span> draft mode</button>
       </div>
       {{end}}
-      {{if ne .View "calendar"}}
+      {{if eq .View "publications"}}
       <div class="stats">
         <div class="stat"><div class="k">scheduled</div><div class="v">{{.ScheduledCount}}</div></div>
         <div class="stat"><div class="k">drafts</div><div class="v">{{.DraftCount}}</div></div>
@@ -1649,7 +1649,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 <script>
 (() => {
   const view = document.body.dataset.view || "";
-  if (view === "calendar") {
+  if (view !== "publications") {
     return;
   }
   const storageKey = "publisher.ui.status-filters.v1";
