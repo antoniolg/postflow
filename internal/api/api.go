@@ -828,7 +828,6 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		IsToday        bool
 		IsSelected     bool
 		Events         []calendarEvent
-		OverflowCount  int
 	}
 
 	firstWeekday := int(monthStartLocal.Weekday())
@@ -900,11 +899,6 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	for d := gridStart; !d.After(gridEnd); d = d.AddDate(0, 0, 1) {
 		key := d.Format("2006-01-02")
 		dayEvents := eventsByDate[key]
-		overflow := 0
-		if len(dayEvents) > 3 {
-			overflow = len(dayEvents) - 3
-			dayEvents = dayEvents[:3]
-		}
 		calendarDays = append(calendarDays, calendarDay{
 			DateKey:        key,
 			DayNumber:      d.Day(),
@@ -912,7 +906,6 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 			IsToday:        d.Year() == nowLocal.Year() && d.Month() == nowLocal.Month() && d.Day() == nowLocal.Day(),
 			IsSelected:     d.Year() == selectedDayLocal.Year() && d.Month() == selectedDayLocal.Month() && d.Day() == selectedDayLocal.Day(),
 			Events:         dayEvents,
-			OverflowCount:  overflow,
 		})
 	}
 
@@ -2102,14 +2095,14 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
                 <div class="day-head">
                   <span class="day-num {{if .IsToday}}today{{end}}">{{.DayNumber}}</span>
                 </div>
-                <div class="day-events">
+                <div class="day-events" data-day-events>
                   {{range .Events}}
-                  <div class="day-event {{.StatusClass}}" data-status="{{.StatusKey}}">
+                  <div class="day-event {{.StatusClass}}" data-day-event data-status="{{.StatusKey}}">
                     <span class="event-time">{{.TimeLabel}}</span>{{.TextPreview}}
                   </div>
                   {{end}}
-                  {{if gt .OverflowCount 0}}
-                  <div class="more">+{{.OverflowCount}} more</div>
+                  {{if gt (len .Events) 0}}
+                  <div class="more" data-day-overflow hidden></div>
                   {{end}}
                 </div>
               </a>
@@ -2353,6 +2346,84 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
   const panelBody = document.querySelector(".day-panel-body");
   const mobileQuery = window.matchMedia("(max-width: 980px)");
 
+  const syncCalendarCellOverflow = () => {
+    if (!layout) {
+      return;
+    }
+
+    const dayEventLists = Array.from(layout.querySelectorAll(".day-events[data-day-events]"));
+    dayEventLists.forEach((list) => {
+      const events = Array.from(list.querySelectorAll(".day-event[data-day-event]"));
+      const more = list.querySelector(".more[data-day-overflow]");
+
+      if (events.length === 0) {
+        if (more) {
+          more.hidden = true;
+          more.textContent = "";
+        }
+        return;
+      }
+
+      events.forEach((eventEl) => {
+        eventEl.hidden = false;
+      });
+
+      if (!more) {
+        return;
+      }
+
+      more.hidden = true;
+      more.textContent = "";
+
+      const availableHeight = list.clientHeight;
+      if (availableHeight <= 0) {
+        return;
+      }
+
+      if (list.scrollHeight <= availableHeight + 0.5) {
+        return;
+      }
+
+      more.hidden = false;
+      more.textContent = "+0 more";
+
+      const styles = window.getComputedStyle(list);
+      const gapValue = parseFloat(styles.rowGap || styles.gap || "0");
+      const gap = Number.isFinite(gapValue) ? gapValue : 0;
+      const moreHeight = more.offsetHeight;
+      let usedHeight = 0;
+      let visible = 0;
+
+      for (let i = 0; i < events.length; i += 1) {
+        const eventEl = events[i];
+        const eventHeight = eventEl.offsetHeight;
+        const gapBeforeEvent = visible > 0 ? gap : 0;
+        const remainingAfterThis = events.length - (visible + 1);
+        const reserveForMore = remainingAfterThis > 0 ? gap + moreHeight : 0;
+        const nextUsedHeight = usedHeight + gapBeforeEvent + eventHeight + reserveForMore;
+        if (nextUsedHeight > availableHeight + 0.5) {
+          break;
+        }
+        usedHeight += gapBeforeEvent + eventHeight;
+        visible += 1;
+      }
+
+      events.forEach((eventEl, index) => {
+        eventEl.hidden = index >= visible;
+      });
+
+      const hiddenCount = events.length - visible;
+      if (hiddenCount > 0) {
+        more.textContent = "+" + hiddenCount + " more";
+        more.hidden = false;
+        return;
+      }
+
+      more.textContent = "";
+      more.hidden = true;
+    });
+  };
+
   const syncDayPanelHeightToCalendar = () => {
     if (!layout || !calendarWrap || !dayPanel) {
       return;
@@ -2387,6 +2458,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     }
     syncFrame = requestAnimationFrame(() => {
       syncDayPanelHeightToCalendar();
+      syncCalendarCellOverflow();
       syncFrame = 0;
     });
   };
@@ -2420,6 +2492,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 
     requestAnimationFrame(() => {
       syncDayPanelHeightToCalendar();
+      syncCalendarCellOverflow();
       if (grid) {
         grid.scrollLeft = x;
       }
@@ -2429,6 +2502,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       window.scrollTo(0, y);
       setTimeout(() => {
         syncDayPanelHeightToCalendar();
+        syncCalendarCellOverflow();
         if (grid) {
           grid.scrollLeft = x;
         }
