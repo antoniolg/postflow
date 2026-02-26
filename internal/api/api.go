@@ -716,10 +716,10 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	nowLocal := time.Now().In(uiLoc)
 	view := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("view")))
 	if view == "" {
-		view = "publications"
+		view = "calendar"
 	}
 	if view != "calendar" && view != "publications" && view != "drafts" && view != "create" && view != "failed" && view != "settings" {
-		view = "publications"
+		view = "calendar"
 	}
 	editID := strings.TrimSpace(r.URL.Query().Get("edit_id"))
 	returnTo := strings.TrimSpace(r.URL.Query().Get("return_to"))
@@ -931,8 +931,10 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	selectedDayItems := detailsByDate[selectedDayKey]
 	todayMonthParam := nowLocal.Format("2006-01")
 	todayDayKey := nowLocal.Format("2006-01-02")
-	currentViewURL := "/?view=publications&month=" + currentMonthParam
+	currentViewURL := "/?view=calendar&month=" + currentMonthParam + "&day=" + selectedDayKey
 	switch view {
+	case "publications":
+		currentViewURL = "/?view=publications"
 	case "calendar":
 		currentViewURL = "/?view=calendar&month=" + currentMonthParam + "&day=" + selectedDayKey
 	case "drafts":
@@ -947,13 +949,13 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	createViewURL := "/?view=create&return_to=" + url.QueryEscape(currentViewURL)
-	backURL := "/?view=publications&month=" + currentMonthParam
+	backURL := "/?view=calendar&month=" + currentMonthParam + "&day=" + selectedDayKey
 	if returnTo != "" {
 		backURL = returnTo
 	}
 	activeNavView := view
 	if activeNavView == "create" {
-		activeNavView = "publications"
+		activeNavView = "calendar"
 		if returnTo != "" {
 			if parsed, err := url.Parse(returnTo); err == nil {
 				sourceView := strings.ToLower(strings.TrimSpace(parsed.Query().Get("view")))

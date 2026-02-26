@@ -539,3 +539,26 @@ func TestPublicationsViewDoesNotRenderDrafts(t *testing.T) {
 		t.Fatalf("scheduled text should appear in publications view")
 	}
 }
+
+func TestDefaultViewIsCalendar(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, ">CALENDAR</h1>") {
+		t.Fatalf("expected CALENDAR as default view title")
+	}
+}
