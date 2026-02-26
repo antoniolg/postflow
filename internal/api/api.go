@@ -1311,8 +1311,8 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     .stat .v { font-size: 16px; }
     .calendar-wrap {
       border: 0;
-      background: #212121;
-      border-radius: 18px;
+      background: transparent;
+      border-radius: 4px;
       overflow: hidden;
     }
     .calendar-grid-scroll {
@@ -1341,6 +1341,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     body[data-view="calendar"] .calendar-grid-scroll {
       display: flex;
       flex-direction: column;
+      gap: 1px;
       flex: 1;
       min-height: 0;
       overflow: auto;
@@ -1351,10 +1352,12 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     body[data-view="calendar"] .week-row {
       flex: 1 1 0;
       min-height: 0;
+      overflow: hidden;
     }
     body[data-view="calendar"] .day-cell {
       min-height: 0;
       height: 100%;
+      overflow: hidden;
     }
     body[data-view="calendar"] .day-link {
       min-height: 0;
@@ -1365,6 +1368,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     body[data-view="calendar"] .day-events {
       flex: 1;
       min-height: 0;
+      overflow: hidden;
     }
     body[data-view="calendar"] .day-panel {
       display: flex;
@@ -1378,28 +1382,30 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     }
     .day-panel {
       border: 0;
-      background: #212121;
-      border-radius: 18px;
+      background: var(--bg-card, #212121);
+      border-radius: 8px;
       overflow: hidden;
       position: sticky;
       top: 16px;
     }
     .day-panel-head {
-      padding: 10px 12px;
+      padding: 14px 14px 12px;
       border-bottom: 1px solid #2a2a2a;
-      background: #212121;
+      background: var(--bg-card, #212121);
     }
     .day-panel-title {
-      font-size: 12px;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: #b8b8b8;
+      font-family: 'Oswald', sans-serif;
+      font-size: 20px;
       font-weight: 700;
-      margin-bottom: 3px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--text-primary);
+      margin-bottom: 2px;
     }
     .day-panel-sub {
+      font-family: 'JetBrains Mono', monospace;
       font-size: 12px;
-      color: var(--text-secondary);
+      color: var(--accent-orange);
     }
     .day-panel-body {
       padding: 10px;
@@ -1462,6 +1468,37 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       margin-bottom: 5px;
       word-break: break-word;
     }
+    .day-item-platform {
+      font-size: 11px;
+      color: #a8a8a8;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .day-item-actions {
+      display: flex;
+      gap: 6px;
+      justify-content: flex-end;
+      margin-top: 4px;
+    }
+    .day-item-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px;
+      height: 26px;
+      border-radius: 6px;
+      border: 0;
+      background: #343434;
+      color: #b8b8b8;
+      font-size: 13px;
+      cursor: pointer;
+      text-decoration: none;
+      line-height: 1;
+    }
+    .day-item-btn:hover { background: #404040; color: #e0e0e0; }
+    .day-item-btn-del { color: #a87272; }
+    .day-item-btn-del:hover { background: #4a2a2a; color: #e88; }
+    .day-item-btn:disabled { opacity: 0.35; cursor: not-allowed; }
     .day-item-meta {
       display: flex;
       gap: 8px;
@@ -1469,63 +1506,10 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       font-size: 11px;
       color: #a8a8a8;
     }
-    .calendar-head {
+    .header-right {
       display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 10px 12px;
-      flex-wrap: wrap;
-      padding: 12px 14px 10px;
-      border-bottom: 1px solid #2a2a2a;
-      background: #212121;
-    }
-    .calendar-head-main {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      min-width: 0;
-    }
-    .calendar-title {
-      font-size: 13px;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      color: #b8b8b8;
-      font-weight: 700;
-    }
-    .calendar-sub {
-      font-size: 11px;
-      color: var(--text-secondary);
-    }
-    .calendar-legend {
-      display: inline-flex;
       align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-    .legend-item {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      border-radius: 999px;
-      background: #2a2a2a;
-      color: #b8b8b8;
-      padding: 3px 8px;
-      font-size: 10px;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-    }
-    .legend-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 999px;
-      flex: 0 0 auto;
-      background: #858585;
-    }
-    .legend-item.pending .legend-dot {
-      background: var(--accent-orange);
-    }
-    .legend-item.published .legend-dot {
-      background: var(--accent-teal);
+      gap: 16px;
     }
     .calendar-controls {
       display: flex;
@@ -1536,15 +1520,31 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       color: var(--text-primary);
       text-decoration: none;
       border: 0;
-      border-radius: 12px;
-      width: 30px;
-      height: 30px;
+      border-radius: 8px;
+      width: 32px;
+      height: 32px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
       font-size: 14px;
       line-height: 1;
-      background: #2d2d2d;
+      background: var(--bg-elevated, #2d2d2d);
+    }
+    .month-link:hover {
+      background: #3a3a3a;
+    }
+    .month-link svg {
+      width: 16px;
+      height: 16px;
+    }
+    .month-label {
+      font-family: 'Oswald', sans-serif;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      color: var(--text-primary);
+      min-width: 180px;
+      text-align: center;
     }
     .month-go {
       display: inline-flex;
@@ -1553,18 +1553,19 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       border: 0;
       background: var(--accent-orange);
       color: #0d0d0d;
-      border-radius: 12px;
+      border-radius: 999px;
       min-height: 30px;
-      padding: 0 12px;
+      padding: 0 14px;
       font-size: 12px;
       font-weight: 600;
       text-transform: lowercase;
       line-height: 1;
+      margin-left: 4px;
     }
     .weekday-row {
       display: grid;
       grid-template-columns: repeat(7, minmax(0, 1fr));
-      border-bottom: 1px solid #2a2a2a;
+      gap: 1px;
       min-width: 700px;
     }
     .weekday {
@@ -1573,59 +1574,65 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       letter-spacing: 0.08em;
       text-transform: uppercase;
       color: #a8a8a8;
-      border-right: 1px solid #2a2a2a;
-      background: #212121;
+      border-radius: 4px;
+      background: var(--bg-card, #212121);
     }
-    .weekday:last-child { border-right: 0; }
     .week-row {
       display: grid;
       grid-template-columns: repeat(7, minmax(0, 1fr));
-      border-bottom: 1px solid #2a2a2a;
+      gap: 1px;
       min-width: 700px;
     }
-    .week-row:last-child { border-bottom: 0; }
     .day-cell {
       min-height: 106px;
       min-width: 100px;
-      border-right: 1px solid #2a2a2a;
-      padding: 10px 8px 6px;
-      background: #212121;
+      border-radius: 4px;
+      padding: 8px;
+      background: var(--bg-card, #212121);
     }
-    .day-cell:last-child { border-right: 0; }
-    .day-cell.outside { background: #1c1c1c; }
+    .day-cell.outside { background: var(--bg-card, #212121); }
+    .day-cell.outside .day-num { color: #585858; }
+    .day-cell.today-cell {
+      background: var(--bg-elevated, #2d2d2d);
+      box-shadow: inset 0 0 0 2px var(--accent-orange);
+    }
     .day-cell.selected {
-      background: #292929;
-      box-shadow: inset 0 0 0 1px rgba(255,107,53,0.45);
+      background: var(--bg-elevated, #2d2d2d);
+      box-shadow: inset 0 0 0 1px rgba(255,107,53,0.55);
+    }
+    .day-cell.today-cell.selected {
+      box-shadow: inset 0 0 0 2px var(--accent-orange);
     }
     .day-link {
       display: block;
       text-decoration: none;
       color: inherit;
       min-height: 90px;
-      border-radius: 10px;
+      border-radius: 4px;
       transition: background-color .12s ease;
     }
     .day-link:hover {
-      background: #272727;
+      background: rgba(255,255,255,0.03);
     }
     .day-head {
       display: flex;
-      justify-content: space-between;
       align-items: center;
+      gap: 4px;
       margin-bottom: 7px;
     }
+    .day-count { margin-left: auto; }
     .day-num {
       font-size: 12px;
       color: #c4c4c4;
     }
     .day-num.today {
-      color: #171717;
-      background: var(--accent-orange);
-      border-radius: 999px;
-      min-width: 20px;
-      text-align: center;
-      padding: 2px 6px;
+      color: var(--accent-orange);
       font-weight: 700;
+    }
+    .today-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: var(--accent-orange);
     }
     .day-count {
       border-radius: 999px;
@@ -1644,49 +1651,36 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     .day-events {
       display: flex;
       flex-direction: column;
-      gap: 5px;
+      gap: 3px;
     }
     .day-event {
       flex: 0 0 auto;
-      border-radius: 8px;
-      padding: 4px 5px;
-      background: #2d2d2d;
+      border-radius: 4px;
+      padding: 3px 6px;
+      background: #3a3a3a;
       border: 0;
-      font-size: 11px;
-      color: #dedede;
+      font-size: 10px;
+      font-weight: 600;
+      color: #b8b8b8;
       line-height: 1.3;
       display: flex;
       align-items: center;
-      gap: 5px;
+      gap: 4px;
       min-width: 0;
     }
-    .day-event.live { box-shadow: inset 0 0 0 1px rgba(0,212,170,0.36); }
-    .day-event.schd { box-shadow: inset 0 0 0 1px rgba(255,107,53,0.36); }
-    .event-dot {
-      width: 5px;
-      height: 5px;
-      border-radius: 999px;
-      background: #9a9a9a;
-      flex: 0 0 auto;
-    }
-    .day-event.live .event-dot {
+    .day-event.live {
       background: var(--accent-teal);
+      color: #0d0d0d;
     }
-    .day-event.schd .event-dot {
+    .day-event.schd {
       background: var(--accent-orange);
+      color: #0d0d0d;
     }
+    .event-dot { display: none; }
     .event-time {
-      color: #a8a8a8;
-      margin-right: 0;
       flex: 0 0 auto;
     }
-    .event-title {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      flex: 1;
-      min-width: 0;
-    }
+    .event-title { display: none; }
     .more {
       font-size: 11px;
       color: #9a9a9a;
@@ -2650,28 +2644,20 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         grid-template-columns: 1fr;
         gap: 10px;
       }
-      .calendar-head {
-        padding: 8px 10px;
-      }
-      .calendar-head-main {
-        width: 100%;
-      }
-      .calendar-legend {
-        gap: 6px;
-      }
-      .legend-item {
-        font-size: 9px;
-        padding: 2px 7px;
+      .header-right {
+        flex-wrap: wrap;
+        gap: 8px;
       }
       .calendar-controls {
         gap: 4px;
-        width: 100%;
-        justify-content: flex-end;
+      }
+      .month-label {
+        font-size: 16px;
+        min-width: auto;
       }
       .month-link {
         width: 28px;
         height: 28px;
-        font-size: 12px;
       }
       .month-go {
         min-height: 28px;
@@ -2811,14 +2797,25 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
           {{if and (eq .View "create") .BackURL}}<a class="title-back" href="{{.BackURL}}" aria-label="back">←</a>{{end}}
           <div class="title-copy">
             <h1>{{if eq .View "calendar"}}CALENDAR{{else if eq .View "drafts"}}DRAFTS{{else if eq .View "failed"}}FAILED{{else if eq .View "create"}}NEW POST{{else if eq .View "settings"}}SETTINGS{{else}}SCHEDULED{{end}}</h1>
+            {{if eq .View "calendar"}}<div class="title-sub">// scheduled content overview</div>{{end}}
             {{if eq .View "create"}}<div class="title-sub">// compose and schedule your content</div>{{end}}
           </div>
         </div>
-        {{if eq .View "create"}}
+        {{if eq .View "calendar"}}
+        <div class="header-right">
+          <div class="calendar-controls">
+            <a class="month-link" href="/?view=calendar&month={{.PrevMonthParam}}&day={{.SelectedDayKey}}" aria-label="Previous month"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 12L6 8l4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+            <span class="month-label">{{.CalendarMonthLabel}}</span>
+            <a class="month-link" href="/?view=calendar&month={{.NextMonthParam}}&day={{.SelectedDayKey}}" aria-label="Next month"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+            <a class="month-go" href="/?view=calendar&month={{.TodayMonthParam}}&day={{.TodayDayKey}}">today</a>
+          </div>
+          <a class="create-pill" href="{{.CreateViewURL}}">create_post</a>
+        </div>
+        {{else if eq .View "create"}}
         <div class="create-header-actions">
-          <button class="btn-secondary" type="submit" form="create-post-form" name="intent" value="draft">save_draft</button>
-          <button class="btn-secondary" type="submit" form="create-post-form" name="intent" value="schedule">{{if .EditingPost}}update_schedule{{else}}schedule{{end}}</button>
-          <button class="btn-primary" type="submit" form="create-post-form" name="intent" value="publish_now">publish_now</button>
+          <button class="btn-secondary" type="submit" form="create-post-form" name="intent" value="draft"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> save_draft</button>
+          <button class="btn-secondary btn-schedule" type="submit" form="create-post-form" name="intent" value="schedule"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> {{if .EditingPost}}update_schedule{{else}}schedule{{end}}</button>
+          <button class="btn-primary" type="submit" form="create-post-form" name="intent" value="publish_now"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> publish_now</button>
         </div>
         {{else}}
         <a class="create-pill" href="{{.CreateViewURL}}">create_post</a>
@@ -2827,21 +2824,6 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       {{if eq .View "calendar"}}
       <div class="calendar-layout">
       <div class="calendar-wrap">
-        <div class="calendar-head">
-          <div class="calendar-head-main">
-            <div class="calendar-title">{{.CalendarMonthLabel}}</div>
-            <div class="calendar-sub">{{len .Items}} posts en el mes</div>
-            <div class="calendar-legend" aria-hidden="true">
-              <span class="legend-item pending"><span class="legend-dot"></span>to publish</span>
-              <span class="legend-item published"><span class="legend-dot"></span>published</span>
-            </div>
-          </div>
-          <div class="calendar-controls">
-            <a class="month-link" href="/?view=calendar&month={{.PrevMonthParam}}&day={{.SelectedDayKey}}">&lt;</a>
-            <a class="month-go" href="/?view=calendar&month={{.TodayMonthParam}}&day={{.TodayDayKey}}">today</a>
-            <a class="month-link" href="/?view=calendar&month={{.NextMonthParam}}&day={{.SelectedDayKey}}">&gt;</a>
-          </div>
-        </div>
         <div class="calendar-grid-scroll">
           <div class="weekday-row">
             <div class="weekday">Mon</div>
@@ -2855,10 +2837,11 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
           {{range .CalendarWeeks}}
           <div class="week-row">
             {{range .}}
-            <div class="day-cell {{if not .InCurrentMonth}}outside{{end}} {{if .IsSelected}}selected{{end}}">
+            <div class="day-cell {{if not .InCurrentMonth}}outside{{end}} {{if .IsToday}}today-cell{{end}} {{if .IsSelected}}selected{{end}}">
               <a class="day-link" href="/?view=calendar&month={{$.CurrentMonthParam}}&day={{.DateKey}}">
                 <div class="day-head">
                   <span class="day-num {{if .IsToday}}today{{end}}">{{.DayNumber}}</span>
+                  {{if .IsToday}}<span class="today-badge">// today</span>{{end}}
                   {{if gt (len .Events) 0}}<span class="day-count">{{len .Events}}</span>{{end}}
                 </div>
                 <div class="day-events" data-day-events>
@@ -2882,8 +2865,8 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       </div>
       <aside class="day-panel" aria-label="Day detail">
         <div class="day-panel-head">
-          <div class="day-panel-title">DAY DETAIL</div>
-          <div class="day-panel-sub">{{.SelectedDayLabel}}</div>
+          <div class="day-panel-title">{{.SelectedDayLabel}}</div>
+          <div class="day-panel-sub">// {{len .SelectedDayPendingItems}} scheduled posts</div>
         </div>
         <div class="day-panel-body">
           {{if and (eq (len .SelectedDayPendingItems) 0) (eq (len .SelectedDayPublishedItems) 0)}}
@@ -2895,12 +2878,12 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
           <article class="day-item {{.StatusClass}}" data-status="{{.StatusKey}}" {{if .Editable}}data-edit-url="/?view=create&edit_id={{.PostID}}&return_to={{urlquery $.CurrentViewURL}}"{{end}}>
             <div class="day-item-head">
               <span class="day-item-time">{{.TimeLabel}}</span>
-              <span class="label status-{{.StatusClass}}">{{.StatusLabel}}</span>
+              <span class="day-item-platform">{{.Platform}}</span>
             </div>
             <div class="day-item-text">{{.Text}}</div>
-            <div class="day-item-meta">
-              <span>{{.Platform}}</span>
-              <span>{{.MediaCount}} media</span>
+            <div class="day-item-actions">
+              {{if .Editable}}<a class="day-item-btn" href="/?view=create&edit_id={{.PostID}}&return_to={{urlquery $.CurrentViewURL}}" title="Edit">&#9998;</a>{{end}}
+              <button class="day-item-btn day-item-btn-del" title="Delete" disabled>&#10005;</button>
             </div>
           </article>
           {{end}}
@@ -2914,12 +2897,11 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
           <article class="day-item {{.StatusClass}}" data-status="{{.StatusKey}}">
             <div class="day-item-head">
               <span class="day-item-time">{{.TimeLabel}}</span>
-              <span class="label status-{{.StatusClass}}">{{.StatusLabel}}</span>
+              <span class="day-item-platform">{{.Platform}}</span>
             </div>
             <div class="day-item-text">{{.Text}}</div>
-            <div class="day-item-meta">
-              <span>{{.Platform}}</span>
-              <span>{{.MediaCount}} media</span>
+            <div class="day-item-actions">
+              <button class="day-item-btn day-item-btn-del" title="Delete" disabled>&#10005;</button>
             </div>
           </article>
           {{end}}
