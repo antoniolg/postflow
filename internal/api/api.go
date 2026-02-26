@@ -1150,7 +1150,11 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     .main {
       flex: 1;
       padding: 34px 44px 22px;
+      width: 100%;
       max-width: 1180px;
+    }
+    body[data-view="calendar"] .main {
+      max-width: none;
     }
     .header {
       display: flex;
@@ -1280,6 +1284,12 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       grid-template-columns: minmax(0, 2.3fr) minmax(280px, 1fr);
       gap: 12px;
       align-items: start;
+    }
+    body[data-view="calendar"] .calendar-layout {
+      width: min(100%, 1540px);
+      margin-left: auto;
+      margin-right: auto;
+      grid-template-columns: minmax(0, 1fr) clamp(300px, 28vw, 390px);
     }
     .day-panel {
       border: 1px solid var(--border);

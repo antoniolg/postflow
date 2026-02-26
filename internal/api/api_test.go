@@ -815,4 +815,13 @@ func TestDefaultViewIsCalendar(t *testing.T) {
 	if !strings.Contains(body, ">CALENDAR</h1>") {
 		t.Fatalf("expected CALENDAR as default view title")
 	}
+	if !strings.Contains(body, "body[data-view=\"calendar\"] .main") {
+		t.Fatalf("expected calendar-specific main width rule")
+	}
+	if !strings.Contains(body, "body[data-view=\"calendar\"] .calendar-layout") {
+		t.Fatalf("expected calendar-specific centered layout rule")
+	}
+	if !strings.Contains(body, "width: min(100%, 1540px);") {
+		t.Fatalf("expected calendar layout max width cap")
+	}
 }
