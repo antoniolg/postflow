@@ -93,6 +93,32 @@ func TestMCPStreamableHTTPExposesToolsAndCreatesPost(t *testing.T) {
 	}
 }
 
+func TestMCPInitializeAcceptJSONOnly(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	httpServer := httptest.NewServer(srv.Handler())
+	defer httpServer.Close()
+
+	mcpURL := httpServer.URL + "/mcp"
+	initializeBody := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test-client","version":"1.0.0"}}}`
+	initializeResp, initializeRaw := postMCPRequestWithAccept(t, mcpURL, "", initializeBody, "application/json")
+	if initializeResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected initialize status 200, got %d: %s", initializeResp.StatusCode, string(initializeRaw))
+	}
+	if strings.TrimSpace(initializeResp.Header.Get("Mcp-Session-Id")) == "" {
+		t.Fatalf("expected initialize response to include MCP session id")
+	}
+	if !strings.Contains(string(initializeRaw), "publisher-mcp") {
+		t.Fatalf("expected initialize response to include publisher server info")
+	}
+}
+
 func TestSettingsViewIncludesMCPURLAndConfig(t *testing.T) {
 	tempDir := t.TempDir()
 	store, err := db.Open(filepath.Join(tempDir, "test.db"))
@@ -146,13 +172,17 @@ func TestSettingsViewIncludesMCPURLAndConfig(t *testing.T) {
 }
 
 func postMCPRequest(t *testing.T, endpoint, sessionID, payload string) (*http.Response, []byte) {
+	return postMCPRequestWithAccept(t, endpoint, sessionID, payload, "application/json, text/event-stream")
+}
+
+func postMCPRequestWithAccept(t *testing.T, endpoint, sessionID, payload, accept string) (*http.Response, []byte) {
 	t.Helper()
 	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewBufferString(payload))
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json, text/event-stream")
+	req.Header.Set("Accept", accept)
 	if strings.TrimSpace(sessionID) != "" {
 		req.Header.Set("Mcp-Session-Id", sessionID)
 	}
