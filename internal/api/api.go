@@ -932,6 +932,15 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	selectedDayKey := selectedDayLocal.Format("2006-01-02")
 	selectedDayLabel := strings.ToUpper(selectedDayLocal.Format("Mon 02 Jan 2006"))
 	selectedDayItems := detailsByDate[selectedDayKey]
+	selectedDayPendingItems := make([]dayDetailItem, 0, len(selectedDayItems))
+	selectedDayPublishedItems := make([]dayDetailItem, 0, len(selectedDayItems))
+	for _, item := range selectedDayItems {
+		if item.StatusKey == "published" {
+			selectedDayPublishedItems = append(selectedDayPublishedItems, item)
+			continue
+		}
+		selectedDayPendingItems = append(selectedDayPendingItems, item)
+	}
 	todayMonthParam := nowLocal.Format("2006-01")
 	todayDayKey := nowLocal.Format("2006-01-02")
 	currentViewURL := "/?view=calendar&month=" + currentMonthParam + "&day=" + selectedDayKey
@@ -1304,6 +1313,31 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       gap: 8px;
       max-height: 560px;
       overflow: auto;
+    }
+    .day-group-title {
+      font-size: 9px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #90a1c2;
+      font-weight: 700;
+      padding: 2px 2px 0;
+    }
+    .day-separator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 9px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #7f8ca8;
+      margin: 2px 0;
+    }
+    .day-separator::before,
+    .day-separator::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: #2a3244;
     }
     .day-item {
       border: 1px solid #2a3244;
@@ -2001,7 +2035,12 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
           <div class="day-panel-sub">{{.SelectedDayLabel}}</div>
         </div>
         <div class="day-panel-body">
-          {{range .SelectedDayItems}}
+          {{if and (eq (len .SelectedDayPendingItems) 0) (eq (len .SelectedDayPublishedItems) 0)}}
+          <div class="empty">No hay publicaciones para este día.</div>
+          {{else}}
+          {{if gt (len .SelectedDayPendingItems) 0}}
+          <div class="day-group-title">to publish ({{len .SelectedDayPendingItems}})</div>
+          {{range .SelectedDayPendingItems}}
           <article class="day-item {{.StatusClass}}" data-status="{{.StatusKey}}" {{if .Editable}}data-edit-url="/?view=create&edit_id={{.PostID}}&return_to={{urlquery $.CurrentViewURL}}"{{end}}>
             <div class="day-item-head">
               <span class="day-item-time">{{.TimeLabel}}</span>
@@ -2013,8 +2052,27 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
               <span>{{.MediaCount}} media</span>
             </div>
           </article>
-          {{else}}
-          <div class="empty">No hay publicaciones para este día.</div>
+          {{end}}
+          {{end}}
+          {{if and (gt (len .SelectedDayPendingItems) 0) (gt (len .SelectedDayPublishedItems) 0)}}
+          <div class="day-separator">published</div>
+          {{end}}
+          {{if gt (len .SelectedDayPublishedItems) 0}}
+          <div class="day-group-title">published ({{len .SelectedDayPublishedItems}})</div>
+          {{range .SelectedDayPublishedItems}}
+          <article class="day-item {{.StatusClass}}" data-status="{{.StatusKey}}">
+            <div class="day-item-head">
+              <span class="day-item-time">{{.TimeLabel}}</span>
+              <span class="label status-{{.StatusClass}}">{{.StatusLabel}}</span>
+            </div>
+            <div class="day-item-text">{{.Text}}</div>
+            <div class="day-item-meta">
+              <span>{{.Platform}}</span>
+              <span>{{.MediaCount}} media</span>
+            </div>
+          </article>
+          {{end}}
+          {{end}}
           {{end}}
         </div>
       </aside>
@@ -2377,80 +2435,84 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	type pageData struct {
-		View                 string
-		ActiveNavView        string
-		UITimezone           string
-		TimezoneConfigured   bool
-		Items                []domain.Post
-		Publications         []domain.Post
-		Drafts               []domain.Post
-		FailedItems          []failedQueueItem
-		CurrentViewURL       string
-		CreateViewURL        string
-		ReturnTo             string
-		BackURL              string
-		EditingPost          *domain.Post
-		CreateText           string
-		CreateScheduledLocal string
-		CreateError          string
-		CreateSuccess        string
-		FailedError          string
-		FailedSuccess        string
-		SettingsError        string
-		SettingsSuccess      string
-		ScheduledCount       int
-		PublicationsWindowDays int
-		DraftCount           int
-		FailedCount          int
-		NextRunLabel         string
-		CalendarMonthLabel   string
-		CalendarWeeks        [][]calendarDay
-		PrevMonthParam       string
-		NextMonthParam       string
-		CurrentMonthParam    string
-		TodayMonthParam      string
-		TodayDayKey          string
-		SelectedDayKey       string
-		SelectedDayLabel     string
-		SelectedDayItems     []dayDetailItem
+		View                      string
+		ActiveNavView             string
+		UITimezone                string
+		TimezoneConfigured        bool
+		Items                     []domain.Post
+		Publications              []domain.Post
+		Drafts                    []domain.Post
+		FailedItems               []failedQueueItem
+		CurrentViewURL            string
+		CreateViewURL             string
+		ReturnTo                  string
+		BackURL                   string
+		EditingPost               *domain.Post
+		CreateText                string
+		CreateScheduledLocal      string
+		CreateError               string
+		CreateSuccess             string
+		FailedError               string
+		FailedSuccess             string
+		SettingsError             string
+		SettingsSuccess           string
+		ScheduledCount            int
+		PublicationsWindowDays    int
+		DraftCount                int
+		FailedCount               int
+		NextRunLabel              string
+		CalendarMonthLabel        string
+		CalendarWeeks             [][]calendarDay
+		PrevMonthParam            string
+		NextMonthParam            string
+		CurrentMonthParam         string
+		TodayMonthParam           string
+		TodayDayKey               string
+		SelectedDayKey            string
+		SelectedDayLabel          string
+		SelectedDayItems          []dayDetailItem
+		SelectedDayPendingItems   []dayDetailItem
+		SelectedDayPublishedItems []dayDetailItem
 	}
 	_ = t.Execute(w, pageData{
-		View:                 view,
-		ActiveNavView:        activeNavView,
-		UITimezone:           uiTimezone,
-		TimezoneConfigured:   timezoneConfigured,
-		Items:                items,
-		Publications:         publicationsItems,
-		Drafts:               drafts,
-		FailedItems:          failedItems,
-		CurrentViewURL:       currentViewURL,
-		CreateViewURL:        createViewURL,
-		ReturnTo:             returnTo,
-		BackURL:              backURL,
-		EditingPost:          editingPost,
-		CreateText:           createText,
-		CreateScheduledLocal: createScheduledLocal,
-		CreateError:          createError,
-		CreateSuccess:        createSuccess,
-		FailedError:          failedError,
-		FailedSuccess:        failedSuccess,
-		SettingsError:        settingsError,
-		SettingsSuccess:      settingsSuccess,
-		ScheduledCount:       scheduledCount,
-		PublicationsWindowDays: publicationsWindowDays,
-		DraftCount:           len(drafts),
-		FailedCount:          failedCount,
-		NextRunLabel:         nextRunLabel,
-		CalendarMonthLabel:   calendarMonthLabel,
-		CalendarWeeks:        calendarWeeks,
-		PrevMonthParam:       prevMonthParam,
-		NextMonthParam:       nextMonthParam,
-		CurrentMonthParam:    currentMonthParam,
-		TodayMonthParam:      todayMonthParam,
-		TodayDayKey:          todayDayKey,
-		SelectedDayKey:       selectedDayKey,
-		SelectedDayLabel:     selectedDayLabel,
-		SelectedDayItems:     selectedDayItems,
+		View:                      view,
+		ActiveNavView:             activeNavView,
+		UITimezone:                uiTimezone,
+		TimezoneConfigured:        timezoneConfigured,
+		Items:                     items,
+		Publications:              publicationsItems,
+		Drafts:                    drafts,
+		FailedItems:               failedItems,
+		CurrentViewURL:            currentViewURL,
+		CreateViewURL:             createViewURL,
+		ReturnTo:                  returnTo,
+		BackURL:                   backURL,
+		EditingPost:               editingPost,
+		CreateText:                createText,
+		CreateScheduledLocal:      createScheduledLocal,
+		CreateError:               createError,
+		CreateSuccess:             createSuccess,
+		FailedError:               failedError,
+		FailedSuccess:             failedSuccess,
+		SettingsError:             settingsError,
+		SettingsSuccess:           settingsSuccess,
+		ScheduledCount:            scheduledCount,
+		PublicationsWindowDays:    publicationsWindowDays,
+		DraftCount:                len(drafts),
+		FailedCount:               failedCount,
+		NextRunLabel:              nextRunLabel,
+		CalendarMonthLabel:        calendarMonthLabel,
+		CalendarWeeks:             calendarWeeks,
+		PrevMonthParam:            prevMonthParam,
+		NextMonthParam:            nextMonthParam,
+		CurrentMonthParam:         currentMonthParam,
+		TodayMonthParam:           todayMonthParam,
+		TodayDayKey:               todayDayKey,
+		SelectedDayKey:            selectedDayKey,
+		SelectedDayLabel:          selectedDayLabel,
+		SelectedDayItems:          selectedDayItems,
+		SelectedDayPendingItems:   selectedDayPendingItems,
+		SelectedDayPublishedItems: selectedDayPublishedItems,
 	})
 }
 

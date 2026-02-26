@@ -696,6 +696,104 @@ func TestNavBadgesUseNeutralForScheduledAndDraftsAndRedForFailed(t *testing.T) {
 	}
 }
 
+func TestCalendarDayDetailShowsPendingBeforePublished(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	settingsForm := url.Values{}
+	settingsForm.Set("timezone", "UTC")
+	settingsReq := httptest.NewRequest(http.MethodPost, "/settings/timezone", bytes.NewBufferString(settingsForm.Encode()))
+	settingsReq.Header.Set("content-type", "application/x-www-form-urlencoded")
+	settingsW := httptest.NewRecorder()
+	h.ServeHTTP(settingsW, settingsReq)
+	if settingsW.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303 on timezone update, got %d", settingsW.Code)
+	}
+
+	selectedDay := time.Date(2026, time.February, 26, 0, 0, 0, 0, time.UTC)
+	publishedAt := selectedDay.Add(9 * time.Hour)
+	pendingAt := selectedDay.Add(10 * time.Hour)
+
+	createPublishedBody, _ := json.Marshal(map[string]any{
+		"platform":     "x",
+		"text":         "published item should be below",
+		"scheduled_at": publishedAt.Format(time.RFC3339),
+	})
+	createPublishedReq := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(createPublishedBody))
+	createPublishedW := httptest.NewRecorder()
+	h.ServeHTTP(createPublishedW, createPublishedReq)
+	if createPublishedW.Code != http.StatusCreated {
+		t.Fatalf("expected 201 for published seed post, got %d", createPublishedW.Code)
+	}
+	var publishedResp map[string]any
+	if err := json.Unmarshal(createPublishedW.Body.Bytes(), &publishedResp); err != nil {
+		t.Fatalf("decode published seed response: %v", err)
+	}
+	publishedID, _ := publishedResp["id"].(string)
+	if publishedID == "" {
+		t.Fatalf("expected published post id")
+	}
+	if err := store.MarkPublished(t.Context(), publishedID, "x-published-seed"); err != nil {
+		t.Fatalf("mark published: %v", err)
+	}
+
+	createPendingBody, _ := json.Marshal(map[string]any{
+		"platform":     "x",
+		"text":         "pending item should be first",
+		"scheduled_at": pendingAt.Format(time.RFC3339),
+	})
+	createPendingReq := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(createPendingBody))
+	createPendingW := httptest.NewRecorder()
+	h.ServeHTTP(createPendingW, createPendingReq)
+	if createPendingW.Code != http.StatusCreated {
+		t.Fatalf("expected 201 for pending post, got %d", createPendingW.Code)
+	}
+
+	monthParam := selectedDay.Format("2006-01")
+	dayParam := selectedDay.Format("2006-01-02")
+	calendarReq := httptest.NewRequest(http.MethodGet, "/?view=calendar&month="+monthParam+"&day="+dayParam, nil)
+	calendarW := httptest.NewRecorder()
+	h.ServeHTTP(calendarW, calendarReq)
+	if calendarW.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", calendarW.Code)
+	}
+
+	body := calendarW.Body.String()
+	panelStart := strings.Index(body, "<aside class=\"day-panel\">")
+	if panelStart == -1 {
+		t.Fatalf("expected day panel in calendar view")
+	}
+	panelEndRel := strings.Index(body[panelStart:], "</aside>")
+	if panelEndRel == -1 {
+		t.Fatalf("expected day panel closing tag")
+	}
+	panel := body[panelStart : panelStart+panelEndRel]
+
+	if !strings.Contains(panel, "to publish (1)") {
+		t.Fatalf("expected pending section header")
+	}
+	if !strings.Contains(panel, "published (1)") {
+		t.Fatalf("expected published section header")
+	}
+
+	pendingIdx := strings.Index(panel, "pending item should be first")
+	separatorIdx := strings.Index(panel, "class=\"day-separator\">published</div>")
+	publishedIdx := strings.Index(panel, "published item should be below")
+	if pendingIdx == -1 || separatorIdx == -1 || publishedIdx == -1 {
+		t.Fatalf("expected pending item, separator, and published item in day panel")
+	}
+	if !(pendingIdx < separatorIdx && separatorIdx < publishedIdx) {
+		t.Fatalf("expected pending section before separator and published section")
+	}
+}
+
 func TestDefaultViewIsCalendar(t *testing.T) {
 	tempDir := t.TempDir()
 	store, err := db.Open(filepath.Join(tempDir, "test.db"))
