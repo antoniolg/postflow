@@ -1297,9 +1297,32 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       flex-direction: column;
     }
     body[data-view="calendar"] .calendar-grid-scroll {
+      display: flex;
+      flex-direction: column;
       flex: 1;
       min-height: 0;
       overflow: auto;
+    }
+    body[data-view="calendar"] .weekday-row {
+      flex: 0 0 auto;
+    }
+    body[data-view="calendar"] .week-row {
+      flex: 1 1 0;
+      min-height: 0;
+    }
+    body[data-view="calendar"] .day-cell {
+      min-height: 0;
+      height: 100%;
+    }
+    body[data-view="calendar"] .day-link {
+      min-height: 0;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+    body[data-view="calendar"] .day-events {
+      flex: 1;
+      min-height: 0;
     }
     body[data-view="calendar"] .day-panel {
       display: flex;
@@ -1915,7 +1938,23 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         padding: 4px 6px;
         font-size: 9px;
       }
-      .day-cell { min-height: 82px; }
+      body[data-view="calendar"] .calendar-grid-scroll {
+        display: block;
+      }
+      body[data-view="calendar"] .week-row {
+        flex: initial;
+        min-height: initial;
+      }
+      .day-cell { min-height: 82px; height: auto; }
+      body[data-view="calendar"] .day-link {
+        min-height: 0;
+        height: auto;
+        display: block;
+      }
+      body[data-view="calendar"] .day-events {
+        flex: initial;
+        min-height: initial;
+      }
       .calendar-layout { grid-template-columns: 1fr; }
       .day-panel {
         position: static;
