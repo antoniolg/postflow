@@ -33,7 +33,11 @@ type Server struct {
 
 func (s Server) Handler() http.Handler {
 	mux := http.NewServeMux()
+	mcpHandler := s.newMCPHandler()
 	mux.HandleFunc("GET /healthz", s.handleHealthz)
+	mux.Handle("GET /mcp", mcpHandler)
+	mux.Handle("POST /mcp", mcpHandler)
+	mux.Handle("DELETE /mcp", mcpHandler)
 	mux.HandleFunc("POST /media", s.handleUploadMedia)
 	mux.HandleFunc("POST /posts", s.handleCreatePost)
 	mux.HandleFunc("POST /posts/", s.handlePostActions)
@@ -1021,6 +1025,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	if qScheduled := strings.TrimSpace(r.URL.Query().Get("scheduled_at_local")); qScheduled != "" {
 		createScheduledLocal = qScheduled
 	}
+	mcpURL, mcpAuthHint, mcpConfigJSON, mcpClaudeCommand, mcpCodexCommand, mcpCodexConfigTOML := s.mcpSettingsInfo(r)
 	const tpl = `<!doctype html>
 <html lang="es">
 <head>
@@ -1787,6 +1792,9 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       overflow: hidden;
       max-width: 760px;
     }
+    .editor.editor-wide {
+      max-width: 920px;
+    }
     .editor-head {
       padding: 10px 12px;
       border-bottom: 1px solid #2a2a2a;
@@ -1835,6 +1843,19 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       width: 100%;
       max-width: none;
     }
+    .field input[type=text] {
+      min-width: 0;
+      width: 100%;
+      max-width: none;
+      padding: 9px 10px;
+      border-radius: 12px;
+      border: 0;
+      background-color: #2d2d2d;
+      color: var(--text-primary);
+      font: inherit;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
     .field .date-input {
       width: min(100%, 320px);
     }
@@ -1864,6 +1885,26 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     .field select:focus {
       outline: none;
       box-shadow: 0 0 0 2px rgba(255, 107, 53, 0.2);
+    }
+    .field input[type=text]:focus {
+      outline: none;
+      box-shadow: 0 0 0 2px rgba(255, 107, 53, 0.2);
+    }
+    .field input[readonly] {
+      color: #d7d7d7;
+      cursor: text;
+    }
+    .code-block {
+      margin: 0;
+      background: #2d2d2d;
+      color: #d7d7d7;
+      border-radius: 12px;
+      padding: 10px;
+      font-size: 12px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      word-break: break-word;
+      overflow-wrap: anywhere;
     }
     .editor-actions {
       display: flex;
@@ -3150,6 +3191,34 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
           <div class="meta"><span class="meta-soft">current timezone: {{.UITimezone}}</span></div>
         </form>
       </section>
+      <section class="editor editor-wide">
+        <div class="editor-head">mcp · streamable http</div>
+        <div class="editor-body">
+          <div class="field">
+            <label for="mcp-url">MCP URL</label>
+            <input id="mcp-url" type="text" value="{{.MCPURL}}" readonly />
+          </div>
+          <div class="meta">
+            <span class="meta-soft">{{.MCPAuthHint}}</span>
+          </div>
+          <div class="field">
+            <label>Claude Code</label>
+            <pre class="code-block">{{.MCPClaudeCommand}}</pre>
+          </div>
+          <div class="field">
+            <label>Codex CLI</label>
+            <pre class="code-block">{{.MCPCodexCommand}}</pre>
+          </div>
+          <div class="field">
+            <label>Codex config.toml</label>
+            <pre class="code-block">{{.MCPCodexConfigTOML}}</pre>
+          </div>
+          <div class="field">
+            <label>JSON config</label>
+            <pre class="code-block">{{.MCPConfigJSON}}</pre>
+          </div>
+        </div>
+      </section>
       {{end}}
     </main>
   </div>
@@ -4303,6 +4372,12 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		ActiveNavView             string
 		UITimezone                string
 		TimezoneConfigured        bool
+		MCPURL                    string
+		MCPAuthHint               string
+		MCPConfigJSON             string
+		MCPClaudeCommand          string
+		MCPCodexCommand           string
+		MCPCodexConfigTOML        string
 		Items                     []domain.Post
 		Publications              []domain.Post
 		Drafts                    []domain.Post
@@ -4343,6 +4418,12 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		ActiveNavView:             activeNavView,
 		UITimezone:                uiTimezone,
 		TimezoneConfigured:        timezoneConfigured,
+		MCPURL:                    mcpURL,
+		MCPAuthHint:               mcpAuthHint,
+		MCPConfigJSON:             mcpConfigJSON,
+		MCPClaudeCommand:          mcpClaudeCommand,
+		MCPCodexCommand:           mcpCodexCommand,
+		MCPCodexConfigTOML:        mcpCodexConfigTOML,
 		Items:                     items,
 		Publications:              publicationsItems,
 		Drafts:                    drafts,
