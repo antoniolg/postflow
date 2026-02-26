@@ -490,7 +490,7 @@ func TestCreatePostFromFormUsesConfiguredTimezone(t *testing.T) {
 	}
 }
 
-func TestPublicationsViewDoesNotRenderDrafts(t *testing.T) {
+func TestPublicationsViewShowsOnlyScheduledInNext14Days(t *testing.T) {
 	tempDir := t.TempDir()
 	store, err := db.Open(filepath.Join(tempDir, "test.db"))
 	if err != nil {
@@ -514,7 +514,7 @@ func TestPublicationsViewDoesNotRenderDrafts(t *testing.T) {
 
 	createScheduledBody, _ := json.Marshal(map[string]any{
 		"platform":     "x",
-		"text":         "this scheduled post must appear in publications",
+		"text":         "scheduled in next 14 days",
 		"scheduled_at": time.Now().UTC().Add(2 * time.Hour).Format(time.RFC3339),
 	})
 	createScheduledReq := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(createScheduledBody))
@@ -522,6 +522,49 @@ func TestPublicationsViewDoesNotRenderDrafts(t *testing.T) {
 	h.ServeHTTP(createScheduledW, createScheduledReq)
 	if createScheduledW.Code != http.StatusCreated {
 		t.Fatalf("expected 201 for scheduled, got %d", createScheduledW.Code)
+	}
+	var scheduledResp map[string]any
+	if err := json.Unmarshal(createScheduledW.Body.Bytes(), &scheduledResp); err != nil {
+		t.Fatalf("decode scheduled create response: %v", err)
+	}
+	scheduledID, _ := scheduledResp["id"].(string)
+	if scheduledID == "" {
+		t.Fatalf("expected scheduled post id")
+	}
+
+	createFutureBody, _ := json.Marshal(map[string]any{
+		"platform":     "x",
+		"text":         "scheduled after 14 days",
+		"scheduled_at": time.Now().UTC().Add(20 * 24 * time.Hour).Format(time.RFC3339),
+	})
+	createFutureReq := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(createFutureBody))
+	createFutureW := httptest.NewRecorder()
+	h.ServeHTTP(createFutureW, createFutureReq)
+	if createFutureW.Code != http.StatusCreated {
+		t.Fatalf("expected 201 for future scheduled, got %d", createFutureW.Code)
+	}
+
+	createToPublishBody, _ := json.Marshal(map[string]any{
+		"platform":     "x",
+		"text":         "this published post should not appear in publications",
+		"scheduled_at": time.Now().UTC().Add(4 * time.Hour).Format(time.RFC3339),
+	})
+	createToPublishReq := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(createToPublishBody))
+	createToPublishW := httptest.NewRecorder()
+	h.ServeHTTP(createToPublishW, createToPublishReq)
+	if createToPublishW.Code != http.StatusCreated {
+		t.Fatalf("expected 201 for post-to-publish, got %d", createToPublishW.Code)
+	}
+	var toPublishResp map[string]any
+	if err := json.Unmarshal(createToPublishW.Body.Bytes(), &toPublishResp); err != nil {
+		t.Fatalf("decode post-to-publish response: %v", err)
+	}
+	toPublishID, _ := toPublishResp["id"].(string)
+	if toPublishID == "" {
+		t.Fatalf("expected post-to-publish id")
+	}
+	if err := store.MarkPublished(t.Context(), toPublishID, "x-post-123"); err != nil {
+		t.Fatalf("mark published: %v", err)
 	}
 
 	publicationsReq := httptest.NewRequest(http.MethodGet, "/?view=publications", nil)
@@ -535,8 +578,17 @@ func TestPublicationsViewDoesNotRenderDrafts(t *testing.T) {
 	if strings.Contains(body, "this draft must stay out of publications") {
 		t.Fatalf("draft text should not appear in publications view")
 	}
-	if !strings.Contains(body, "this scheduled post must appear in publications") {
-		t.Fatalf("scheduled text should appear in publications view")
+	if !strings.Contains(body, "scheduled in next 14 days") {
+		t.Fatalf("scheduled-in-window text should appear in publications view")
+	}
+	if strings.Contains(body, "scheduled after 14 days") {
+		t.Fatalf("scheduled-outside-window text should not appear in publications view")
+	}
+	if strings.Contains(body, "this published post should not appear in publications") {
+		t.Fatalf("published text should not appear in publications view")
+	}
+	if !strings.Contains(body, scheduledID) {
+		t.Fatalf("expected in-window scheduled post id in rendered html")
 	}
 }
 

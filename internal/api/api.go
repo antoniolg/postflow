@@ -749,11 +749,23 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 			items[i].ScheduledAt = items[i].ScheduledAt.In(uiLoc)
 		}
 	}
-	publicationsItems := make([]domain.Post, 0, len(items))
-	for _, item := range items {
-		if item.Status == domain.PostStatusPublished || item.Status == domain.PostStatusScheduled {
-			publicationsItems = append(publicationsItems, item)
+	publicationsWindowDays := 14
+	publicationsFrom := nowLocal
+	publicationsTo := nowLocal.AddDate(0, 0, publicationsWindowDays)
+	publicationsRaw, err := s.Store.ListSchedule(r.Context(), publicationsFrom.UTC(), publicationsTo.UTC())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	publicationsItems := make([]domain.Post, 0, len(publicationsRaw))
+	for _, item := range publicationsRaw {
+		if item.Status != domain.PostStatusScheduled {
+			continue
 		}
+		if !item.ScheduledAt.IsZero() {
+			item.ScheduledAt = item.ScheduledAt.In(uiLoc)
+		}
+		publicationsItems = append(publicationsItems, item)
 	}
 	drafts, err := s.Store.ListDrafts(r.Context())
 	if err != nil {
@@ -765,22 +777,13 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	scheduledCount := 0
-	publishedCount := 0
-	failedCount := 0
+	scheduledCount := len(publicationsItems)
+	failedCount := len(deadLetters)
 	var nextRun *time.Time
-	for _, item := range items {
-		switch item.Status {
-		case domain.PostStatusScheduled:
-			scheduledCount++
-			if !item.ScheduledAt.IsZero() && (nextRun == nil || item.ScheduledAt.Before(*nextRun)) {
-				t := item.ScheduledAt
-				nextRun = &t
-			}
-		case domain.PostStatusPublished:
-			publishedCount++
-		case domain.PostStatusFailed:
-			failedCount++
+	for _, item := range publicationsItems {
+		if !item.ScheduledAt.IsZero() && (nextRun == nil || item.ScheduledAt.Before(*nextRun)) {
+			t := item.ScheduledAt
+			nextRun = &t
 		}
 	}
 	nextRunLabel := "Sin próxima ejecución"
@@ -1870,7 +1873,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         <span>post_flow</span>
       </div>
       <nav class="nav">
-        <a class="nav-item {{if eq .ActiveNavView "publications"}}active{{end}}" href="/?view=publications&month={{.CurrentMonthParam}}">// publications</a>
+        <a class="nav-item {{if eq .ActiveNavView "publications"}}active{{end}}" href="/?view=publications">// publications</a>
         <a class="nav-item {{if eq .ActiveNavView "calendar"}}active{{end}}" href="/?view=calendar&month={{.CurrentMonthParam}}&day={{.SelectedDayKey}}">// calendar</a>
         <a class="nav-item {{if eq .ActiveNavView "drafts"}}active{{end}}" href="/?view=drafts">// drafts</a>
         <a class="nav-item {{if eq .ActiveNavView "failed"}}active{{end}}" href="/?view=failed"><span>// failed</span>{{if gt .FailedCount 0}}<span class="nav-badge">{{.FailedCount}}</span>{{end}}</a>
@@ -1886,16 +1889,10 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         <a class="create-pill" href="{{.CreateViewURL}}">create_post</a>
       </header>
       {{if eq .View "publications"}}
-      <div class="tabs">
-        <button type="button" class="tab filter-chip active" data-filter="published" aria-pressed="true"><span class="dot live"></span> published</button>
-        <button type="button" class="tab filter-chip active" data-filter="scheduled" aria-pressed="true"><span class="dot scheduled"></span> scheduled</button>
-      </div>
-      {{end}}
-      {{if eq .View "publications"}}
       <div class="stats">
-        <div class="stat"><div class="k">scheduled</div><div class="v">{{.ScheduledCount}}</div></div>
+        <div class="stat"><div class="k">scheduled ({{.PublicationsWindowDays}}d)</div><div class="v">{{.ScheduledCount}}</div></div>
         <div class="stat"><div class="k">drafts</div><div class="v">{{.DraftCount}}</div></div>
-        <div class="stat"><div class="k">published</div><div class="v">{{.PublishedCount}}</div></div>
+        <div class="stat"><div class="k">failed</div><div class="v">{{.FailedCount}}</div></div>
         <div class="stat"><div class="k">next run</div><div class="v" style="font-size:12px;">{{.NextRunLabel}}</div></div>
       </div>
       {{end}}
@@ -1976,18 +1973,18 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       {{end}}
 
       {{if eq .View "publications"}}
-      <div class="line">calendar</div>
+      <div class="line">upcoming queue</div>
       <section class="list">
         {{range .Publications}}
-        <article class="card {{.Status}} {{if ne .Status "published"}}card-editable{{end}}" data-status="{{.Status}}" {{if ne .Status "published"}}data-edit-url="/?view=create&edit_id={{.ID}}&return_to={{urlquery $.CurrentViewURL}}"{{end}}>
+        <article class="card scheduled card-editable" data-edit-url="/?view=create&edit_id={{.ID}}&return_to={{urlquery $.CurrentViewURL}}">
           <div class="card-left">
             <div class="status">
-              {{if eq .Status "published"}}<span class="dot live"></span><span class="label status-live">LIVE</span>{{else if eq .Status "scheduled"}}<span class="dot scheduled"></span><span class="label status-schd">SCHD</span>{{else}}<span class="dot draft"></span><span class="label status-drft">DRFT</span>{{end}}
+              <span class="dot scheduled"></span><span class="label status-schd">SCHD</span>
             </div>
             <div class="content">
               <div class="text">{{.Text}}</div>
               <div class="meta">
-                <span class="{{if eq .Status "scheduled"}}meta-accent{{else}}meta-soft{{end}}">{{if .ScheduledAt.IsZero}}no date{{else}}{{.ScheduledAt.Format "2006-01-02 15:04 MST"}}{{end}}</span>
+                <span class="meta-accent">{{if .ScheduledAt.IsZero}}no date{{else}}{{.ScheduledAt.Format "2006-01-02 15:04 MST"}}{{end}}</span>
                 <span>{{.Platform}}</span>
                 <span>{{len .Media}} media</span>
               </div>
@@ -1995,7 +1992,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
           </div>
         </article>
         {{else}}
-        <div class="empty">No hay publicaciones en esta ventana de calendario.</div>
+        <div class="empty">No hay publicaciones programadas para los próximos {{.PublicationsWindowDays}} días.</div>
         {{end}}
       </section>
       {{end}}
@@ -2270,67 +2267,6 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 
 (() => {
   const view = document.body.dataset.view || "";
-  if (view !== "publications") {
-    return;
-  }
-  const storageKey = "publisher.ui.status-filters.v1";
-  const defaultFilters = { published: true, scheduled: true };
-  let filters = { ...defaultFilters };
-
-  try {
-    const raw = localStorage.getItem(storageKey);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      filters = { ...defaultFilters, ...parsed };
-    }
-  } catch (_) {}
-
-  const chips = Array.from(document.querySelectorAll("[data-filter]"));
-  const items = Array.from(document.querySelectorAll("[data-status]"));
-
-  const save = () => {
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(filters));
-    } catch (_) {}
-  };
-
-  const syncChips = () => {
-    chips.forEach((chip) => {
-      const key = chip.dataset.filter;
-      const active = !!filters[key];
-      chip.classList.toggle("inactive", !active);
-      chip.classList.toggle("active", active);
-      chip.setAttribute("aria-pressed", String(active));
-    });
-  };
-
-  const applyFilters = () => {
-    items.forEach((el) => {
-      const status = el.dataset.status;
-      const visible = filters[status] !== false;
-      el.classList.toggle("is-hidden", !visible);
-    });
-  };
-
-  chips.forEach((chip) => {
-    chip.addEventListener("click", () => {
-      const key = chip.dataset.filter;
-      filters[key] = !filters[key];
-      if (!Object.values(filters).some(Boolean)) {
-        filters[key] = true;
-      }
-      save();
-      syncChips();
-      applyFilters();
-    });
-  });
-
-  syncChips();
-  applyFilters();
-})();
-
-(() => {
-  const view = document.body.dataset.view || "";
   if (view !== "settings") {
     return;
   }
@@ -2414,8 +2350,8 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		SettingsError        string
 		SettingsSuccess      string
 		ScheduledCount       int
+		PublicationsWindowDays int
 		DraftCount           int
-		PublishedCount       int
 		FailedCount          int
 		NextRunLabel         string
 		CalendarMonthLabel   string
@@ -2452,8 +2388,8 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		SettingsError:        settingsError,
 		SettingsSuccess:      settingsSuccess,
 		ScheduledCount:       scheduledCount,
+		PublicationsWindowDays: publicationsWindowDays,
 		DraftCount:           len(drafts),
-		PublishedCount:       publishedCount,
 		FailedCount:          failedCount,
 		NextRunLabel:         nextRunLabel,
 		CalendarMonthLabel:   calendarMonthLabel,
