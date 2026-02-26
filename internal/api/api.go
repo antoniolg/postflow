@@ -1268,7 +1268,6 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     .stat .k { color: var(--text-secondary); font-size: 10px; margin-bottom: 4px; }
     .stat .v { font-size: 16px; }
     .calendar-wrap {
-      margin-top: 12px;
       border: 1px solid var(--border);
       background: #141923;
       border-radius: 14px;
