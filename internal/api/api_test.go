@@ -824,6 +824,9 @@ func TestDefaultViewIsCalendar(t *testing.T) {
 	if !strings.Contains(body, "width: min(100%, 1540px);") {
 		t.Fatalf("expected calendar layout max width cap")
 	}
+	if !strings.Contains(body, "padding-top: 6px;") {
+		t.Fatalf("expected calendar/day-detail top spacing")
+	}
 	if strings.Contains(body, ".calendar-wrap {\n      margin-top: 12px;") {
 		t.Fatalf("calendar and day detail cards should align at the same top edge")
 	}

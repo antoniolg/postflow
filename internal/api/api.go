@@ -1288,6 +1288,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       width: min(100%, 1540px);
       margin-left: auto;
       margin-right: auto;
+      padding-top: 6px;
       grid-template-columns: minmax(0, 1fr) clamp(300px, 28vw, 390px);
     }
     .day-panel {
