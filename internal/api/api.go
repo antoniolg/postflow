@@ -1610,20 +1610,9 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       min-width: 0;
       flex: 1;
     }
-    .status {
-      width: 40px;
+    .failed-select {
       flex: 0 0 auto;
-      text-align: left;
       padding-top: 3px;
-    }
-    .status .label {
-      display: block;
-      margin-top: 3px;
-      font-size: 9px;
-      font-weight: 700;
-      letter-spacing: 0.08em;
-      color: var(--text-secondary);
-      text-transform: uppercase;
     }
     .content {
       min-width: 0;
@@ -2025,7 +2014,6 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     @media (max-width: 520px) {
       h1 { font-size: 30px; }
       .stats { grid-template-columns: 1fr; }
-      .status { width: 34px; }
       .content .text { font-size: 10px; }
       .meta { font-size: 9px; gap: 8px; }
     }
@@ -2187,9 +2175,6 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         {{range .Publications}}
         <article class="card scheduled card-editable" data-edit-url="/?view=create&edit_id={{.ID}}&return_to={{urlquery $.CurrentViewURL}}">
           <div class="card-left">
-            <div class="status">
-              <span class="dot scheduled"></span><span class="label status-schd">SCHD</span>
-            </div>
             <div class="content">
               <div class="text">{{.Text}}</div>
               <div class="meta">
@@ -2212,10 +2197,6 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         {{range .Drafts}}
         <article class="card draft card-editable" data-status="draft" data-edit-url="/?view=create&edit_id={{.ID}}&return_to={{urlquery $.CurrentViewURL}}">
           <div class="card-left">
-            <div class="status">
-              <span class="dot draft"></span>
-              <span class="label status-drft">DRFT</span>
-            </div>
             <div class="content">
               <div class="text">{{.Text}}</div>
               <div class="meta">
@@ -2253,10 +2234,8 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         {{range .FailedItems}}
         <article class="card failed card-editable" data-edit-url="/?view=create&edit_id={{.PostID}}&return_to={{urlquery $.CurrentViewURL}}">
           <div class="card-left">
-            <div class="status">
+            <div class="failed-select">
               <input class="failed-checkbox" type="checkbox" value="{{.DeadLetterID}}" data-failed-checkbox />
-              <span class="dot fail"></span>
-              <span class="label status-fail">FAIL</span>
             </div>
             <div class="content">
               <div class="text">{{.Text}}</div>
