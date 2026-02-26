@@ -1874,8 +1874,8 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       </div>
       <nav class="nav">
         <a class="nav-item {{if eq .ActiveNavView "calendar"}}active{{end}}" href="/?view=calendar&month={{.CurrentMonthParam}}&day={{.SelectedDayKey}}">// calendar</a>
-        <a class="nav-item {{if eq .ActiveNavView "publications"}}active{{end}}" href="/?view=publications">// scheduled</a>
-        <a class="nav-item {{if eq .ActiveNavView "drafts"}}active{{end}}" href="/?view=drafts">// drafts</a>
+        <a class="nav-item {{if eq .ActiveNavView "publications"}}active{{end}}" href="/?view=publications"><span>// scheduled</span>{{if gt .ScheduledCount 0}}<span class="nav-badge">{{.ScheduledCount}}</span>{{end}}</a>
+        <a class="nav-item {{if eq .ActiveNavView "drafts"}}active{{end}}" href="/?view=drafts"><span>// drafts</span>{{if gt .DraftCount 0}}<span class="nav-badge">{{.DraftCount}}</span>{{end}}</a>
         <a class="nav-item {{if eq .ActiveNavView "failed"}}active{{end}}" href="/?view=failed"><span>// failed</span>{{if gt .FailedCount 0}}<span class="nav-badge">{{.FailedCount}}</span>{{end}}</a>
         <a class="nav-item {{if eq .ActiveNavView "settings"}}active{{end}}" href="/?view=settings">// settings</a>
       </nav>
@@ -1888,15 +1888,6 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         </div>
         <a class="create-pill" href="{{.CreateViewURL}}">create_post</a>
       </header>
-      {{if eq .View "publications"}}
-      <div class="stats">
-        <div class="stat"><div class="k">scheduled ({{.PublicationsWindowDays}}d)</div><div class="v">{{.ScheduledCount}}</div></div>
-        <div class="stat"><div class="k">drafts</div><div class="v">{{.DraftCount}}</div></div>
-        <div class="stat"><div class="k">failed</div><div class="v">{{.FailedCount}}</div></div>
-        <div class="stat"><div class="k">next run</div><div class="v" style="font-size:12px;">{{.NextRunLabel}}</div></div>
-      </div>
-      {{end}}
-
       {{if eq .View "calendar"}}
       <div class="calendar-layout">
       <div class="calendar-wrap">

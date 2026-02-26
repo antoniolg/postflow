@@ -590,6 +590,18 @@ func TestPublicationsViewShowsOnlyScheduledInNext14Days(t *testing.T) {
 	if !strings.Contains(body, scheduledID) {
 		t.Fatalf("expected in-window scheduled post id in rendered html")
 	}
+	if strings.Contains(body, "scheduled (14d)") {
+		t.Fatalf("legacy publications stats bar should not appear")
+	}
+	if strings.Contains(body, "next run") {
+		t.Fatalf("legacy publications stats bar should not appear")
+	}
+	if !strings.Contains(body, "<span>// scheduled</span><span class=\"nav-badge\">1</span>") {
+		t.Fatalf("expected scheduled nav badge with count")
+	}
+	if !strings.Contains(body, "<span>// drafts</span><span class=\"nav-badge\">1</span>") {
+		t.Fatalf("expected drafts nav badge with count")
+	}
 }
 
 func TestDefaultViewIsCalendar(t *testing.T) {
