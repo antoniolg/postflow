@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"testing"
@@ -36,6 +37,90 @@ func TestCreatePostValidation(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestCreatePostFromFormRedirects(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	form := url.Values{}
+	form.Set("platform", "x")
+	form.Set("text", "draft from form")
+	req := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewBufferString(form.Encode()))
+	req.Header.Set("content-type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", w.Code)
+	}
+
+	drafts, err := store.ListDrafts(t.Context())
+	if err != nil {
+		t.Fatalf("list drafts: %v", err)
+	}
+	if len(drafts) != 1 {
+		t.Fatalf("expected 1 draft, got %d", len(drafts))
+	}
+}
+
+func TestEditPostFromForm(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	createPayload, _ := json.Marshal(map[string]any{
+		"platform":     "x",
+		"text":         "initial scheduled",
+		"scheduled_at": time.Now().UTC().Add(2 * time.Hour).Format(time.RFC3339),
+	})
+	createReq := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(createPayload))
+	createW := httptest.NewRecorder()
+	h.ServeHTTP(createW, createReq)
+	if createW.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", createW.Code)
+	}
+	var created map[string]any
+	if err := json.Unmarshal(createW.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode create response: %v", err)
+	}
+	postID, _ := created["id"].(string)
+	if postID == "" {
+		t.Fatalf("missing post id")
+	}
+
+	editForm := url.Values{}
+	editForm.Set("text", "edited as draft")
+	editReq := httptest.NewRequest(http.MethodPost, "/posts/"+postID+"/edit", bytes.NewBufferString(editForm.Encode()))
+	editReq.Header.Set("content-type", "application/x-www-form-urlencoded")
+	editW := httptest.NewRecorder()
+	h.ServeHTTP(editW, editReq)
+	if editW.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", editW.Code)
+	}
+
+	post, err := store.GetPost(t.Context(), postID)
+	if err != nil {
+		t.Fatalf("get post: %v", err)
+	}
+	if post.Text != "edited as draft" {
+		t.Fatalf("expected updated text, got %q", post.Text)
+	}
+	if status := string(post.Status); status != "draft" {
+		t.Fatalf("expected draft status after clearing date, got %s", status)
 	}
 }
 

@@ -428,6 +428,28 @@ func (s *Store) CancelPost(ctx context.Context, id string) error {
 	return nil
 }
 
+func (s *Store) UpdatePostEditable(ctx context.Context, id, text string, scheduledAt time.Time) error {
+	status := domain.PostStatusDraft
+	if !scheduledAt.IsZero() {
+		status = domain.PostStatusScheduled
+	}
+
+	result, err := s.db.ExecContext(ctx, `
+		UPDATE posts
+		SET text = ?, status = ?, scheduled_at = ?, next_retry_at = NULL, attempts = 0, error = NULL, updated_at = ?
+		WHERE id = ?
+		  AND status IN (?, ?, ?, ?)
+	`, strings.TrimSpace(text), status, formatScheduledAt(scheduledAt.UTC()), time.Now().UTC().Format(time.RFC3339Nano), id, domain.PostStatusDraft, domain.PostStatusScheduled, domain.PostStatusFailed, domain.PostStatusCanceled)
+	if err != nil {
+		return err
+	}
+	n, _ := result.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("post not editable")
+	}
+	return nil
+}
+
 func (s *Store) ClaimDuePosts(ctx context.Context, limit int) ([]domain.Post, error) {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	rows, err := s.db.QueryContext(ctx, `
