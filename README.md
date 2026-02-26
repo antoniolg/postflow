@@ -32,6 +32,33 @@ go install github.com/air-verse/air@latest
 air
 ```
 
+## CLI (`publisher-cli`)
+
+CLI para operar la API HTTP directamente (sin MCP).
+
+```bash
+go run ./cmd/publisher-cli --help
+```
+
+Global flags:
+- `--base-url` (o `PUBLISHER_BASE_URL`)
+- `--api-token` (o `PUBLISHER_API_TOKEN`)
+- `--timeout`
+- `--json`
+
+Ejemplos:
+
+```bash
+go run ./cmd/publisher-cli schedule list --from 2026-03-01T00:00:00Z --to 2026-03-31T23:59:59Z
+go run ./cmd/publisher-cli posts create --text "hola" --scheduled-at 2026-03-10T09:00:00Z
+go run ./cmd/publisher-cli posts validate --text "hola" --scheduled-at 2026-03-10T09:00:00Z
+go run ./cmd/publisher-cli dlq list --limit 50
+go run ./cmd/publisher-cli dlq requeue --id dlq_xxx
+```
+
+Skill local incluida:
+- `skills/publisher-cli/SKILL.md`
+
 Variables opcionales:
 - `PORT` (default: `8080`)
 - `DATABASE_PATH` (default: `publisher.db`)
