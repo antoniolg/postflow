@@ -1108,7 +1108,7 @@ func TestAccessibilityMarkupAddsLabelsAndLandmarks(t *testing.T) {
 		t.Fatalf("expected 200 for create view, got %d", createW.Code)
 	}
 	createBody := createW.Body.String()
-	if !strings.Contains(createBody, "<label for=\"create-scheduled-at\">") || !strings.Contains(createBody, "id=\"create-scheduled-at\"") {
+	if !strings.Contains(createBody, "for=\"create-scheduled-at\"") || !strings.Contains(createBody, "id=\"create-scheduled-at\"") {
 		t.Fatalf("expected create scheduled datetime label association")
 	}
 
@@ -1145,6 +1145,12 @@ func TestCreateViewIncludesComposerPreviewUploadAndNetworks(t *testing.T) {
 	body := w.Body.String()
 	if !strings.Contains(body, "id=\"create-network-picker\"") || !strings.Contains(body, "data-network-chip") {
 		t.Fatalf("expected network picker in create view")
+	}
+	if !strings.Contains(body, "class=\"create-header-actions\"") || !strings.Contains(body, "form=\"create-post-form\"") {
+		t.Fatalf("expected create actions in header and connected to composer form")
+	}
+	if !strings.Contains(body, "NEW POST</h1>") || !strings.Contains(body, "// compose and schedule your content") {
+		t.Fatalf("expected create title and subtitle to match designed hierarchy")
 	}
 	if !strings.Contains(body, "id=\"create-media-input\"") || !strings.Contains(body, "id=\"create-media-list\"") {
 		t.Fatalf("expected media upload controls in create view")

@@ -1172,6 +1172,17 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       align-items: center;
       gap: 12px;
     }
+    .title-copy {
+      display: inline-flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .title-sub {
+      font-size: 12px;
+      letter-spacing: 0.06em;
+      color: var(--text-secondary);
+      text-transform: lowercase;
+    }
     .title-back {
       color: #c8c8c8;
       text-decoration: none;
@@ -1223,6 +1234,20 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     }
     body[data-view="create"] .create-pill {
       display: none;
+    }
+    .create-header-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .create-header-actions button {
+      min-height: 34px;
+      padding: 0 14px;
+    }
+    .create-header-actions .btn-secondary {
+      color: #b8b8b8;
     }
     .tabs {
       margin-top: 18px;
@@ -2061,10 +2086,10 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       letter-spacing: 0.06em;
     }
     .composer-layout {
-      margin-top: 10px;
+      margin-top: 12px;
       display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(300px, 0.42fr);
-      gap: 12px;
+      grid-template-columns: minmax(0, 1fr) 320px;
+      gap: 24px;
       align-items: start;
     }
     .composer-main {
@@ -2073,12 +2098,56 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     .composer-main .editor {
       margin-top: 0;
       max-width: none;
+      background: transparent;
+      border: 0;
+      border-radius: 0;
+      overflow: visible;
+    }
+    body[data-view="create"] .composer-main .editor-head {
+      display: none;
+    }
+    body[data-view="create"] .composer-main .editor-body {
+      padding: 0;
+      gap: 18px;
     }
     .composer-label {
-      font-size: 12px;
+      font-size: 11px;
       color: #a8a8a8;
       text-transform: lowercase;
-      letter-spacing: 0.06em;
+      letter-spacing: 0.08em;
+      margin-bottom: 2px;
+    }
+    .create-field {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .create-field-content .composer-text-wrap,
+    .create-field-media .media-block,
+    .create-field-schedule .schedule-block {
+      background: #212121;
+      border-radius: 16px;
+      padding: 16px 18px;
+    }
+    .create-field-content .composer-text-wrap {
+      gap: 12px;
+      display: flex;
+      flex-direction: column;
+      min-height: clamp(320px, 46vh, 520px);
+    }
+    .create-field-schedule .schedule-block {
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .schedule-label {
+      font-size: 11px;
+      color: #a8a8a8;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
     }
     .network-picker {
       display: flex;
@@ -2118,20 +2187,22 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     .composer-text-wrap {
       border: 0;
       border-radius: 16px;
-      background: #212121;
+      background: transparent;
       overflow: hidden;
     }
     .composer-text-wrap textarea {
       border: 0;
       background: transparent;
       width: 100%;
-      min-height: clamp(200px, 34vh, 380px);
+      min-height: clamp(250px, 34vh, 420px);
       resize: vertical;
       display: block;
+      color: #ffffff;
+      padding: 0;
     }
     .composer-text-meta {
-      border-top: 1px solid #2a2a2a;
-      padding: 8px 10px;
+      border-top: 1px solid #2f2f2f;
+      padding: 10px 0 0;
       display: flex;
       justify-content: space-between;
       gap: 8px;
@@ -2148,6 +2219,11 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       gap: 8px;
       flex-wrap: wrap;
     }
+    .media-block {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
     .upload-notice {
       font-size: 12px;
       color: #a8a8a8;
@@ -2161,12 +2237,12 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     .media-list {
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 10px;
     }
     .media-item {
       border: 0;
-      border-radius: 16px;
-      background: #212121;
+      border-radius: 12px;
+      background: #2a2a2a;
       padding: 8px 10px;
       display: grid;
       grid-template-columns: 44px minmax(0, 1fr) auto;
@@ -2210,6 +2286,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     .media-item-actions button {
       padding: 5px 9px;
       font-size: 11px;
+      min-height: 26px;
     }
     .media-item-actions .btn-secondary {
       border: 0;
@@ -2225,14 +2302,18 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       border: 0;
       border-radius: 18px;
       background: #212121;
-      overflow: hidden;
+      overflow: visible;
       position: sticky;
       top: 16px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
     }
     .preview-head {
-      padding: 10px 12px;
-      border-bottom: 1px solid #2a2a2a;
-      background: #212121;
+      padding: 0;
+      border-bottom: 0;
+      background: transparent;
     }
     .preview-title {
       font-size: 12px;
@@ -2249,17 +2330,31 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       font-size: 11px;
       color: #a8a8a8;
     }
+    .preview-platforms span {
+      border-radius: 999px;
+      background: #2d2d2d;
+      padding: 2px 8px;
+      min-width: 24px;
+      text-align: center;
+      text-transform: lowercase;
+    }
     .preview-platforms .active {
       color: var(--accent-orange);
+      box-shadow: inset 0 0 0 1px rgba(255, 107, 53, 0.45);
     }
     .preview-body {
-      padding: 12px;
+      padding: 0;
+      flex: 1;
+      min-height: 0;
     }
     .preview-card {
       border: 0;
       border-radius: 16px;
-      background: #212121;
-      padding: 12px;
+      background: #1f1f1f;
+      padding: 14px;
+      min-height: 520px;
+      display: flex;
+      flex-direction: column;
     }
     .preview-author {
       display: flex;
@@ -2328,6 +2423,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     }
     .composer-submit-actions {
       justify-content: flex-end;
+      display: none;
     }
     @media (max-width: 980px) {
       .app { flex-direction: column; }
@@ -2364,13 +2460,30 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       }
       .header {
         flex-direction: row;
-        align-items: center;
+        align-items: flex-start;
         gap: 10px;
       }
+      .title-row {
+        align-items: flex-start;
+      }
+      .title-copy {
+        gap: 2px;
+      }
       h1 { font-size: 34px; }
+      .title-sub {
+        font-size: 11px;
+      }
       .create-pill {
         padding: 8px 12px;
         font-size: 11px;
+      }
+      .create-header-actions {
+        width: 100%;
+        justify-content: flex-start;
+      }
+      .create-header-actions button {
+        min-height: 32px;
+        padding: 0 12px;
       }
       .tabs {
         flex-wrap: nowrap;
@@ -2473,12 +2586,21 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       }
       .preview-panel {
         position: static;
+        padding: 12px;
       }
       .composer-submit-actions {
+        display: flex;
         justify-content: stretch;
       }
       .composer-submit-actions button {
         width: 100%;
+      }
+      .create-field-content .composer-text-wrap,
+      .create-field-media .media-block {
+        padding: 14px;
+      }
+      .create-field-schedule .schedule-block {
+        padding: 10px 12px;
       }
     }
     @media (max-width: 520px) {
@@ -2536,9 +2658,20 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       <header class="header">
         <div class="title-row">
           {{if and (eq .View "create") .BackURL}}<a class="title-back" href="{{.BackURL}}" aria-label="back">←</a>{{end}}
-          <h1>{{if eq .View "calendar"}}CALENDAR{{else if eq .View "drafts"}}DRAFTS{{else if eq .View "failed"}}FAILED{{else if eq .View "create"}}CREATE{{else if eq .View "settings"}}SETTINGS{{else}}SCHEDULED{{end}}</h1>
+          <div class="title-copy">
+            <h1>{{if eq .View "calendar"}}CALENDAR{{else if eq .View "drafts"}}DRAFTS{{else if eq .View "failed"}}FAILED{{else if eq .View "create"}}NEW POST{{else if eq .View "settings"}}SETTINGS{{else}}SCHEDULED{{end}}</h1>
+            {{if eq .View "create"}}<div class="title-sub">// compose and schedule your content</div>{{end}}
+          </div>
         </div>
+        {{if eq .View "create"}}
+        <div class="create-header-actions">
+          <button class="btn-secondary" type="submit" form="create-post-form" name="intent" value="draft">save_draft</button>
+          <button class="btn-secondary" type="submit" form="create-post-form" name="intent" value="schedule">{{if .EditingPost}}update_schedule{{else}}schedule{{end}}</button>
+          <button class="btn-primary" type="submit" form="create-post-form" name="intent" value="publish_now">publish_now</button>
+        </div>
+        {{else}}
         <a class="create-pill" href="{{.CreateViewURL}}">create_post</a>
+        {{end}}
       </header>
       {{if eq .View "calendar"}}
       <div class="calendar-layout">
@@ -2751,7 +2884,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
               {{if .CreateError}}<div class="alert error">{{.CreateError}}</div>{{end}}
               {{if .CreateSuccess}}<div class="alert success">{{.CreateSuccess}}</div>{{end}}
 
-              <div class="field">
+              <div class="field create-field create-field-networks">
                 <div class="composer-label">// select networks</div>
                 <div class="network-picker" id="create-network-picker">
                   <button type="button" class="network-chip active" data-network-chip data-platform="x" aria-pressed="true">x</button>
@@ -2761,30 +2894,34 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
                 </div>
               </div>
 
-              <div class="field">
+              <div class="field create-field create-field-content">
                 <div class="composer-label">// post content</div>
                 <div class="composer-text-wrap">
                   <textarea id="create-text" name="text" required placeholder="Write your post...">{{.CreateText}}</textarea>
                   <div class="composer-text-meta">
                     <span id="create-char-count">0/280 chars (x limit)</span>
-                    <span># @</span>
+                    <span>o # @</span>
                   </div>
                 </div>
               </div>
 
-              <div class="field">
-                <label for="create-scheduled-at">Scheduled At ({{.UITimezone}})</label>
-                <input id="create-scheduled-at" type="datetime-local" name="scheduled_at_local" data-date-picker value="{{.CreateScheduledLocal}}" />
+              <div class="field create-field create-field-schedule">
+                <div class="schedule-block">
+                  <label class="schedule-label" for="create-scheduled-at">scheduled at ({{.UITimezone}})</label>
+                  <input id="create-scheduled-at" type="datetime-local" name="scheduled_at_local" data-date-picker value="{{.CreateScheduledLocal}}" />
+                </div>
               </div>
 
-              <div class="field">
+              <div class="field create-field create-field-media">
                 <div class="composer-label">// media attachment (4 max)</div>
-                <div class="media-upload-actions">
-                  <input id="create-media-input" type="file" accept="image/*,video/*" multiple hidden />
-                  <button type="button" class="pill" id="create-media-trigger">upload files</button>
-                  <span class="upload-notice" id="create-upload-notice">no media uploaded</span>
+                <div class="media-block">
+                  <div class="media-upload-actions">
+                    <input id="create-media-input" type="file" accept="image/*,video/*" multiple hidden />
+                    <button type="button" class="pill" id="create-media-trigger">upload files</button>
+                    <span class="upload-notice" id="create-upload-notice">no media uploaded</span>
+                  </div>
+                  <div class="media-list" id="create-media-list"></div>
                 </div>
-                <div class="media-list" id="create-media-list"></div>
               </div>
 
               <div class="editor-actions composer-submit-actions">
@@ -3306,7 +3443,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
   };
 
   const setActionsEnabled = (enabled) => {
-    form.querySelectorAll("button[type=submit]").forEach((btn) => {
+    document.querySelectorAll('button[type=submit][form="create-post-form"], #create-post-form button[type=submit]').forEach((btn) => {
       if (btn instanceof HTMLButtonElement) {
         btn.disabled = !enabled;
       }
