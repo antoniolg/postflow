@@ -1290,6 +1290,21 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       margin-right: auto;
       padding-top: 6px;
       grid-template-columns: minmax(0, 1fr) clamp(300px, 28vw, 390px);
+      align-items: stretch;
+    }
+    body[data-view="calendar"] .calendar-wrap,
+    body[data-view="calendar"] .day-panel {
+      height: 100%;
+    }
+    body[data-view="calendar"] .day-panel {
+      display: flex;
+      flex-direction: column;
+      align-self: stretch;
+    }
+    body[data-view="calendar"] .day-panel-body {
+      flex: 1;
+      min-height: 0;
+      max-height: none;
     }
     .day-panel {
       border: 1px solid var(--border);

@@ -827,6 +827,12 @@ func TestDefaultViewIsCalendar(t *testing.T) {
 	if !strings.Contains(body, "padding-top: 6px;") {
 		t.Fatalf("expected calendar/day-detail top spacing")
 	}
+	if !strings.Contains(body, "body[data-view=\"calendar\"] .calendar-wrap,\n    body[data-view=\"calendar\"] .day-panel {\n      height: 100%;") {
+		t.Fatalf("expected calendar and day detail containers to share the same height")
+	}
+	if !strings.Contains(body, "body[data-view=\"calendar\"] .day-panel-body {\n      flex: 1;\n      min-height: 0;\n      max-height: none;") {
+		t.Fatalf("expected day detail body to stretch and fill calendar height")
+	}
 	if strings.Contains(body, ".calendar-wrap {\n      margin-top: 12px;") {
 		t.Fatalf("calendar and day detail cards should align at the same top edge")
 	}
