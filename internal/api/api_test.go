@@ -1143,6 +1143,9 @@ func TestCreateViewIncludesComposerPreviewUploadAndNetworks(t *testing.T) {
 	if !strings.Contains(body, "id=\"create-media-input\"") || !strings.Contains(body, "id=\"create-media-list\"") {
 		t.Fatalf("expected media upload controls in create view")
 	}
+	if !strings.Contains(body, "id=\"create-scheduled-at\" type=\"datetime-local\" name=\"scheduled_at_local\" data-date-picker") {
+		t.Fatalf("expected create datetime input to use reusable date picker component")
+	}
 	if !strings.Contains(body, "class=\"preview-panel\"") || !strings.Contains(body, "id=\"preview-text\"") {
 		t.Fatalf("expected live preview panel in create view")
 	}
@@ -1151,6 +1154,12 @@ func TestCreateViewIncludesComposerPreviewUploadAndNetworks(t *testing.T) {
 	}
 	if !strings.Contains(body, ".composer-text-wrap textarea {") || !strings.Contains(body, "width: 100%;") {
 		t.Fatalf("expected create textarea to span full composer width")
+	}
+	if !strings.Contains(body, "input[type=\"date\"], input[type=\"datetime-local\"], input[data-date-picker]") {
+		t.Fatalf("expected reusable date picker script to target all date/datetime inputs")
+	}
+	if !strings.Contains(body, "class=\"btn-primary\" type=\"submit\" name=\"intent\" value=\"publish_now\"") {
+		t.Fatalf("expected publish now button to use primary action style")
 	}
 	if !strings.Contains(body, "name=\"intent\" value=\"publish_now\"") {
 		t.Fatalf("expected publish_now action in create view")

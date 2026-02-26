@@ -1032,16 +1032,16 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg-page: #0f1014;
-      --bg-panel: #14161d;
-      --bg-card: #1a1d25;
-      --bg-elevated: #212632;
-      --bg-muted: #2b3140;
+      --bg-page: #0b1018;
+      --bg-panel: #111723;
+      --bg-card: #151c2a;
+      --bg-elevated: #1c2638;
+      --bg-muted: #273149;
       --text-primary: #f5f7fb;
-      --text-secondary: #97a2bd;
-      --accent-orange: #ff7a30;
-      --accent-teal: #36d3bf;
-      --border: #2a3040;
+      --text-secondary: #95a5c5;
+      --accent-orange: #ff8740;
+      --accent-teal: #2fd8c3;
+      --border: #2d3850;
       --radius: 12px;
     }
     * { box-sizing: border-box; }
@@ -1717,7 +1717,10 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     .field input[type=datetime-local] {
       min-width: 0;
       width: 100%;
-      max-width: 280px;
+      max-width: none;
+    }
+    .field .date-input {
+      width: min(100%, 320px);
     }
     .field select {
       min-width: 0;
@@ -1753,10 +1756,20 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       flex-wrap: wrap;
       align-items: center;
     }
+    .btn-primary {
+      border-color: #a05522;
+      background: linear-gradient(180deg, #ff9c59 0%, #ff8441 100%);
+      color: #1e140d;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), 0 3px 10px rgba(255,134,63,0.25);
+    }
+    .btn-primary:hover:not(:disabled) {
+      filter: brightness(1.05);
+    }
     .btn-secondary {
-      border: 1px solid #364058;
-      background: #1b2230;
-      color: #c2cde6;
+      border: 1px solid #3c4863;
+      background: linear-gradient(180deg, #212a3c 0%, #1a2233 100%);
+      color: #d6dff4;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
     }
     .alert {
       border-radius: 10px;
@@ -1870,22 +1883,85 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       min-width: 170px;
       padding: 6px 8px;
       border-radius: 8px;
-      border: 1px solid #364058;
-      background: #11141b;
+      border: 1px solid #3a4560;
+      background: #121925;
       color: var(--text-primary);
       font: inherit;
       font-size: 13px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+    }
+    .date-input {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      width: min(100%, 300px);
+    }
+    .date-input input[type=datetime-local],
+    .date-input input[type=date] {
+      width: 100%;
+      min-width: 0;
+      padding-right: 36px;
+    }
+    .date-input.is-focus input[type=datetime-local],
+    .date-input.is-focus input[type=date] {
+      outline: none;
+      border-color: #5870a0;
+      box-shadow: 0 0 0 2px rgba(88,112,160,0.2);
+    }
+    .date-input input[type=datetime-local]::-webkit-calendar-picker-indicator,
+    .date-input input[type=date]::-webkit-calendar-picker-indicator {
+      opacity: 0;
+      position: absolute;
+      right: 0;
+      width: 36px;
+      height: 100%;
+      cursor: pointer;
+    }
+    .date-trigger {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      width: 26px;
+      height: calc(100% - 8px);
+      border-radius: 8px;
+      border: 1px solid #3a4661;
+      background: linear-gradient(180deg, #1e2637 0%, #1a2233 100%);
+      color: #b8c6e7;
+      font-size: 12px;
+      line-height: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
     }
     button {
-      border: 1px solid #8a4a1f;
-      background: var(--accent-orange);
-      color: #161616;
+      border: 1px solid #3c4863;
+      background: linear-gradient(180deg, #232c3f 0%, #1a2233 100%);
+      color: #d6dff4;
       border-radius: 999px;
-      padding: 6px 10px;
+      padding: 7px 12px;
       font-size: 12px;
       font-weight: 700;
       text-transform: lowercase;
       cursor: pointer;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+      transition: border-color .12s ease, transform .08s ease, filter .12s ease;
+    }
+    button:hover:not(:disabled) {
+      border-color: #4e5f83;
+      filter: brightness(1.05);
+    }
+    button:active:not(:disabled) {
+      transform: translateY(1px);
+    }
+    button:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 2px rgba(95,122,175,0.25);
+    }
+    button:disabled {
+      opacity: 0.52;
+      cursor: not-allowed;
+      filter: none;
     }
     .empty {
       border: 1px dashed #2f3649;
@@ -2280,6 +2356,10 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       .field input[type=datetime-local] {
         max-width: none;
       }
+      .field .date-input {
+        width: 100%;
+        max-width: none;
+      }
       .editor-actions {
         width: 100%;
       }
@@ -2498,8 +2578,8 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
           </div>
           <div class="card-actions">
             <form method="post" action="/posts/{{.ID}}/schedule">
-              <input type="datetime-local" name="scheduled_at_local" required aria-label="scheduled at for draft {{.ID}}" />
-              <button type="submit">schedule</button>
+              <input type="datetime-local" name="scheduled_at_local" required data-date-picker aria-label="scheduled at for draft {{.ID}}" />
+              <button type="submit" class="btn-primary">schedule</button>
             </form>
           </div>
         </article>
@@ -2518,7 +2598,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
           <button type="button" class="pill" id="failed-select-all">mark all</button>
           <button type="button" class="pill" id="failed-clear-all">clear all</button>
           <form method="post" action="/dlq/requeue" id="failed-bulk-form">
-            <button type="submit" id="failed-requeue-selected" disabled>requeue selected</button>
+            <button type="submit" id="failed-requeue-selected" class="btn-primary" disabled>requeue selected</button>
           </form>
         </div>
         {{range .FailedItems}}
@@ -2541,7 +2621,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
           </div>
           <div class="card-actions">
             <form method="post" action="/dlq/{{.DeadLetterID}}/requeue">
-              <button type="submit">requeue</button>
+              <button type="submit" class="btn-secondary">requeue</button>
             </form>
           </div>
         </article>
@@ -2587,7 +2667,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 
               <div class="field">
                 <label for="create-scheduled-at">Scheduled At ({{.UITimezone}})</label>
-                <input id="create-scheduled-at" type="datetime-local" name="scheduled_at_local" value="{{.CreateScheduledLocal}}" />
+                <input id="create-scheduled-at" type="datetime-local" name="scheduled_at_local" data-date-picker value="{{.CreateScheduledLocal}}" />
               </div>
 
               <div class="field">
@@ -2603,7 +2683,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
               <div class="editor-actions composer-submit-actions">
                 <button class="btn-secondary" type="submit" name="intent" value="draft">save_draft</button>
                 <button class="btn-secondary" type="submit" name="intent" value="schedule">{{if .EditingPost}}update_schedule{{else}}schedule{{end}}</button>
-                <button type="submit" name="intent" value="publish_now">publish_now</button>
+                <button class="btn-primary" type="submit" name="intent" value="publish_now">publish_now</button>
               </div>
             </form>
           </section>
@@ -2663,7 +2743,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
             </select>
           </div>
           <div class="editor-actions">
-            <button type="submit">save timezone</button>
+            <button type="submit" class="btn-primary">save timezone</button>
             <button type="button" class="btn-secondary" id="tz-detect">use browser timezone</button>
           </div>
           <div class="meta"><span class="meta-soft">current timezone: {{.UITimezone}}</span></div>
@@ -2690,6 +2770,74 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       }
     });
   });
+})();
+
+(() => {
+  const openDatePicker = (input) => {
+    if (!(input instanceof HTMLInputElement)) {
+      return;
+    }
+    if (typeof input.showPicker === "function") {
+      try {
+        input.showPicker();
+        return;
+      } catch (_) {}
+    }
+    input.focus();
+    input.click();
+  };
+
+  const setupDatePickerInput = (input) => {
+    if (!(input instanceof HTMLInputElement)) {
+      return;
+    }
+    if (input.dataset.datePickerReady === "1") {
+      return;
+    }
+    input.dataset.datePickerReady = "1";
+
+    let wrapper = input.parentElement;
+    if (!(wrapper instanceof HTMLElement) || !wrapper.classList.contains("date-input")) {
+      wrapper = document.createElement("div");
+      wrapper.className = "date-input";
+      input.replaceWith(wrapper);
+      wrapper.appendChild(input);
+    }
+
+    let trigger = wrapper.querySelector("[data-date-trigger]");
+    if (!(trigger instanceof HTMLButtonElement)) {
+      trigger = document.createElement("button");
+      trigger.type = "button";
+      trigger.className = "date-trigger";
+      trigger.setAttribute("data-date-trigger", "1");
+      trigger.setAttribute("aria-label", "open date picker");
+      trigger.textContent = "▾";
+      wrapper.appendChild(trigger);
+    }
+
+    trigger.addEventListener("click", () => openDatePicker(input));
+    input.addEventListener("focus", () => wrapper.classList.add("is-focus"));
+    input.addEventListener("blur", () => wrapper.classList.remove("is-focus"));
+    input.addEventListener("keydown", (event) => {
+      if ((event.key === "Enter" || event.key === "ArrowDown") && (event.altKey || event.metaKey || event.ctrlKey)) {
+        event.preventDefault();
+        openDatePicker(input);
+      }
+    });
+  };
+
+  const initDatePickers = () => {
+    document.querySelectorAll('input[type="date"], input[type="datetime-local"], input[data-date-picker]').forEach((node) => {
+      if (node instanceof HTMLInputElement) {
+        if (node.disabled || node.readOnly) {
+          return;
+        }
+        setupDatePickerInput(node);
+      }
+    });
+  };
+
+  initDatePickers();
 })();
 
 (() => {
