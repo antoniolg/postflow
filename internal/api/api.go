@@ -195,6 +195,10 @@ func (s Server) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 				http.Redirect(w, r, createViewURL("", req.Text, req.ScheduledAt, req.ReturnTo, "scheduled_at is required to schedule", ""), http.StatusSeeOther)
 				return
 			}
+		case "publish_now":
+			if scheduledAt.IsZero() {
+				scheduledAt = time.Now().UTC()
+			}
 		}
 	}
 	if _, err := s.Store.GetMediaByIDs(r.Context(), req.MediaIDs); err != nil {
@@ -410,6 +414,9 @@ func (s Server) handleEditPost(w http.ResponseWriter, r *http.Request) {
 	}
 	if intent == "draft" {
 		scheduledAt = time.Time{}
+	}
+	if intent == "publish_now" && scheduledAt.IsZero() {
+		scheduledAt = time.Now().UTC()
 	}
 	if intent == "schedule" && scheduledAt.IsZero() {
 		if fromForm {
@@ -1205,6 +1212,9 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       letter-spacing: 0.03em;
       text-decoration: none;
     }
+    body[data-view="create"] .create-pill {
+      display: none;
+    }
     .tabs {
       margin-top: 18px;
       display: flex;
@@ -1892,6 +1902,265 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       text-transform: uppercase;
       letter-spacing: 0.06em;
     }
+    .composer-layout {
+      margin-top: 10px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(300px, 0.42fr);
+      gap: 12px;
+      align-items: start;
+    }
+    .composer-main {
+      min-width: 0;
+    }
+    .composer-main .editor {
+      margin-top: 0;
+      max-width: none;
+    }
+    .composer-label {
+      font-size: 12px;
+      color: #8fa0c1;
+      text-transform: lowercase;
+      letter-spacing: 0.06em;
+    }
+    .network-picker {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .network-chip {
+      border: 1px solid #364058;
+      background: #151b24;
+      color: #8fa0c1;
+      border-radius: 999px;
+      padding: 7px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: lowercase;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+    }
+    .network-chip::before {
+      content: "●";
+      font-size: 10px;
+      line-height: 1;
+      opacity: 0.85;
+    }
+    .network-chip.active {
+      border-color: #ff7a30;
+      background: rgba(255, 122, 48, 0.12);
+      color: #ffd7c0;
+      box-shadow: inset 0 0 0 1px rgba(255, 122, 48, 0.2);
+    }
+    .network-chip.disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+    .composer-text-wrap {
+      border: 1px solid #364058;
+      border-radius: 10px;
+      background: #11141b;
+      overflow: hidden;
+    }
+    .composer-text-wrap textarea {
+      border: 0;
+      background: transparent;
+    }
+    .composer-text-meta {
+      border-top: 1px solid #232b3c;
+      padding: 8px 10px;
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      align-items: center;
+      color: #7f8ca8;
+      font-size: 11px;
+    }
+    .char-over {
+      color: #ff8a97;
+    }
+    .media-upload-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .upload-notice {
+      font-size: 12px;
+      color: #8fa0c1;
+    }
+    .upload-notice[data-state="error"] {
+      color: #ffb0b9;
+    }
+    .upload-notice[data-state="success"] {
+      color: #8be7d7;
+    }
+    .media-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .media-item {
+      border: 1px solid #2d3447;
+      border-radius: 10px;
+      background: #151b26;
+      padding: 8px 10px;
+      display: grid;
+      grid-template-columns: 44px minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+    }
+    .media-thumb {
+      width: 44px;
+      height: 44px;
+      border-radius: 8px;
+      background: #202938;
+      border: 1px solid #2f394d;
+      background-size: cover;
+      background-position: center;
+      display: grid;
+      place-items: center;
+      color: #8fa0c1;
+      font-size: 11px;
+      text-transform: uppercase;
+    }
+    .media-info {
+      min-width: 0;
+    }
+    .media-name {
+      font-size: 12px;
+      color: #d9e4ff;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      overflow: hidden;
+    }
+    .media-meta {
+      margin-top: 2px;
+      font-size: 11px;
+      color: #8fa0c1;
+    }
+    .media-item-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .media-item-actions button {
+      padding: 5px 9px;
+      font-size: 11px;
+    }
+    .media-item-actions .btn-secondary {
+      border-color: #3a4359;
+    }
+    .media-item-actions .btn-danger {
+      border-color: rgba(255,95,112,0.45);
+      background: rgba(90, 31, 40, 0.45);
+      color: #ffd5da;
+    }
+    .preview-panel {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: #141923;
+      overflow: hidden;
+      position: sticky;
+      top: 16px;
+    }
+    .preview-head {
+      padding: 10px 12px;
+      border-bottom: 1px solid #242b3b;
+      background: #171d28;
+    }
+    .preview-title {
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #c7d1e8;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .preview-platforms {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      font-size: 11px;
+      color: #7f8ca8;
+    }
+    .preview-platforms .active {
+      color: #ffb181;
+    }
+    .preview-body {
+      padding: 12px;
+    }
+    .preview-card {
+      border: 1px solid #252d3f;
+      border-radius: 12px;
+      background: #11151d;
+      padding: 12px;
+    }
+    .preview-author {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .preview-avatar {
+      width: 30px;
+      height: 30px;
+      border-radius: 999px;
+      background: linear-gradient(180deg, #ff904f 0%, #ff7a30 100%);
+      color: #181818;
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+      font-size: 12px;
+    }
+    .preview-name {
+      font-size: 12px;
+      color: #e8eeff;
+      font-weight: 700;
+    }
+    .preview-handle {
+      font-size: 11px;
+      color: #8595b7;
+    }
+    .preview-text {
+      font-size: 13px;
+      line-height: 1.45;
+      color: #dbe5fc;
+      white-space: pre-wrap;
+      word-break: break-word;
+      min-height: 68px;
+    }
+    .preview-media {
+      margin-top: 10px;
+      border: 1px solid #2c3548;
+      border-radius: 10px;
+      background: #171f2d;
+      min-height: 120px;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+    }
+    .preview-media img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .preview-media-empty {
+      font-size: 12px;
+      color: #8191b4;
+      padding: 10px;
+      text-align: center;
+    }
+    .preview-footer {
+      margin-top: 10px;
+      font-size: 11px;
+      color: #7f8ca8;
+    }
+    .composer-submit-actions {
+      justify-content: flex-end;
+    }
     @media (max-width: 980px) {
       .app { flex-direction: column; }
       .sidebar {
@@ -2008,6 +2277,18 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         width: 100%;
         justify-content: center;
         text-align: center;
+      }
+      .composer-layout {
+        grid-template-columns: 1fr;
+      }
+      .preview-panel {
+        position: static;
+      }
+      .composer-submit-actions {
+        justify-content: stretch;
+      }
+      .composer-submit-actions button {
+        width: 100%;
       }
     }
     @media (max-width: 520px) {
@@ -2262,27 +2543,91 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 
       {{if eq .View "create"}}
       <div class="line">composer</div>
-      <section class="editor">
-        <div class="editor-head">{{if .EditingPost}}edit publication{{else}}create publication{{end}}</div>
-        <form class="editor-body" method="post" action="{{if .EditingPost}}/posts/{{.EditingPost.ID}}/edit{{else}}/posts{{end}}">
-          <input type="hidden" name="platform" value="x" />
-          <input type="hidden" name="return_to" value="{{.ReturnTo}}" />
-          {{if .CreateError}}<div class="alert error">{{.CreateError}}</div>{{end}}
-          {{if .CreateSuccess}}<div class="alert success">{{.CreateSuccess}}</div>{{end}}
-          <div class="field">
-            <label for="create-text">Text</label>
-            <textarea id="create-text" name="text" required placeholder="Write your post...">{{.CreateText}}</textarea>
+      <div class="composer-layout">
+        <section class="composer-main">
+          <section class="editor">
+            <div class="editor-head">{{if .EditingPost}}edit publication{{else}}new post{{end}}</div>
+            <form class="editor-body" id="create-post-form" method="post" action="{{if .EditingPost}}/posts/{{.EditingPost.ID}}/edit{{else}}/posts{{end}}">
+              <input id="create-platform" type="hidden" name="platform" value="x" />
+              <input type="hidden" name="return_to" value="{{.ReturnTo}}" />
+              <div id="create-media-hidden"></div>
+              {{if .CreateError}}<div class="alert error">{{.CreateError}}</div>{{end}}
+              {{if .CreateSuccess}}<div class="alert success">{{.CreateSuccess}}</div>{{end}}
+
+              <div class="field">
+                <div class="composer-label">// select networks</div>
+                <div class="network-picker" id="create-network-picker">
+                  <button type="button" class="network-chip active" data-network-chip data-platform="x" aria-pressed="true">x</button>
+                  <button type="button" class="network-chip disabled" disabled aria-disabled="true">linkedin</button>
+                  <button type="button" class="network-chip disabled" disabled aria-disabled="true">instagram</button>
+                  <button type="button" class="network-chip disabled" disabled aria-disabled="true">facebook</button>
+                </div>
+              </div>
+
+              <div class="field">
+                <div class="composer-label">// post content</div>
+                <div class="composer-text-wrap">
+                  <textarea id="create-text" name="text" required placeholder="Write your post...">{{.CreateText}}</textarea>
+                  <div class="composer-text-meta">
+                    <span id="create-char-count">0/280 chars (x limit)</span>
+                    <span># @</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="field">
+                <label for="create-scheduled-at">Scheduled At ({{.UITimezone}})</label>
+                <input id="create-scheduled-at" type="datetime-local" name="scheduled_at_local" value="{{.CreateScheduledLocal}}" />
+              </div>
+
+              <div class="field">
+                <div class="composer-label">// media attachment (4 max)</div>
+                <div class="media-upload-actions">
+                  <input id="create-media-input" type="file" accept="image/*,video/*" multiple hidden />
+                  <button type="button" class="pill" id="create-media-trigger">upload files</button>
+                  <span class="upload-notice" id="create-upload-notice">no media uploaded</span>
+                </div>
+                <div class="media-list" id="create-media-list"></div>
+              </div>
+
+              <div class="editor-actions composer-submit-actions">
+                <button class="btn-secondary" type="submit" name="intent" value="draft">save_draft</button>
+                <button class="btn-secondary" type="submit" name="intent" value="schedule">{{if .EditingPost}}update_schedule{{else}}schedule{{end}}</button>
+                <button type="submit" name="intent" value="publish_now">publish_now</button>
+              </div>
+            </form>
+          </section>
+        </section>
+
+        <aside class="preview-panel" aria-label="Live preview">
+          <div class="preview-head">
+            <div class="preview-title">// live preview</div>
+            <div class="preview-platforms">
+              <span class="active" id="preview-network">x</span>
+              <span>li</span>
+              <span>ig</span>
+              <span>fb</span>
+            </div>
           </div>
-          <div class="field">
-            <label for="create-scheduled-at">Scheduled At ({{.UITimezone}})</label>
-            <input id="create-scheduled-at" type="datetime-local" name="scheduled_at_local" value="{{.CreateScheduledLocal}}" />
+          <div class="preview-body">
+            <article class="preview-card">
+              <div class="preview-author">
+                <div class="preview-avatar">pf</div>
+                <div>
+                  <div class="preview-name">post_flow</div>
+                  <div class="preview-handle">@postflow_app</div>
+                </div>
+              </div>
+              <div class="preview-text" id="preview-text">{{if .CreateText}}{{.CreateText}}{{else}}Start typing to preview your post...{{end}}</div>
+              <div class="preview-media" id="preview-media">
+                <img id="preview-media-image" alt="media preview" hidden />
+                <div class="preview-media-empty" id="preview-media-empty">No media selected yet.</div>
+              </div>
+              <div class="preview-footer">just now</div>
+            </article>
           </div>
-          <div class="editor-actions">
-            <button class="btn-secondary" type="submit" name="intent" value="draft">save_draft</button>
-            <button type="submit" name="intent" value="schedule">{{if .EditingPost}}update_schedule{{else}}create_scheduled{{end}}</button>
-          </div>
-        </form>
-      </section>
+        </aside>
+      </div>
       {{end}}
 
       {{if eq .View "settings"}}
@@ -2582,6 +2927,357 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 
 (() => {
   const view = document.body.dataset.view || "";
+  if (view !== "create") {
+    return;
+  }
+
+  const form = document.getElementById("create-post-form");
+  if (!(form instanceof HTMLFormElement)) {
+    return;
+  }
+
+  const platformInput = document.getElementById("create-platform");
+  const networkChips = Array.from(document.querySelectorAll("[data-network-chip]"));
+  const previewNetwork = document.getElementById("preview-network");
+  const textInput = document.getElementById("create-text");
+  const charCount = document.getElementById("create-char-count");
+  const previewText = document.getElementById("preview-text");
+  const scheduleInput = document.getElementById("create-scheduled-at");
+  const mediaInput = document.getElementById("create-media-input");
+  const mediaTrigger = document.getElementById("create-media-trigger");
+  const mediaList = document.getElementById("create-media-list");
+  const mediaHidden = document.getElementById("create-media-hidden");
+  const uploadNotice = document.getElementById("create-upload-notice");
+  const previewImage = document.getElementById("preview-media-image");
+  const previewEmpty = document.getElementById("preview-media-empty");
+
+  if (!(textInput instanceof HTMLTextAreaElement) ||
+      !(scheduleInput instanceof HTMLInputElement) ||
+      !(mediaInput instanceof HTMLInputElement) ||
+      !(mediaTrigger instanceof HTMLButtonElement) ||
+      !(mediaList instanceof HTMLElement) ||
+      !(mediaHidden instanceof HTMLElement) ||
+      !(uploadNotice instanceof HTMLElement) ||
+      !(previewImage instanceof HTMLImageElement) ||
+      !(previewEmpty instanceof HTMLElement)) {
+    return;
+  }
+
+  const limit = 280;
+  const maxMedia = 4;
+  let uploadInFlight = 0;
+  let replaceIndex = -1;
+  const attachments = [];
+
+  const formatBytes = (size) => {
+    if (!Number.isFinite(size) || size <= 0) {
+      return "0 B";
+    }
+    const units = ["B", "KB", "MB", "GB"];
+    let value = size;
+    let unitIndex = 0;
+    while (value >= 1024 && unitIndex < units.length - 1) {
+      value /= 1024;
+      unitIndex += 1;
+    }
+    return (value >= 10 || unitIndex === 0 ? value.toFixed(0) : value.toFixed(1)) + " " + units[unitIndex];
+  };
+
+  const toDatetimeLocal = (d) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const hour = String(d.getHours()).padStart(2, "0");
+    const minute = String(d.getMinutes()).padStart(2, "0");
+    return year + "-" + month + "-" + day + "T" + hour + ":" + minute;
+  };
+
+  const setNotice = (message, state) => {
+    uploadNotice.textContent = message;
+    if (state) {
+      uploadNotice.setAttribute("data-state", state);
+      return;
+    }
+    uploadNotice.removeAttribute("data-state");
+  };
+
+  const updateCharCount = () => {
+    const count = textInput.value.length;
+    charCount.textContent = count + "/" + limit + " chars (x limit)";
+    charCount.classList.toggle("char-over", count > limit);
+  };
+
+  const updatePreviewText = () => {
+    const content = textInput.value.trim();
+    previewText.textContent = content === "" ? "Start typing to preview your post..." : content;
+  };
+
+  const updatePreviewMedia = () => {
+    const firstImage = attachments.find((item) => item.previewUrl);
+    if (firstImage && firstImage.previewUrl) {
+      previewImage.src = firstImage.previewUrl;
+      previewImage.hidden = false;
+      previewEmpty.hidden = true;
+      return;
+    }
+    previewImage.removeAttribute("src");
+    previewImage.hidden = true;
+    previewEmpty.hidden = false;
+  };
+
+  const syncHiddenMediaInputs = () => {
+    mediaHidden.innerHTML = "";
+    attachments.forEach((item) => {
+      const input = document.createElement("input");
+      input.type = "hidden";
+      input.name = "media_ids";
+      input.value = item.id;
+      mediaHidden.appendChild(input);
+    });
+  };
+
+  const setActionsEnabled = (enabled) => {
+    form.querySelectorAll("button[type=submit]").forEach((btn) => {
+      if (btn instanceof HTMLButtonElement) {
+        btn.disabled = !enabled;
+      }
+    });
+  };
+
+  const destroyPreviewURL = (item) => {
+    if (!item || !item.previewUrl) {
+      return;
+    }
+    URL.revokeObjectURL(item.previewUrl);
+  };
+
+  const renderMediaList = () => {
+    if (attachments.length === 0) {
+      mediaList.innerHTML = '<div class="empty">No media yet. Upload up to ' + maxMedia + " files.</div>";
+      setNotice("no media uploaded");
+      updatePreviewMedia();
+      return;
+    }
+
+    mediaList.innerHTML = "";
+    attachments.forEach((item, index) => {
+      const row = document.createElement("div");
+      row.className = "media-item";
+
+      const thumb = document.createElement("div");
+      thumb.className = "media-thumb";
+      if (!item.previewUrl) {
+        thumb.textContent = "file";
+      } else {
+        thumb.style.backgroundImage = 'url("' + item.previewUrl + '")';
+      }
+
+      const info = document.createElement("div");
+      info.className = "media-info";
+      const name = document.createElement("div");
+      name.className = "media-name";
+      name.textContent = item.name;
+      const meta = document.createElement("div");
+      meta.className = "media-meta";
+      meta.textContent = formatBytes(item.size) + " · " + (item.mime || "file");
+      info.appendChild(name);
+      info.appendChild(meta);
+
+      const actions = document.createElement("div");
+      actions.className = "media-item-actions";
+      const replace = document.createElement("button");
+      replace.type = "button";
+      replace.className = "btn-secondary";
+      replace.setAttribute("data-media-replace", String(index));
+      replace.textContent = "replace";
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "btn-danger";
+      remove.setAttribute("data-media-remove", String(index));
+      remove.textContent = "remove";
+      actions.appendChild(replace);
+      actions.appendChild(remove);
+
+      row.appendChild(thumb);
+      row.appendChild(info);
+      row.appendChild(actions);
+      mediaList.appendChild(row);
+    });
+    setNotice(attachments.length + "/" + maxMedia + " media uploaded", "success");
+    updatePreviewMedia();
+  };
+
+  const detectKind = (file) => file.type.startsWith("video/") ? "video" : "image";
+
+  const uploadMediaFile = async (file) => {
+    const payload = new FormData();
+    payload.append("platform", platformInput instanceof HTMLInputElement ? platformInput.value : "x");
+    payload.append("kind", detectKind(file));
+    payload.append("file", file);
+    const res = await fetch("/media", { method: "POST", body: payload });
+    if (!res.ok) {
+      let message = "upload failed (" + res.status + ")";
+      try {
+        const body = await res.json();
+        if (body && typeof body.error === "string" && body.error.trim() !== "") {
+          message = body.error.trim();
+        }
+      } catch (_) {}
+      throw new Error(message);
+    }
+    return res.json();
+  };
+
+  const addOrReplaceFile = async (file, index) => {
+    if (!(file instanceof File)) {
+      return;
+    }
+    if (index < 0 && attachments.length >= maxMedia) {
+      setNotice("max " + maxMedia + " files", "error");
+      return;
+    }
+
+    uploadInFlight += 1;
+    setActionsEnabled(false);
+    setNotice("uploading " + file.name + "...");
+
+    try {
+      const uploaded = await uploadMediaFile(file);
+      const item = {
+        id: String(uploaded.id || ""),
+        name: String(uploaded.original_name || file.name),
+        size: Number(uploaded.size_bytes || file.size || 0),
+        mime: String(uploaded.mime_type || file.type || ""),
+        previewUrl: file.type.startsWith("image/") ? URL.createObjectURL(file) : ""
+      };
+
+      if (item.id === "") {
+        throw new Error("upload failed: missing media id");
+      }
+
+      if (index >= 0 && index < attachments.length) {
+        destroyPreviewURL(attachments[index]);
+        attachments[index] = item;
+      } else {
+        attachments.push(item);
+      }
+
+      syncHiddenMediaInputs();
+      renderMediaList();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "upload failed";
+      setNotice(message, "error");
+    } finally {
+      uploadInFlight -= 1;
+      setActionsEnabled(uploadInFlight === 0);
+    }
+  };
+
+  mediaTrigger.addEventListener("click", () => {
+    mediaInput.click();
+  });
+
+  mediaInput.addEventListener("change", async () => {
+    const files = Array.from(mediaInput.files || []);
+    mediaInput.value = "";
+    if (files.length === 0) {
+      return;
+    }
+
+    if (replaceIndex >= 0) {
+      const target = replaceIndex;
+      replaceIndex = -1;
+      await addOrReplaceFile(files[0], target);
+      return;
+    }
+
+    for (const file of files) {
+      if (attachments.length >= maxMedia) {
+        break;
+      }
+      // Keep uploads sequential so UI state stays stable and predictable.
+      // eslint-disable-next-line no-await-in-loop
+      await addOrReplaceFile(file, -1);
+    }
+  });
+
+  mediaList.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) {
+      return;
+    }
+    const removeValue = target.getAttribute("data-media-remove");
+    if (removeValue !== null) {
+      const index = Number(removeValue);
+      if (Number.isInteger(index) && index >= 0 && index < attachments.length) {
+        destroyPreviewURL(attachments[index]);
+        attachments.splice(index, 1);
+        syncHiddenMediaInputs();
+        renderMediaList();
+      }
+      return;
+    }
+
+    const replaceValue = target.getAttribute("data-media-replace");
+    if (replaceValue !== null) {
+      const index = Number(replaceValue);
+      if (Number.isInteger(index) && index >= 0 && index < attachments.length) {
+        replaceIndex = index;
+        mediaInput.click();
+      }
+    }
+  });
+
+  networkChips.forEach((chip) => {
+    if (!(chip instanceof HTMLButtonElement)) {
+      return;
+    }
+    chip.addEventListener("click", () => {
+      if (chip.disabled) {
+        return;
+      }
+      const platform = (chip.dataset.platform || "x").trim() || "x";
+      if (platformInput instanceof HTMLInputElement) {
+        platformInput.value = platform;
+      }
+      networkChips.forEach((item) => {
+        if (item instanceof HTMLButtonElement) {
+          item.classList.remove("active");
+          item.setAttribute("aria-pressed", "false");
+        }
+      });
+      chip.classList.add("active");
+      chip.setAttribute("aria-pressed", "true");
+      if (previewNetwork instanceof HTMLElement) {
+        previewNetwork.textContent = platform;
+      }
+    });
+  });
+
+  textInput.addEventListener("input", () => {
+    updateCharCount();
+    updatePreviewText();
+  });
+
+  form.addEventListener("submit", (event) => {
+    if (uploadInFlight > 0) {
+      event.preventDefault();
+      setNotice("wait for uploads to finish", "error");
+      return;
+    }
+    const submitter = event.submitter;
+    if (submitter instanceof HTMLButtonElement && submitter.value === "publish_now" && scheduleInput.value.trim() === "") {
+      scheduleInput.value = toDatetimeLocal(new Date());
+    }
+  });
+
+  updateCharCount();
+  updatePreviewText();
+  renderMediaList();
+})();
+
+(() => {
+  const view = document.body.dataset.view || "";
   if (view !== "settings") {
     return;
   }
@@ -2759,6 +3455,13 @@ func parseCreatePostRequest(r *http.Request) (createPostRequest, bool, error) {
 		req.ScheduledAt = raw
 	} else {
 		req.ScheduledAt = strings.TrimSpace(r.FormValue("scheduled_at"))
+	}
+	for _, rawID := range r.Form["media_ids"] {
+		id := strings.TrimSpace(rawID)
+		if id == "" {
+			continue
+		}
+		req.MediaIDs = append(req.MediaIDs, id)
 	}
 	return req, true, nil
 }

@@ -1118,6 +1118,93 @@ func TestAccessibilityMarkupAddsLabelsAndLandmarks(t *testing.T) {
 	}
 }
 
+func TestCreateViewIncludesComposerPreviewUploadAndNetworks(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	req := httptest.NewRequest(http.MethodGet, "/?view=create", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for create view, got %d", w.Code)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "id=\"create-network-picker\"") || !strings.Contains(body, "data-network-chip") {
+		t.Fatalf("expected network picker in create view")
+	}
+	if !strings.Contains(body, "id=\"create-media-input\"") || !strings.Contains(body, "id=\"create-media-list\"") {
+		t.Fatalf("expected media upload controls in create view")
+	}
+	if !strings.Contains(body, "class=\"preview-panel\"") || !strings.Contains(body, "id=\"preview-text\"") {
+		t.Fatalf("expected live preview panel in create view")
+	}
+	if !strings.Contains(body, "name=\"intent\" value=\"publish_now\"") {
+		t.Fatalf("expected publish_now action in create view")
+	}
+}
+
+func TestCreatePostFromFormSupportsMediaIDs(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	mediaID, err := db.NewID("med")
+	if err != nil {
+		t.Fatalf("new media id: %v", err)
+	}
+	createdMedia, err := store.CreateMedia(t.Context(), domain.Media{
+		ID:           mediaID,
+		Platform:     domain.PlatformX,
+		Kind:         "image",
+		OriginalName: "preview.png",
+		StoragePath:  filepath.Join(tempDir, "preview.png"),
+		MimeType:     "image/png",
+		SizeBytes:    1234,
+	})
+	if err != nil {
+		t.Fatalf("create media: %v", err)
+	}
+
+	form := url.Values{}
+	form.Set("platform", "x")
+	form.Set("text", "form post with media ids")
+	form.Set("intent", "draft")
+	form.Add("media_ids", createdMedia.ID)
+
+	req := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewBufferString(form.Encode()))
+	req.Header.Set("content-type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303 from form submit, got %d", w.Code)
+	}
+
+	drafts, err := store.ListDrafts(t.Context())
+	if err != nil {
+		t.Fatalf("list drafts: %v", err)
+	}
+	if len(drafts) != 1 {
+		t.Fatalf("expected 1 draft, got %d", len(drafts))
+	}
+	if len(drafts[0].Media) != 1 || drafts[0].Media[0].ID != createdMedia.ID {
+		t.Fatalf("expected draft to include submitted media id")
+	}
+}
+
 func TestCalendarCellsRenderAllEventsForDynamicOverflow(t *testing.T) {
 	tempDir := t.TempDir()
 	store, err := db.Open(filepath.Join(tempDir, "test.db"))
