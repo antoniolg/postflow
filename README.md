@@ -134,6 +134,7 @@ Abre `http://localhost:8080/` para ver una tabla de publicaciones (solo lectura)
 Incluye vista `settings` para definir la zona horaria de la UI (`IANA`, por ejemplo `Europe/Madrid`).
 - La persistencia sigue en UTC.
 - La visualización y los campos `datetime-local` se muestran/interpretan en la zona configurada.
+- En la misma vista `settings` se muestra también la URL/config del MCP HTTP.
 
 ## Revisión de accesibilidad
 
@@ -154,6 +155,56 @@ Notas:
 curl -X POST http://localhost:8080/settings/timezone \
   -H 'content-type: application/json' \
   -d '{"timezone":"Europe/Madrid"}'
+```
+
+## MCP (streamable HTTP)
+
+Endpoint MCP:
+
+```bash
+http://localhost:8080/mcp
+```
+
+Soporta transporte streamable HTTP y expone estas tools:
+- `publisher_list_schedule`
+- `publisher_list_drafts`
+- `publisher_list_failed`
+- `publisher_create_post`
+
+Ejemplo para Claude Code:
+
+```bash
+claude mcp add -t http publisher http://localhost:8080/mcp --header "Authorization: Bearer <API_TOKEN>"
+```
+
+Ejemplo para Codex:
+
+```bash
+codex mcp add publisher --url http://localhost:8080/mcp
+```
+
+`~/.codex/config.toml`:
+
+```toml
+[mcp_servers.publisher]
+url = "http://localhost:8080/mcp"
+bearer_token_env_var = "PUBLISHER_API_TOKEN"
+```
+
+Ejemplo de config JSON:
+
+```json
+{
+  "mcpServers": {
+    "publisher": {
+      "transport": "streamable_http",
+      "url": "http://localhost:8080/mcp",
+      "headers": {
+        "Authorization": "Bearer <API_TOKEN>"
+      }
+    }
+  }
+}
 ```
 
 ## Publicación real en X
