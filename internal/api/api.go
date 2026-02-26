@@ -1447,34 +1447,77 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     .calendar-head {
       display: flex;
       justify-content: space-between;
-      align-items: center;
-      padding: 10px 12px;
+      align-items: flex-start;
+      gap: 10px 12px;
+      flex-wrap: wrap;
+      padding: 12px 14px 10px;
       border-bottom: 1px solid #2a2a2a;
       background: #212121;
     }
+    .calendar-head-main {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-width: 0;
+    }
     .calendar-title {
-      font-size: 12px;
-      letter-spacing: 0.08em;
+      font-size: 13px;
+      letter-spacing: 0.06em;
       text-transform: uppercase;
       color: #b8b8b8;
       font-weight: 700;
     }
     .calendar-sub {
-      font-size: 12px;
+      font-size: 11px;
       color: var(--text-secondary);
+    }
+    .calendar-legend {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      background: #2a2a2a;
+      color: #b8b8b8;
+      padding: 3px 8px;
+      font-size: 10px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .legend-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      flex: 0 0 auto;
+      background: #858585;
+    }
+    .legend-item.pending .legend-dot {
+      background: var(--accent-orange);
+    }
+    .legend-item.published .legend-dot {
+      background: var(--accent-teal);
     }
     .calendar-controls {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 8px;
     }
     .month-link {
       color: var(--text-primary);
       text-decoration: none;
       border: 0;
-      border-radius: 10px;
-      padding: 4px 7px;
-      font-size: 12px;
+      border-radius: 12px;
+      width: 30px;
+      height: 30px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
       line-height: 1;
       background: #2d2d2d;
     }
@@ -1485,8 +1528,9 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       border: 0;
       background: var(--accent-orange);
       color: #0d0d0d;
-      border-radius: 10px;
-      padding: 4px 7px;
+      border-radius: 12px;
+      min-height: 30px;
+      padding: 0 12px;
       font-size: 12px;
       font-weight: 600;
       text-transform: lowercase;
@@ -1519,7 +1563,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       min-height: 106px;
       min-width: 100px;
       border-right: 1px solid #2a2a2a;
-      padding: 8px 8px 6px;
+      padding: 10px 8px 6px;
       background: #212121;
     }
     .day-cell:last-child { border-right: 0; }
@@ -1533,16 +1577,21 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       text-decoration: none;
       color: inherit;
       min-height: 90px;
+      border-radius: 10px;
+      transition: background-color .12s ease;
+    }
+    .day-link:hover {
+      background: #272727;
     }
     .day-head {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 5px;
+      margin-bottom: 7px;
     }
     .day-num {
       font-size: 12px;
-      color: #a8b4cf;
+      color: #c4c4c4;
     }
     .day-num.today {
       color: #171717;
@@ -1553,10 +1602,24 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       padding: 2px 6px;
       font-weight: 700;
     }
+    .day-count {
+      border-radius: 999px;
+      background: #343434;
+      color: #b8b8b8;
+      padding: 1px 6px;
+      font-size: 10px;
+      line-height: 1.4;
+      min-width: 16px;
+      text-align: center;
+    }
+    .day-cell.selected .day-count {
+      background: #4a3127;
+      color: #ffc6af;
+    }
     .day-events {
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 5px;
     }
     .day-event {
       flex: 0 0 auto;
@@ -1567,20 +1630,43 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       font-size: 11px;
       color: #dedede;
       line-height: 1.3;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      min-width: 0;
     }
     .day-event.live { box-shadow: inset 0 0 0 1px rgba(0,212,170,0.36); }
     .day-event.schd { box-shadow: inset 0 0 0 1px rgba(255,107,53,0.36); }
+    .event-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 999px;
+      background: #9a9a9a;
+      flex: 0 0 auto;
+    }
+    .day-event.live .event-dot {
+      background: var(--accent-teal);
+    }
+    .day-event.schd .event-dot {
+      background: var(--accent-orange);
+    }
     .event-time {
       color: #a8a8a8;
-      margin-right: 4px;
+      margin-right: 0;
+      flex: 0 0 auto;
+    }
+    .event-title {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex: 1;
+      min-width: 0;
     }
     .more {
       font-size: 11px;
-      color: #7f8fad;
+      color: #9a9a9a;
       margin-top: 1px;
+      padding-left: 2px;
     }
     .list {
       margin-top: 14px;
@@ -2303,11 +2389,29 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       .calendar-head {
         padding: 8px 10px;
       }
+      .calendar-head-main {
+        width: 100%;
+      }
+      .calendar-legend {
+        gap: 6px;
+      }
+      .legend-item {
+        font-size: 9px;
+        padding: 2px 7px;
+      }
       .calendar-controls {
         gap: 4px;
+        width: 100%;
+        justify-content: flex-end;
       }
-      .month-link, .month-go {
-        padding: 4px 6px;
+      .month-link {
+        width: 28px;
+        height: 28px;
+        font-size: 12px;
+      }
+      .month-go {
+        min-height: 28px;
+        padding: 0 10px;
         font-size: 11px;
       }
       body[data-view="calendar"] .calendar-grid-scroll {
@@ -2440,9 +2544,13 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       <div class="calendar-layout">
       <div class="calendar-wrap">
         <div class="calendar-head">
-          <div>
+          <div class="calendar-head-main">
             <div class="calendar-title">{{.CalendarMonthLabel}}</div>
             <div class="calendar-sub">{{len .Items}} posts en el mes</div>
+            <div class="calendar-legend" aria-hidden="true">
+              <span class="legend-item pending"><span class="legend-dot"></span>to publish</span>
+              <span class="legend-item published"><span class="legend-dot"></span>published</span>
+            </div>
           </div>
           <div class="calendar-controls">
             <a class="month-link" href="/?view=calendar&month={{.PrevMonthParam}}&day={{.SelectedDayKey}}">&lt;</a>
@@ -2467,11 +2575,14 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
               <a class="day-link" href="/?view=calendar&month={{$.CurrentMonthParam}}&day={{.DateKey}}">
                 <div class="day-head">
                   <span class="day-num {{if .IsToday}}today{{end}}">{{.DayNumber}}</span>
+                  {{if gt (len .Events) 0}}<span class="day-count">{{len .Events}}</span>{{end}}
                 </div>
                 <div class="day-events" data-day-events>
                   {{range .Events}}
                   <div class="day-event {{.StatusClass}}" data-day-event data-status="{{.StatusKey}}">
-                    <span class="event-time">{{.TimeLabel}}</span>{{.TextPreview}}
+                    <span class="event-dot" aria-hidden="true"></span>
+                    <span class="event-time">{{.TimeLabel}}</span>
+                    <span class="event-title">{{.TextPreview}}</span>
                   </div>
                   {{end}}
                   {{if gt (len .Events) 0}}

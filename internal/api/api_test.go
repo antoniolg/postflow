@@ -1001,6 +1001,12 @@ func TestDefaultViewIsCalendar(t *testing.T) {
 	if !strings.Contains(body, ".day-event {\n      flex: 0 0 auto;") {
 		t.Fatalf("expected calendar event rows to keep fixed height without shrinking")
 	}
+	if !strings.Contains(body, "<span class=\"legend-item pending\"><span class=\"legend-dot\"></span>to publish</span>") {
+		t.Fatalf("expected calendar header legend for status scanning")
+	}
+	if !strings.Contains(body, ".event-title {\n      overflow: hidden;") {
+		t.Fatalf("expected calendar event title truncation style for cleaner cells")
+	}
 	if !strings.Contains(body, "const bottomPadding = mainStyles ? parseFloat(mainStyles.paddingBottom || \"0\") : 0;") {
 		t.Fatalf("expected calendar height calculation to account for main bottom padding")
 	}
