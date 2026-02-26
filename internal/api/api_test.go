@@ -1146,6 +1146,12 @@ func TestCreateViewIncludesComposerPreviewUploadAndNetworks(t *testing.T) {
 	if !strings.Contains(body, "class=\"preview-panel\"") || !strings.Contains(body, "id=\"preview-text\"") {
 		t.Fatalf("expected live preview panel in create view")
 	}
+	if !strings.Contains(body, "id=\"preview-media\" hidden") {
+		t.Fatalf("expected media preview block to be hidden by default when there is no media")
+	}
+	if !strings.Contains(body, ".composer-text-wrap textarea {") || !strings.Contains(body, "width: 100%;") {
+		t.Fatalf("expected create textarea to span full composer width")
+	}
 	if !strings.Contains(body, "name=\"intent\" value=\"publish_now\"") {
 		t.Fatalf("expected publish_now action in create view")
 	}

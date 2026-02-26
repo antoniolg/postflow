@@ -1701,8 +1701,10 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       letter-spacing: 0.08em;
     }
     .field textarea {
+      width: 100%;
       min-height: 150px;
       resize: vertical;
+      box-sizing: border-box;
       border-radius: 10px;
       border: 1px solid #364058;
       background: #11141b;
@@ -1966,6 +1968,10 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     .composer-text-wrap textarea {
       border: 0;
       background: transparent;
+      width: 100%;
+      min-height: clamp(200px, 34vh, 380px);
+      resize: vertical;
+      display: block;
     }
     .composer-text-meta {
       border-top: 1px solid #232b3c;
@@ -2146,6 +2152,10 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       height: 100%;
       object-fit: cover;
       display: block;
+    }
+    .preview-media[hidden],
+    .preview-media img[hidden] {
+      display: none;
     }
     .preview-media-empty {
       font-size: 12px;
@@ -2619,7 +2629,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
                 </div>
               </div>
               <div class="preview-text" id="preview-text">{{if .CreateText}}{{.CreateText}}{{else}}Start typing to preview your post...{{end}}</div>
-              <div class="preview-media" id="preview-media">
+              <div class="preview-media" id="preview-media" hidden>
                 <img id="preview-media-image" alt="media preview" hidden />
                 <div class="preview-media-empty" id="preview-media-empty">No media selected yet.</div>
               </div>
@@ -2948,6 +2958,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
   const mediaList = document.getElementById("create-media-list");
   const mediaHidden = document.getElementById("create-media-hidden");
   const uploadNotice = document.getElementById("create-upload-notice");
+  const previewMedia = document.getElementById("preview-media");
   const previewImage = document.getElementById("preview-media-image");
   const previewEmpty = document.getElementById("preview-media-empty");
 
@@ -2958,6 +2969,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       !(mediaList instanceof HTMLElement) ||
       !(mediaHidden instanceof HTMLElement) ||
       !(uploadNotice instanceof HTMLElement) ||
+      !(previewMedia instanceof HTMLElement) ||
       !(previewImage instanceof HTMLImageElement) ||
       !(previewEmpty instanceof HTMLElement)) {
     return;
@@ -3018,11 +3030,13 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       previewImage.src = firstImage.previewUrl;
       previewImage.hidden = false;
       previewEmpty.hidden = true;
+      previewMedia.hidden = false;
       return;
     }
     previewImage.removeAttribute("src");
     previewImage.hidden = true;
-    previewEmpty.hidden = false;
+    previewEmpty.hidden = true;
+    previewMedia.hidden = true;
   };
 
   const syncHiddenMediaInputs = () => {
