@@ -1032,16 +1032,16 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg-page: #0b1018;
-      --bg-panel: #111723;
-      --bg-card: #151c2a;
-      --bg-elevated: #1c2638;
-      --bg-muted: #273149;
-      --text-primary: #f5f7fb;
-      --text-secondary: #95a5c5;
-      --accent-orange: #ff8740;
-      --accent-teal: #2fd8c3;
-      --border: #2d3850;
+      --bg-page: #1a1a1a;
+      --bg-panel: #1a1a1a;
+      --bg-card: #212121;
+      --bg-elevated: #2d2d2d;
+      --bg-muted: #343434;
+      --text-primary: #ffffff;
+      --text-secondary: #a8a8a8;
+      --accent-orange: #ff6b35;
+      --accent-teal: #00d4aa;
+      --border: #2a2a2a;
       --radius: 12px;
     }
     * { box-sizing: border-box; }
@@ -1050,8 +1050,8 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       min-height: 100vh;
       color: var(--text-primary);
       background:
-        radial-gradient(1200px 500px at 90% -10%, rgba(255,122,48,0.08), transparent 60%),
-        radial-gradient(1000px 500px at 5% 0%, rgba(54,211,191,0.07), transparent 65%),
+        radial-gradient(1200px 540px at 90% -12%, rgba(255, 107, 53, 0.07), transparent 62%),
+        radial-gradient(950px 480px at -10% -18%, rgba(255, 255, 255, 0.03), transparent 65%),
         var(--bg-page);
       font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
     }
@@ -1062,9 +1062,9 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     }
     .sidebar {
       width: 220px;
-      border-right: 1px solid #191e29;
+      border-right: 1px solid #242424;
       padding: 24px 16px;
-      background: rgba(13, 14, 19, 0.85);
+      background: #1a1a1a;
       display: flex;
       flex-direction: column;
     }
@@ -1095,11 +1095,11 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       min-height: 0;
     }
     .nav-item {
-      border-radius: 10px;
-      padding: 10px 12px;
+      border-radius: 16px;
+      padding: 10px 16px;
       font-size: 13px;
       color: var(--text-secondary);
-      border: 1px solid transparent;
+      border: 0;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -1124,7 +1124,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       height: 18px;
       padding: 0 6px;
       border-radius: 999px;
-      background: rgba(126, 138, 168, 0.26);
+      background: #2d2d2d;
       color: var(--text-secondary);
       display: inline-flex;
       align-items: center;
@@ -1132,7 +1132,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       font-size: 11px;
       font-weight: 700;
       line-height: 1;
-      border: 1px solid rgba(126, 138, 168, 0.35);
+      border: 0;
     }
     .nav-badge-danger {
       background: #c93d4f;
@@ -1142,12 +1142,12 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     .nav-item.active {
       color: var(--text-primary);
       background: var(--bg-elevated);
-      border-color: #31394b;
+      border: 0;
     }
     .nav-item.active .nav-badge {
-      background: #2f384d;
-      color: #d9e4ff;
-      border-color: #4d5b7a;
+      background: #3a3a3a;
+      color: #f0f0f0;
+      border: 0;
     }
     .nav-item-settings {
       margin-top: auto;
@@ -1173,22 +1173,31 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       gap: 12px;
     }
     .title-back {
-      color: var(--text-secondary);
+      color: #c8c8c8;
       text-decoration: none;
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      width: 30px;
-      height: 30px;
+      border: 0;
+      border-radius: 16px;
+      min-width: 70px;
+      height: 34px;
+      padding: 0 12px;
+      background: #2d2d2d;
       display: inline-flex;
       align-items: center;
-      justify-content: center;
+      justify-content: flex-start;
+      gap: 6px;
       font-size: 18px;
+      line-height: 1;
+    }
+    .title-back::after {
+      content: "back";
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: lowercase;
       line-height: 1;
     }
     .title-back:hover {
       color: var(--text-primary);
-      border-color: #31394b;
-      background: var(--bg-elevated);
+      background: #383838;
     }
     h1 {
       margin: 0;
@@ -1201,13 +1210,13 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     .create-pill {
       display: inline-flex;
       align-items: center;
-      border-radius: 999px;
+      border-radius: 16px;
       background: var(--accent-orange);
-      color: #111;
+      color: #0d0d0d;
       border: 0;
-      padding: 10px 16px;
+      padding: 10px 18px;
       font-size: 12px;
-      font-weight: 700;
+      font-weight: 600;
       text-transform: lowercase;
       letter-spacing: 0.03em;
       text-decoration: none;
@@ -1222,18 +1231,18 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       flex-wrap: wrap;
     }
     .tab {
-      border-radius: 999px;
-      padding: 7px 12px;
+      border-radius: 16px;
+      padding: 8px 14px;
       font-size: 12px;
       color: var(--text-secondary);
-      background: transparent;
-      border: 1px solid var(--border);
+      background: #242424;
+      border: 0;
       display: inline-flex;
       align-items: center;
       gap: 8px;
     }
     .tab.active {
-      background: var(--bg-elevated);
+      background: #323232;
       color: var(--text-primary);
     }
     .tab-link {
@@ -1259,7 +1268,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     }
     .dot.live { background: var(--accent-teal); }
     .dot.scheduled { background: var(--accent-orange); }
-    .dot.draft { background: #646f88; }
+    .dot.draft { background: #666666; }
     .dot.fail { background: #ff5f70; }
     .stats {
       margin-top: 14px;
@@ -1268,17 +1277,17 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       gap: 10px;
     }
     .stat {
-      background: rgba(26, 29, 37, 0.55);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 8px 10px;
+      background: #212121;
+      border: 0;
+      border-radius: 16px;
+      padding: 10px 12px;
     }
     .stat .k { color: var(--text-secondary); font-size: 12px; margin-bottom: 4px; }
     .stat .v { font-size: 16px; }
     .calendar-wrap {
-      border: 1px solid var(--border);
-      background: #141923;
-      border-radius: 14px;
+      border: 0;
+      background: #212121;
+      border-radius: 18px;
       overflow: hidden;
     }
     .calendar-grid-scroll {
@@ -1343,23 +1352,23 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       max-height: none;
     }
     .day-panel {
-      border: 1px solid var(--border);
-      background: #141923;
-      border-radius: 14px;
+      border: 0;
+      background: #212121;
+      border-radius: 18px;
       overflow: hidden;
       position: sticky;
       top: 16px;
     }
     .day-panel-head {
       padding: 10px 12px;
-      border-bottom: 1px solid #242b3b;
-      background: #171d28;
+      border-bottom: 1px solid #2a2a2a;
+      background: #212121;
     }
     .day-panel-title {
       font-size: 12px;
       letter-spacing: 0.08em;
       text-transform: uppercase;
-      color: #c7d1e8;
+      color: #b8b8b8;
       font-weight: 700;
       margin-bottom: 3px;
     }
@@ -1379,7 +1388,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       font-size: 11px;
       letter-spacing: 0.08em;
       text-transform: uppercase;
-      color: #90a1c2;
+      color: #a8a8a8;
       font-weight: 700;
       padding: 2px 2px 0;
     }
@@ -1390,7 +1399,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       font-size: 11px;
       letter-spacing: 0.08em;
       text-transform: uppercase;
-      color: #7f8ca8;
+      color: #a8a8a8;
       margin: 2px 0;
     }
     .day-separator::before,
@@ -1398,16 +1407,16 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       content: "";
       flex: 1;
       height: 1px;
-      background: #2a3244;
+      background: #343434;
     }
     .day-item {
-      border: 1px solid #2a3244;
-      border-radius: 10px;
-      background: #1a2130;
+      border: 0;
+      border-radius: 12px;
+      background: #2a2a2a;
       padding: 8px;
     }
-    .day-item.live { border-color: rgba(54,211,191,0.4); }
-    .day-item.schd { border-color: rgba(255,122,48,0.45); }
+    .day-item.live { box-shadow: inset 0 0 0 1px rgba(0,212,170,0.32); }
+    .day-item.schd { box-shadow: inset 0 0 0 1px rgba(255,107,53,0.32); }
     .day-item-head {
       display: flex;
       align-items: center;
@@ -1416,7 +1425,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       gap: 8px;
     }
     .day-item-time {
-      color: #c7d1e8;
+      color: #e0e0e0;
       font-size: 12px;
       font-weight: 700;
       letter-spacing: 0.06em;
@@ -1424,7 +1433,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     .day-item-text {
       font-size: 13px;
       line-height: 1.35;
-      color: #dee5f6;
+      color: #ffffff;
       margin-bottom: 5px;
       word-break: break-word;
     }
@@ -1433,21 +1442,21 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       gap: 8px;
       flex-wrap: wrap;
       font-size: 11px;
-      color: #8fa0c1;
+      color: #a8a8a8;
     }
     .calendar-head {
       display: flex;
       justify-content: space-between;
       align-items: center;
       padding: 10px 12px;
-      border-bottom: 1px solid #242b3b;
-      background: #171d28;
+      border-bottom: 1px solid #2a2a2a;
+      background: #212121;
     }
     .calendar-title {
       font-size: 12px;
       letter-spacing: 0.08em;
       text-transform: uppercase;
-      color: #c7d1e8;
+      color: #b8b8b8;
       font-weight: 700;
     }
     .calendar-sub {
@@ -1462,31 +1471,31 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     .month-link {
       color: var(--text-primary);
       text-decoration: none;
-      border: 1px solid #34405a;
-      border-radius: 8px;
+      border: 0;
+      border-radius: 10px;
       padding: 4px 7px;
       font-size: 12px;
       line-height: 1;
-      background: #202839;
+      background: #2d2d2d;
     }
     .month-go {
       display: inline-flex;
       align-items: center;
       text-decoration: none;
-      border: 1px solid #8a4a1f;
+      border: 0;
       background: var(--accent-orange);
-      color: #161616;
-      border-radius: 7px;
+      color: #0d0d0d;
+      border-radius: 10px;
       padding: 4px 7px;
       font-size: 12px;
-      font-weight: 700;
+      font-weight: 600;
       text-transform: lowercase;
       line-height: 1;
     }
     .weekday-row {
       display: grid;
       grid-template-columns: repeat(7, minmax(0, 1fr));
-      border-bottom: 1px solid #202839;
+      border-bottom: 1px solid #2a2a2a;
       min-width: 700px;
     }
     .weekday {
@@ -1494,30 +1503,30 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       font-size: 11px;
       letter-spacing: 0.08em;
       text-transform: uppercase;
-      color: #7c8db2;
-      border-right: 1px solid #1e2534;
-      background: #151b26;
+      color: #a8a8a8;
+      border-right: 1px solid #2a2a2a;
+      background: #212121;
     }
     .weekday:last-child { border-right: 0; }
     .week-row {
       display: grid;
       grid-template-columns: repeat(7, minmax(0, 1fr));
-      border-bottom: 1px solid #202839;
+      border-bottom: 1px solid #2a2a2a;
       min-width: 700px;
     }
     .week-row:last-child { border-bottom: 0; }
     .day-cell {
       min-height: 106px;
       min-width: 100px;
-      border-right: 1px solid #1e2534;
+      border-right: 1px solid #2a2a2a;
       padding: 8px 8px 6px;
-      background: #141923;
+      background: #212121;
     }
     .day-cell:last-child { border-right: 0; }
-    .day-cell.outside { background: #111621; }
+    .day-cell.outside { background: #1c1c1c; }
     .day-cell.selected {
-      background: #182031;
-      box-shadow: inset 0 0 0 1px rgba(255,122,48,0.35);
+      background: #292929;
+      box-shadow: inset 0 0 0 1px rgba(255,107,53,0.45);
     }
     .day-link {
       display: block;
@@ -1551,21 +1560,21 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     }
     .day-event {
       flex: 0 0 auto;
-      border-radius: 7px;
+      border-radius: 8px;
       padding: 4px 5px;
-      background: #1d2432;
-      border: 1px solid #2a3244;
+      background: #2d2d2d;
+      border: 0;
       font-size: 11px;
-      color: #bdc8e0;
+      color: #dedede;
       line-height: 1.3;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .day-event.live { border-color: rgba(54,211,191,0.4); }
-    .day-event.schd { border-color: rgba(255,122,48,0.4); }
+    .day-event.live { box-shadow: inset 0 0 0 1px rgba(0,212,170,0.36); }
+    .day-event.schd { box-shadow: inset 0 0 0 1px rgba(255,107,53,0.36); }
     .event-time {
-      color: #90a1c2;
+      color: #a8a8a8;
       margin-right: 4px;
     }
     .more {
@@ -1581,9 +1590,9 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       padding-bottom: 20px;
     }
     .card {
-      border: 1px solid #1e2430;
-      border-radius: var(--radius);
-      background: linear-gradient(180deg, #171a22 0%, #151820 100%);
+      border: 0;
+      border-radius: 16px;
+      background: #212121;
       padding: 12px 14px;
       display: flex;
       justify-content: space-between;
@@ -1596,22 +1605,10 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     .day-item[data-edit-url] {
       cursor: pointer;
     }
-    .card.scheduled {
-      border-color: rgba(255, 122, 48, 0.28);
-      box-shadow: inset 0 0 0 1px rgba(255, 122, 48, 0.08);
-    }
-    .card.published {
-      border-color: rgba(54, 211, 191, 0.25);
-      box-shadow: inset 0 0 0 1px rgba(54, 211, 191, 0.07);
-    }
-    .card.draft {
-      border-color: #283041;
-      box-shadow: inset 0 0 0 1px rgba(133, 148, 182, 0.05);
-    }
-    .card.failed {
-      border-color: rgba(255, 95, 112, 0.35);
-      box-shadow: inset 0 0 0 1px rgba(255, 95, 112, 0.1);
-    }
+    .card.scheduled { box-shadow: inset 0 0 0 1px rgba(255, 107, 53, 0.24); }
+    .card.published { box-shadow: inset 0 0 0 1px rgba(0, 212, 170, 0.22); }
+    .card.draft { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
+    .card.failed { box-shadow: inset 0 0 0 1px rgba(255, 68, 68, 0.24); }
     .card-left {
       display: flex;
       gap: 10px;
@@ -1648,10 +1645,10 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       justify-content: flex-end;
     }
     .pill {
-      border: 1px solid #2f3648;
-      background: var(--bg-elevated);
-      color: var(--text-secondary);
-      border-radius: 999px;
+      border: 0;
+      background: #2d2d2d;
+      color: #b7b7b7;
+      border-radius: 16px;
       padding: 6px 10px;
       font-size: 12px;
       font-weight: 600;
@@ -1665,20 +1662,20 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     }
     .editor {
       margin-top: 14px;
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      background: #141923;
+      border: 0;
+      border-radius: 18px;
+      background: #212121;
       overflow: hidden;
       max-width: 760px;
     }
     .editor-head {
       padding: 10px 12px;
-      border-bottom: 1px solid #242b3b;
-      background: #171d28;
+      border-bottom: 1px solid #2a2a2a;
+      background: #212121;
       font-size: 13px;
       letter-spacing: 0.08em;
       text-transform: uppercase;
-      color: #c7d1e8;
+      color: #b8b8b8;
       font-weight: 700;
     }
     .editor-body {
@@ -1696,7 +1693,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     }
     .field label {
       font-size: 12px;
-      color: #9aa8c7;
+      color: #a8a8a8;
       text-transform: uppercase;
       letter-spacing: 0.08em;
     }
@@ -1705,9 +1702,9 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       min-height: 150px;
       resize: vertical;
       box-sizing: border-box;
-      border-radius: 10px;
-      border: 1px solid #364058;
-      background: #11141b;
+      border-radius: 16px;
+      border: 0;
+      background: #212121;
       color: var(--text-primary);
       font: inherit;
       font-size: 14px;
@@ -1727,9 +1724,9 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       width: 100%;
       max-width: 320px;
       padding: 8px 34px 8px 10px;
-      border-radius: 10px;
-      border: 1px solid #364058;
-      background-color: #11141b;
+      border-radius: 12px;
+      border: 0;
+      background-color: #2d2d2d;
       color: var(--text-primary);
       font: inherit;
       font-size: 14px;
@@ -1737,8 +1734,8 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       -webkit-appearance: none;
       -moz-appearance: none;
       background-image:
-        linear-gradient(45deg, transparent 50%, #8ea0c2 50%),
-        linear-gradient(135deg, #8ea0c2 50%, transparent 50%);
+        linear-gradient(45deg, transparent 50%, #a8a8a8 50%),
+        linear-gradient(135deg, #a8a8a8 50%, transparent 50%);
       background-position:
         calc(100% - 16px) calc(50% - 1px),
         calc(100% - 11px) calc(50% - 1px);
@@ -1747,8 +1744,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     }
     .field select:focus {
       outline: none;
-      border-color: #516286;
-      box-shadow: 0 0 0 2px rgba(81, 98, 134, 0.2);
+      box-shadow: 0 0 0 2px rgba(255, 107, 53, 0.2);
     }
     .editor-actions {
       display: flex;
@@ -1757,19 +1753,19 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       align-items: center;
     }
     .btn-primary {
-      border-color: #a05522;
-      background: linear-gradient(180deg, #ff9c59 0%, #ff8441 100%);
-      color: #1e140d;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), 0 3px 10px rgba(255,134,63,0.25);
+      border: 0;
+      background: #ff6b35;
+      color: #0d0d0d;
+      box-shadow: none;
     }
     .btn-primary:hover:not(:disabled) {
       filter: brightness(1.05);
     }
     .btn-secondary {
-      border: 1px solid #3c4863;
-      background: linear-gradient(180deg, #212a3c 0%, #1a2233 100%);
-      color: #d6dff4;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+      border: 0;
+      background: #2d2d2d;
+      color: #d0d0d0;
+      box-shadow: none;
     }
     .alert {
       border-radius: 10px;
@@ -1788,22 +1784,22 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       background: rgba(22, 67, 62, 0.42);
     }
     .ghost-btn {
-      border: 1px solid #364058;
-      color: #c2cde6;
-      background: #1b2230;
-      border-radius: 999px;
+      border: 0;
+      color: #d0d0d0;
+      background: #2d2d2d;
+      border-radius: 16px;
       padding: 6px 10px;
       font-size: 12px;
       text-transform: lowercase;
       text-decoration: none;
-      font-weight: 700;
+      font-weight: 600;
     }
     .ghost-toggle {
       width: 34px;
       height: 18px;
       border-radius: 999px;
-      background: #202531;
-      border: 1px solid #2f3648;
+      background: #2d2d2d;
+      border: 0;
       position: relative;
     }
     .ghost-toggle::after {
@@ -1811,15 +1807,15 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       width: 12px;
       height: 12px;
       border-radius: 999px;
-      background: #414b62;
+      background: #a8a8a8;
       position: absolute;
       top: 2px;
       left: 2px;
     }
     .status-live { color: var(--accent-teal); }
     .status-schd { color: var(--accent-orange); }
-    .status-drft { color: #7f8ca8; }
-    .status-fail { color: #ff8a97; }
+    .status-drft { color: #a8a8a8; }
+    .status-fail { color: #ff4444; }
     .bulk-actions {
       display: flex;
       align-items: center;
@@ -1837,8 +1833,8 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       appearance: none;
       -webkit-appearance: none;
       border-radius: 5px;
-      border: 1px solid #3c465e;
-      background: #11141b;
+      border: 1px solid #4a4a4a;
+      background: #2d2d2d;
       display: inline-grid;
       place-content: center;
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
@@ -1850,18 +1846,18 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       width: 8px;
       height: 8px;
       border-radius: 2px;
-      background: linear-gradient(180deg, #ff904f 0%, #ff7a30 100%);
+      background: #ff6b35;
       transform: scale(0);
       transition: transform .12s ease;
       box-shadow: 0 0 10px rgba(255,122,48,0.45);
     }
     .failed-checkbox:hover {
-      border-color: #55627f;
-      background: #131824;
+      border-color: #666666;
+      background: #343434;
     }
     .failed-checkbox:checked {
-      border-color: #ff7a30;
-      background: #231a1f;
+      border-color: #ff6b35;
+      background: #3a2a24;
     }
     .failed-checkbox:checked::before {
       transform: scale(1);
@@ -1871,7 +1867,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       box-shadow: 0 0 0 2px rgba(255,122,48,0.25);
     }
     .meta-accent { color: var(--accent-orange); }
-    .meta-soft { color: #7f8ca8; }
+    .meta-soft { color: #a8a8a8; }
     form {
       display: flex;
       gap: 6px;
@@ -1882,13 +1878,13 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     input[type=datetime-local] {
       min-width: 170px;
       padding: 6px 8px;
-      border-radius: 8px;
-      border: 1px solid #3a4560;
-      background: #121925;
+      border-radius: 12px;
+      border: 0;
+      background: #2d2d2d;
       color: var(--text-primary);
       font: inherit;
       font-size: 13px;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+      box-shadow: none;
     }
     .date-input {
       position: relative;
@@ -1905,8 +1901,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     .date-input.is-focus input[type=datetime-local],
     .date-input.is-focus input[type=date] {
       outline: none;
-      border-color: #5870a0;
-      box-shadow: 0 0 0 2px rgba(88,112,160,0.2);
+      box-shadow: 0 0 0 2px rgba(255, 107, 53, 0.22);
     }
     .date-input input[type=datetime-local]::-webkit-calendar-picker-indicator,
     .date-input input[type=date]::-webkit-calendar-picker-indicator {
@@ -1924,9 +1919,9 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       width: 26px;
       height: calc(100% - 8px);
       border-radius: 8px;
-      border: 1px solid #3a4661;
-      background: linear-gradient(180deg, #1e2637 0%, #1a2233 100%);
-      color: #b8c6e7;
+      border: 0;
+      background: #3a3a3a;
+      color: #d0d0d0;
       font-size: 12px;
       line-height: 1;
       display: inline-flex;
@@ -1935,20 +1930,19 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       padding: 0;
     }
     button {
-      border: 1px solid #3c4863;
-      background: linear-gradient(180deg, #232c3f 0%, #1a2233 100%);
-      color: #d6dff4;
-      border-radius: 999px;
+      border: 0;
+      background: #2d2d2d;
+      color: #d0d0d0;
+      border-radius: 16px;
       padding: 7px 12px;
       font-size: 12px;
-      font-weight: 700;
+      font-weight: 600;
       text-transform: lowercase;
       cursor: pointer;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
-      transition: border-color .12s ease, transform .08s ease, filter .12s ease;
+      box-shadow: none;
+      transition: transform .08s ease, filter .12s ease;
     }
     button:hover:not(:disabled) {
-      border-color: #4e5f83;
       filter: brightness(1.05);
     }
     button:active:not(:disabled) {
@@ -1956,7 +1950,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     }
     button:focus-visible {
       outline: none;
-      box-shadow: 0 0 0 2px rgba(95,122,175,0.25);
+      box-shadow: 0 0 0 2px rgba(255, 107, 53, 0.25);
     }
     button:disabled {
       opacity: 0.52;
@@ -1964,9 +1958,9 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       filter: none;
     }
     .empty {
-      border: 1px dashed #2f3649;
-      background: #161a23;
-      border-radius: 12px;
+      border: 1px dashed #343434;
+      background: #202020;
+      border-radius: 16px;
       padding: 18px;
       font-size: 12px;
       color: var(--text-secondary);
@@ -1976,7 +1970,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       margin-top: 14px;
       margin-bottom: 8px;
       color: var(--text-secondary);
-      font-size: 12px;
+      font-size: 11px;
       text-transform: uppercase;
       letter-spacing: 0.06em;
     }
@@ -1996,7 +1990,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     }
     .composer-label {
       font-size: 12px;
-      color: #8fa0c1;
+      color: #a8a8a8;
       text-transform: lowercase;
       letter-spacing: 0.06em;
     }
@@ -2006,11 +2000,11 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       flex-wrap: wrap;
     }
     .network-chip {
-      border: 1px solid #364058;
-      background: #151b24;
-      color: #8fa0c1;
-      border-radius: 999px;
-      padding: 7px 12px;
+      border: 0;
+      background: #2d2d2d;
+      color: #a8a8a8;
+      border-radius: 16px;
+      padding: 8px 14px;
       font-size: 12px;
       font-weight: 600;
       text-transform: lowercase;
@@ -2021,24 +2015,24 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     }
     .network-chip::before {
       content: "●";
-      font-size: 10px;
+      font-size: 8px;
       line-height: 1;
       opacity: 0.85;
     }
     .network-chip.active {
-      border-color: #ff7a30;
-      background: rgba(255, 122, 48, 0.12);
-      color: #ffd7c0;
-      box-shadow: inset 0 0 0 1px rgba(255, 122, 48, 0.2);
+      background: #2d2d2d;
+      color: var(--accent-orange);
+      box-shadow: inset 0 0 0 2px var(--accent-orange);
     }
     .network-chip.disabled {
-      opacity: 0.45;
+      background: #212121;
+      opacity: 1;
       cursor: not-allowed;
     }
     .composer-text-wrap {
-      border: 1px solid #364058;
-      border-radius: 10px;
-      background: #11141b;
+      border: 0;
+      border-radius: 16px;
+      background: #212121;
       overflow: hidden;
     }
     .composer-text-wrap textarea {
@@ -2050,17 +2044,17 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       display: block;
     }
     .composer-text-meta {
-      border-top: 1px solid #232b3c;
+      border-top: 1px solid #2a2a2a;
       padding: 8px 10px;
       display: flex;
       justify-content: space-between;
       gap: 8px;
       align-items: center;
-      color: #7f8ca8;
+      color: #a8a8a8;
       font-size: 11px;
     }
     .char-over {
-      color: #ff8a97;
+      color: #ff6b35;
     }
     .media-upload-actions {
       display: flex;
@@ -2070,7 +2064,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     }
     .upload-notice {
       font-size: 12px;
-      color: #8fa0c1;
+      color: #a8a8a8;
     }
     .upload-notice[data-state="error"] {
       color: #ffb0b9;
@@ -2084,9 +2078,9 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       gap: 8px;
     }
     .media-item {
-      border: 1px solid #2d3447;
-      border-radius: 10px;
-      background: #151b26;
+      border: 0;
+      border-radius: 16px;
+      background: #212121;
       padding: 8px 10px;
       display: grid;
       grid-template-columns: 44px minmax(0, 1fr) auto;
@@ -2097,13 +2091,13 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       width: 44px;
       height: 44px;
       border-radius: 8px;
-      background: #202938;
-      border: 1px solid #2f394d;
+      background: #2d2d2d;
+      border: 0;
       background-size: cover;
       background-position: center;
       display: grid;
       place-items: center;
-      color: #8fa0c1;
+      color: #a8a8a8;
       font-size: 11px;
       text-transform: uppercase;
     }
@@ -2112,7 +2106,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     }
     .media-name {
       font-size: 12px;
-      color: #d9e4ff;
+      color: #ffffff;
       white-space: nowrap;
       text-overflow: ellipsis;
       overflow: hidden;
@@ -2120,7 +2114,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     .media-meta {
       margin-top: 2px;
       font-size: 11px;
-      color: #8fa0c1;
+      color: #a8a8a8;
     }
     .media-item-actions {
       display: inline-flex;
@@ -2132,31 +2126,33 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       font-size: 11px;
     }
     .media-item-actions .btn-secondary {
-      border-color: #3a4359;
+      border: 0;
+      background: #2d2d2d;
+      color: #a8a8a8;
     }
     .media-item-actions .btn-danger {
-      border-color: rgba(255,95,112,0.45);
-      background: rgba(90, 31, 40, 0.45);
-      color: #ffd5da;
+      border: 0;
+      background: #2d2d2d;
+      color: #ff4444;
     }
     .preview-panel {
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      background: #141923;
+      border: 0;
+      border-radius: 18px;
+      background: #212121;
       overflow: hidden;
       position: sticky;
       top: 16px;
     }
     .preview-head {
       padding: 10px 12px;
-      border-bottom: 1px solid #242b3b;
-      background: #171d28;
+      border-bottom: 1px solid #2a2a2a;
+      background: #212121;
     }
     .preview-title {
       font-size: 12px;
       letter-spacing: 0.08em;
       text-transform: uppercase;
-      color: #c7d1e8;
+      color: #b8b8b8;
       font-weight: 700;
       margin-bottom: 6px;
     }
@@ -2165,18 +2161,18 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       gap: 8px;
       flex-wrap: wrap;
       font-size: 11px;
-      color: #7f8ca8;
+      color: #a8a8a8;
     }
     .preview-platforms .active {
-      color: #ffb181;
+      color: var(--accent-orange);
     }
     .preview-body {
       padding: 12px;
     }
     .preview-card {
-      border: 1px solid #252d3f;
-      border-radius: 12px;
-      background: #11151d;
+      border: 0;
+      border-radius: 16px;
+      background: #212121;
       padding: 12px;
     }
     .preview-author {
@@ -2189,8 +2185,8 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       width: 30px;
       height: 30px;
       border-radius: 999px;
-      background: linear-gradient(180deg, #ff904f 0%, #ff7a30 100%);
-      color: #181818;
+      background: #2d2d2d;
+      color: #cfcfcf;
       display: grid;
       place-items: center;
       font-weight: 700;
@@ -2198,26 +2194,26 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     }
     .preview-name {
       font-size: 12px;
-      color: #e8eeff;
+      color: #ffffff;
       font-weight: 700;
     }
     .preview-handle {
       font-size: 11px;
-      color: #8595b7;
+      color: #a8a8a8;
     }
     .preview-text {
       font-size: 13px;
       line-height: 1.45;
-      color: #dbe5fc;
+      color: #ffffff;
       white-space: pre-wrap;
       word-break: break-word;
       min-height: 68px;
     }
     .preview-media {
       margin-top: 10px;
-      border: 1px solid #2c3548;
-      border-radius: 10px;
-      background: #171f2d;
+      border: 0;
+      border-radius: 8px;
+      background: #2d2d2d;
       min-height: 120px;
       display: grid;
       place-items: center;
@@ -2235,14 +2231,14 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     }
     .preview-media-empty {
       font-size: 12px;
-      color: #8191b4;
+      color: #a8a8a8;
       padding: 10px;
       text-align: center;
     }
     .preview-footer {
       margin-top: 10px;
       font-size: 11px;
-      color: #7f8ca8;
+      color: #a8a8a8;
     }
     .composer-submit-actions {
       justify-content: flex-end;

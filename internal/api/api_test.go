@@ -995,7 +995,7 @@ func TestDefaultViewIsCalendar(t *testing.T) {
 	if !strings.Contains(body, ".content .text {\n      font-size: 13px;") {
 		t.Fatalf("expected larger body text size for accessibility")
 	}
-	if !strings.Contains(body, ".nav-item.active .nav-badge {\n      background: #2f384d;\n      color: #d9e4ff;") {
+	if !strings.Contains(body, ".nav-item.active .nav-badge {\n      background: #3a3a3a;\n      color: #f0f0f0;") {
 		t.Fatalf("expected improved active nav badge contrast")
 	}
 	if !strings.Contains(body, ".day-event {\n      flex: 0 0 auto;") {
