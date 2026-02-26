@@ -1093,6 +1093,19 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       gap: 8px;
       text-decoration: none;
     }
+    .nav-main {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+    .nav-icon {
+      width: 14px;
+      height: 14px;
+      flex: 0 0 auto;
+      color: currentColor;
+      opacity: 0.9;
+    }
     .nav-badge {
       min-width: 18px;
       height: 18px;
@@ -1878,11 +1891,39 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         <span>post_flow</span>
       </div>
       <nav class="nav">
-        <a class="nav-item {{if eq .ActiveNavView "calendar"}}active{{end}}" href="/?view=calendar&month={{.CurrentMonthParam}}&day={{.SelectedDayKey}}">// calendar</a>
-        <a class="nav-item {{if eq .ActiveNavView "publications"}}active{{end}}" href="/?view=publications"><span>// scheduled</span>{{if gt .ScheduledCount 0}}<span class="nav-badge">{{.ScheduledCount}}</span>{{end}}</a>
-        <a class="nav-item {{if eq .ActiveNavView "drafts"}}active{{end}}" href="/?view=drafts"><span>// drafts</span>{{if gt .DraftCount 0}}<span class="nav-badge">{{.DraftCount}}</span>{{end}}</a>
-        <a class="nav-item {{if eq .ActiveNavView "failed"}}active{{end}}" href="/?view=failed"><span>// failed</span>{{if gt .FailedCount 0}}<span class="nav-badge nav-badge-danger">{{.FailedCount}}</span>{{end}}</a>
-        <a class="nav-item {{if eq .ActiveNavView "settings"}}active{{end}}" href="/?view=settings">// settings</a>
+        <a class="nav-item {{if eq .ActiveNavView "calendar"}}active{{end}}" href="/?view=calendar&month={{.CurrentMonthParam}}&day={{.SelectedDayKey}}">
+          <span class="nav-main">
+            <svg class="nav-icon nav-icon-calendar" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="2" y="3.5" width="12" height="10.5" rx="2" stroke="currentColor" stroke-width="1.2"/><path d="M5 2.5V5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M11 2.5V5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M2 6.5H14" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+            <span>calendar</span>
+          </span>
+        </a>
+        <a class="nav-item {{if eq .ActiveNavView "publications"}}active{{end}}" href="/?view=publications">
+          <span class="nav-main">
+            <svg class="nav-icon nav-icon-scheduled" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="8" cy="8" r="5.8" stroke="currentColor" stroke-width="1.2"/><path d="M8 4.8V8L10.2 9.4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span>scheduled</span>
+          </span>
+          {{if gt .ScheduledCount 0}}<span class="nav-badge">{{.ScheduledCount}}</span>{{end}}
+        </a>
+        <a class="nav-item {{if eq .ActiveNavView "drafts"}}active{{end}}" href="/?view=drafts">
+          <span class="nav-main">
+            <svg class="nav-icon nav-icon-drafts" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M4 2.5H9L12 5.5V13.5H4V2.5Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M9 2.5V5.5H12" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M6 8H10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M6 10.5H10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+            <span>drafts</span>
+          </span>
+          {{if gt .DraftCount 0}}<span class="nav-badge">{{.DraftCount}}</span>{{end}}
+        </a>
+        <a class="nav-item {{if eq .ActiveNavView "failed"}}active{{end}}" href="/?view=failed">
+          <span class="nav-main">
+            <svg class="nav-icon nav-icon-failed" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M8 2.3L14 13H2L8 2.3Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M8 6.2V9.1" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><circle cx="8" cy="11.2" r="0.8" fill="currentColor"/></svg>
+            <span>failed</span>
+          </span>
+          {{if gt .FailedCount 0}}<span class="nav-badge nav-badge-danger">{{.FailedCount}}</span>{{end}}
+        </a>
+        <a class="nav-item {{if eq .ActiveNavView "settings"}}active{{end}}" href="/?view=settings">
+          <span class="nav-main">
+            <svg class="nav-icon nav-icon-settings" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="8" cy="8" r="2.2" stroke="currentColor" stroke-width="1.2"/><path d="M8 2.2V3.6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M8 12.4V13.8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M3.9 3.9L4.9 4.9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M11.1 11.1L12.1 12.1" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M2.2 8H3.6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M12.4 8H13.8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M3.9 12.1L4.9 11.1" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M11.1 4.9L12.1 3.9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+            <span>settings</span>
+          </span>
+        </a>
       </nav>
     </aside>
     <main class="main">
