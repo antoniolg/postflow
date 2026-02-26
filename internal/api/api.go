@@ -1535,6 +1535,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       gap: 4px;
     }
     .day-event {
+      flex: 0 0 auto;
       border-radius: 7px;
       padding: 4px 5px;
       background: #1d2432;

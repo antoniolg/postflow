@@ -989,6 +989,9 @@ func TestDefaultViewIsCalendar(t *testing.T) {
 	if !strings.Contains(body, "body[data-view=\"calendar\"] .day-cell {\n      min-height: 0;\n      height: 100%;") {
 		t.Fatalf("expected calendar cells to stretch vertically with available height")
 	}
+	if !strings.Contains(body, ".day-event {\n      flex: 0 0 auto;") {
+		t.Fatalf("expected calendar event rows to keep fixed height without shrinking")
+	}
 	if !strings.Contains(body, "const bottomPadding = mainStyles ? parseFloat(mainStyles.paddingBottom || \"0\") : 0;") {
 		t.Fatalf("expected calendar height calculation to account for main bottom padding")
 	}
