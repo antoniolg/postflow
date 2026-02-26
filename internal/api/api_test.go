@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/antoniolg/publisher/internal/db"
+	"github.com/antoniolg/publisher/internal/domain"
 )
 
 func TestCreatePostValidation(t *testing.T) {
@@ -291,5 +293,143 @@ func TestCreatePostWithIdempotencyKeyIsReplayed(t *testing.T) {
 	secondID, _ := secondResp["id"].(string)
 	if secondID != firstID {
 		t.Fatalf("expected same id on replay, got %q and %q", firstID, secondID)
+	}
+}
+
+func TestRequeueDeadLetterFromFormRedirectsToFailedView(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	payload, _ := json.Marshal(map[string]any{
+		"platform":     "x",
+		"text":         "will fail once",
+		"scheduled_at": time.Now().UTC().Add(1 * time.Minute).Format(time.RFC3339),
+		"max_attempts": 1,
+	})
+	createReq := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(payload))
+	createW := httptest.NewRecorder()
+	h.ServeHTTP(createW, createReq)
+	if createW.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", createW.Code)
+	}
+
+	var created map[string]any
+	if err := json.Unmarshal(createW.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode create response: %v", err)
+	}
+	postID, _ := created["id"].(string)
+	if postID == "" {
+		t.Fatalf("missing post id")
+	}
+
+	if err := store.RecordPublishFailure(t.Context(), postID, errors.New("boom"), 30*time.Second); err != nil {
+		t.Fatalf("record publish failure: %v", err)
+	}
+
+	dlqItems, err := store.ListDeadLetters(t.Context(), 10)
+	if err != nil {
+		t.Fatalf("list dead letters: %v", err)
+	}
+	if len(dlqItems) != 1 {
+		t.Fatalf("expected 1 dead letter, got %d", len(dlqItems))
+	}
+
+	requeueReq := httptest.NewRequest(http.MethodPost, "/dlq/"+dlqItems[0].ID+"/requeue", bytes.NewBufferString(""))
+	requeueReq.Header.Set("content-type", "application/x-www-form-urlencoded")
+	requeueW := httptest.NewRecorder()
+	h.ServeHTTP(requeueW, requeueReq)
+	if requeueW.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", requeueW.Code)
+	}
+	if loc := requeueW.Header().Get("Location"); loc != "/?view=failed&failed_success=requeued" {
+		t.Fatalf("unexpected redirect location: %q", loc)
+	}
+
+	post, err := store.GetPost(t.Context(), postID)
+	if err != nil {
+		t.Fatalf("get post: %v", err)
+	}
+	if post.Status != domain.PostStatusScheduled {
+		t.Fatalf("expected scheduled status, got %s", post.Status)
+	}
+}
+
+func TestBulkRequeueDeadLettersFromForm(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	makeFailed := func(text string) string {
+		payload, _ := json.Marshal(map[string]any{
+			"platform":     "x",
+			"text":         text,
+			"scheduled_at": time.Now().UTC().Add(1 * time.Minute).Format(time.RFC3339),
+			"max_attempts": 1,
+		})
+		createReq := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(payload))
+		createW := httptest.NewRecorder()
+		h.ServeHTTP(createW, createReq)
+		if createW.Code != http.StatusCreated {
+			t.Fatalf("expected 201, got %d", createW.Code)
+		}
+		var created map[string]any
+		if err := json.Unmarshal(createW.Body.Bytes(), &created); err != nil {
+			t.Fatalf("decode create response: %v", err)
+		}
+		postID, _ := created["id"].(string)
+		if postID == "" {
+			t.Fatalf("missing post id")
+		}
+		if err := store.RecordPublishFailure(t.Context(), postID, errors.New("boom"), 30*time.Second); err != nil {
+			t.Fatalf("record publish failure: %v", err)
+		}
+		return postID
+	}
+
+	postA := makeFailed("failed a")
+	postB := makeFailed("failed b")
+
+	dlqItems, err := store.ListDeadLetters(t.Context(), 10)
+	if err != nil {
+		t.Fatalf("list dead letters: %v", err)
+	}
+	if len(dlqItems) < 2 {
+		t.Fatalf("expected at least 2 dead letters, got %d", len(dlqItems))
+	}
+
+	form := url.Values{}
+	form.Add("ids", dlqItems[0].ID)
+	form.Add("ids", dlqItems[1].ID)
+	req := httptest.NewRequest(http.MethodPost, "/dlq/requeue", bytes.NewBufferString(form.Encode()))
+	req.Header.Set("content-type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", w.Code)
+	}
+
+	post1, err := store.GetPost(t.Context(), postA)
+	if err != nil {
+		t.Fatalf("get postA: %v", err)
+	}
+	post2, err := store.GetPost(t.Context(), postB)
+	if err != nil {
+		t.Fatalf("get postB: %v", err)
+	}
+	if post1.Status != domain.PostStatusScheduled || post2.Status != domain.PostStatusScheduled {
+		t.Fatalf("expected both posts scheduled after bulk requeue")
 	}
 }
