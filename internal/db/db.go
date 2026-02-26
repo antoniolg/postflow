@@ -91,6 +91,10 @@ func (s *Store) migrate(ctx context.Context) error {
 			attempted_at TEXT NOT NULL,
 			FOREIGN KEY(post_id) REFERENCES posts(id)
 		);`,
+		`CREATE TABLE IF NOT EXISTS settings (
+			key TEXT PRIMARY KEY,
+			value TEXT NOT NULL
+		);`,
 	}
 	for _, q := range baseQueries {
 		if _, err := s.db.ExecContext(ctx, q); err != nil {

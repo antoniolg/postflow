@@ -165,3 +165,43 @@ func TestCreateDraftDefaultsToDraftStatus(t *testing.T) {
 		t.Fatalf("expected zero scheduled_at for draft")
 	}
 }
+
+func TestSetAndGetUITimezone(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+
+	empty, err := store.GetUITimezone(ctx)
+	if err != nil {
+		t.Fatalf("get empty timezone: %v", err)
+	}
+	if empty != "" {
+		t.Fatalf("expected empty timezone, got %q", empty)
+	}
+
+	if err := store.SetUITimezone(ctx, "Europe/Madrid"); err != nil {
+		t.Fatalf("set timezone: %v", err)
+	}
+	got, err := store.GetUITimezone(ctx)
+	if err != nil {
+		t.Fatalf("get timezone: %v", err)
+	}
+	if got != "Europe/Madrid" {
+		t.Fatalf("expected Europe/Madrid, got %q", got)
+	}
+
+	if err := store.SetUITimezone(ctx, "America/New_York"); err != nil {
+		t.Fatalf("update timezone: %v", err)
+	}
+	updated, err := store.GetUITimezone(ctx)
+	if err != nil {
+		t.Fatalf("get updated timezone: %v", err)
+	}
+	if updated != "America/New_York" {
+		t.Fatalf("expected America/New_York, got %q", updated)
+	}
+}
