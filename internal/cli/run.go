@@ -1,0 +1,388 @@
+package cli
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"flag"
+	"fmt"
+	"io"
+	"net/url"
+	"os"
+	"strings"
+	"time"
+)
+
+const Version = "dev"
+
+type config struct {
+	baseURL string
+	token   string
+	timeout time.Duration
+	asJSON  bool
+}
+
+type scheduleResponse struct {
+	From  string    `json:"from"`
+	To    string    `json:"to"`
+	Items []postDTO `json:"items"`
+}
+
+type postDTO struct {
+	ID          string `json:"id"`
+	Platform    string `json:"platform"`
+	Status      string `json:"status"`
+	Text        string `json:"text"`
+	ScheduledAt string `json:"scheduled_at"`
+}
+
+type dlqListResponse struct {
+	Items []deadLetterDTO `json:"items"`
+	Count int             `json:"count"`
+}
+
+type deadLetterDTO struct {
+	ID        string `json:"id"`
+	PostID    string `json:"post_id"`
+	Reason    string `json:"reason"`
+	LastError string `json:"last_error"`
+}
+
+type stringListFlag []string
+
+func (s *stringListFlag) String() string { return strings.Join(*s, ",") }
+
+func (s *stringListFlag) Set(value string) error {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return errors.New("empty value")
+	}
+	*s = append(*s, value)
+	return nil
+}
+
+func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	cfg, rest, handled, code := parseGlobalArgs(args, stdout, stderr)
+	if handled {
+		return code
+	}
+	if len(rest) == 0 {
+		printHelp(stderr)
+		return 2
+	}
+
+	client := NewAPIClient(cfg.baseURL, cfg.token, cfg.timeout)
+
+	switch rest[0] {
+	case "help":
+		printHelp(stdout)
+		return 0
+	case "schedule":
+		return runSchedule(ctx, client, cfg, rest[1:], stdout, stderr)
+	case "posts":
+		return runPosts(ctx, client, cfg, rest[1:], stdout, stderr)
+	case "dlq":
+		return runDLQ(ctx, client, cfg, rest[1:], stdout, stderr)
+	default:
+		fmt.Fprintf(stderr, "unknown command: %s\n\n", rest[0])
+		printHelp(stderr)
+		return 2
+	}
+}
+
+func parseGlobalArgs(args []string, stdout, stderr io.Writer) (config, []string, bool, int) {
+	cfg := config{
+		baseURL: envOrDefault("PUBLISHER_BASE_URL", "http://localhost:8080"),
+		token:   strings.TrimSpace(os.Getenv("PUBLISHER_API_TOKEN")),
+		timeout: 15 * time.Second,
+	}
+
+	fs := flag.NewFlagSet("publisher-cli", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	fs.StringVar(&cfg.baseURL, "base-url", cfg.baseURL, "Publisher API base URL")
+	fs.StringVar(&cfg.token, "api-token", cfg.token, "Publisher API token (or env PUBLISHER_API_TOKEN)")
+	fs.DurationVar(&cfg.timeout, "timeout", cfg.timeout, "HTTP timeout (e.g. 10s)")
+	fs.BoolVar(&cfg.asJSON, "json", false, "Print raw JSON output")
+	showVersion := fs.Bool("version", false, "Print version")
+	showHelp := fs.Bool("help", false, "Show help")
+	fs.Usage = func() { printHelp(stderr) }
+
+	if err := fs.Parse(args); err != nil {
+		return config{}, nil, true, 2
+	}
+	if *showVersion {
+		fmt.Fprintln(stdout, Version)
+		return config{}, nil, true, 0
+	}
+	if *showHelp {
+		printHelp(stdout)
+		return config{}, nil, true, 0
+	}
+	return cfg, fs.Args(), false, 0
+}
+
+func runSchedule(ctx context.Context, client *APIClient, cfg config, args []string, stdout, stderr io.Writer) int {
+	if len(args) == 0 || args[0] != "list" {
+		fmt.Fprintln(stderr, "usage: publisher-cli schedule list [--from RFC3339] [--to RFC3339]")
+		return 2
+	}
+	fs := flag.NewFlagSet("schedule list", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	var from string
+	var to string
+	fs.StringVar(&from, "from", "", "From date (RFC3339)")
+	fs.StringVar(&to, "to", "", "To date (RFC3339)")
+	if err := fs.Parse(args[1:]); err != nil {
+		return 2
+	}
+
+	query := url.Values{}
+	if strings.TrimSpace(from) != "" {
+		query.Set("from", strings.TrimSpace(from))
+	}
+	if strings.TrimSpace(to) != "" {
+		query.Set("to", strings.TrimSpace(to))
+	}
+	var out scheduleResponse
+	if err := client.Get(ctx, "/schedule", query, &out); err != nil {
+		fmt.Fprintln(stderr, err.Error())
+		return 1
+	}
+	printOutput(stdout, cfg.asJSON, out, func() {
+		fmt.Fprintf(stdout, "from: %s\n", out.From)
+		fmt.Fprintf(stdout, "to:   %s\n", out.To)
+		fmt.Fprintf(stdout, "items: %d\n", len(out.Items))
+		for _, item := range out.Items {
+			fmt.Fprintf(stdout, "- [%s] %s %s · %s\n", item.Status, item.ScheduledAt, item.ID, oneLine(item.Text, 90))
+		}
+	})
+	return 0
+}
+
+func runPosts(ctx context.Context, client *APIClient, cfg config, args []string, stdout, stderr io.Writer) int {
+	if len(args) == 0 {
+		fmt.Fprintln(stderr, "usage: publisher-cli posts <create|validate> [flags]")
+		return 2
+	}
+	switch args[0] {
+	case "create":
+		return runPostsCreate(ctx, client, cfg, args[1:], stdout, stderr)
+	case "validate":
+		return runPostsValidate(ctx, client, cfg, args[1:], stdout, stderr)
+	default:
+		fmt.Fprintf(stderr, "unknown posts subcommand: %s\n", args[0])
+		return 2
+	}
+}
+
+func runPostsCreate(ctx context.Context, client *APIClient, cfg config, args []string, stdout, stderr io.Writer) int {
+	fs := flag.NewFlagSet("posts create", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	var platform string
+	var text string
+	var scheduledAt string
+	var maxAttempts int
+	var idempotencyKey string
+	var mediaIDs stringListFlag
+	fs.StringVar(&platform, "platform", "x", "Target platform")
+	fs.StringVar(&text, "text", "", "Post content")
+	fs.StringVar(&scheduledAt, "scheduled-at", "", "Scheduled datetime (RFC3339)")
+	fs.IntVar(&maxAttempts, "max-attempts", 0, "Max publish retries")
+	fs.StringVar(&idempotencyKey, "idempotency-key", "", "Idempotency key")
+	fs.Var(&mediaIDs, "media-id", "Media ID (repeatable)")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if strings.TrimSpace(text) == "" {
+		fmt.Fprintln(stderr, "--text is required")
+		return 2
+	}
+
+	payload := map[string]any{
+		"platform":  platform,
+		"text":      text,
+		"media_ids": []string(mediaIDs),
+	}
+	if strings.TrimSpace(scheduledAt) != "" {
+		payload["scheduled_at"] = strings.TrimSpace(scheduledAt)
+	}
+	if maxAttempts > 0 {
+		payload["max_attempts"] = maxAttempts
+	}
+	headers := map[string]string{}
+	if strings.TrimSpace(idempotencyKey) != "" {
+		headers["Idempotency-Key"] = strings.TrimSpace(idempotencyKey)
+	}
+
+	var out map[string]any
+	var err error
+	if len(headers) > 0 {
+		err = client.PostWithHeaders(ctx, "/posts", payload, &out, headers)
+	} else {
+		err = client.Post(ctx, "/posts", payload, &out)
+	}
+	if err != nil {
+		fmt.Fprintln(stderr, err.Error())
+		return 1
+	}
+	printOutput(stdout, cfg.asJSON, out, func() {
+		fmt.Fprintf(stdout, "post created/updated: %v\n", out["id"])
+	})
+	return 0
+}
+
+func runPostsValidate(ctx context.Context, client *APIClient, cfg config, args []string, stdout, stderr io.Writer) int {
+	fs := flag.NewFlagSet("posts validate", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	var platform string
+	var text string
+	var scheduledAt string
+	var maxAttempts int
+	var mediaIDs stringListFlag
+	fs.StringVar(&platform, "platform", "x", "Target platform")
+	fs.StringVar(&text, "text", "", "Post content")
+	fs.StringVar(&scheduledAt, "scheduled-at", "", "Scheduled datetime (RFC3339)")
+	fs.IntVar(&maxAttempts, "max-attempts", 0, "Max publish retries")
+	fs.Var(&mediaIDs, "media-id", "Media ID (repeatable)")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if strings.TrimSpace(text) == "" {
+		fmt.Fprintln(stderr, "--text is required")
+		return 2
+	}
+
+	payload := map[string]any{
+		"platform":  platform,
+		"text":      text,
+		"media_ids": []string(mediaIDs),
+	}
+	if strings.TrimSpace(scheduledAt) != "" {
+		payload["scheduled_at"] = strings.TrimSpace(scheduledAt)
+	}
+	if maxAttempts > 0 {
+		payload["max_attempts"] = maxAttempts
+	}
+
+	var out map[string]any
+	if err := client.Post(ctx, "/posts/validate", payload, &out); err != nil {
+		fmt.Fprintln(stderr, err.Error())
+		return 1
+	}
+	printOutput(stdout, cfg.asJSON, out, func() {
+		fmt.Fprintf(stdout, "valid: %v\n", out["valid"])
+	})
+	return 0
+}
+
+func runDLQ(ctx context.Context, client *APIClient, cfg config, args []string, stdout, stderr io.Writer) int {
+	if len(args) == 0 {
+		fmt.Fprintln(stderr, "usage: publisher-cli dlq <list|requeue> [flags]")
+		return 2
+	}
+	switch args[0] {
+	case "list":
+		fs := flag.NewFlagSet("dlq list", flag.ContinueOnError)
+		fs.SetOutput(stderr)
+		limit := fs.Int("limit", 100, "Max number of dead letters")
+		if err := fs.Parse(args[1:]); err != nil {
+			return 2
+		}
+		query := url.Values{}
+		if *limit > 0 {
+			query.Set("limit", fmt.Sprintf("%d", *limit))
+		}
+		var out dlqListResponse
+		if err := client.Get(ctx, "/dlq", query, &out); err != nil {
+			fmt.Fprintln(stderr, err.Error())
+			return 1
+		}
+		printOutput(stdout, cfg.asJSON, out, func() {
+			fmt.Fprintf(stdout, "count: %d\n", out.Count)
+			for _, item := range out.Items {
+				fmt.Fprintf(stdout, "- %s post=%s reason=%s err=%s\n", item.ID, item.PostID, item.Reason, oneLine(item.LastError, 70))
+			}
+		})
+		return 0
+	case "requeue":
+		fs := flag.NewFlagSet("dlq requeue", flag.ContinueOnError)
+		fs.SetOutput(stderr)
+		id := fs.String("id", "", "Dead letter ID")
+		if err := fs.Parse(args[1:]); err != nil {
+			return 2
+		}
+		if strings.TrimSpace(*id) == "" {
+			fmt.Fprintln(stderr, "--id is required")
+			return 2
+		}
+		var out map[string]any
+		if err := client.Post(ctx, "/dlq/"+strings.TrimSpace(*id)+"/requeue", nil, &out); err != nil {
+			fmt.Fprintln(stderr, err.Error())
+			return 1
+		}
+		printOutput(stdout, cfg.asJSON, out, func() {
+			fmt.Fprintf(stdout, "requeued: %v\n", out["dead_letter_id"])
+		})
+		return 0
+	default:
+		fmt.Fprintf(stderr, "unknown dlq subcommand: %s\n", args[0])
+		return 2
+	}
+}
+
+func printOutput(w io.Writer, asJSON bool, payload any, human func()) {
+	if asJSON {
+		raw, _ := json.MarshalIndent(payload, "", "  ")
+		fmt.Fprintln(w, string(raw))
+		return
+	}
+	human()
+}
+
+func oneLine(text string, maxLen int) string {
+	text = strings.Join(strings.Fields(strings.TrimSpace(text)), " ")
+	if maxLen <= 0 || len(text) <= maxLen {
+		return text
+	}
+	if maxLen < 4 {
+		return text[:maxLen]
+	}
+	return text[:maxLen-3] + "..."
+}
+
+func envOrDefault(key, fallback string) string {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value != "" {
+		return value
+	}
+	return fallback
+}
+
+func printHelp(w io.Writer) {
+	fmt.Fprintln(w, `publisher-cli - CLI for publisher HTTP API
+
+Usage:
+  publisher-cli [global flags] <command> [subcommand] [flags]
+
+Global flags:
+  --base-url string      Publisher API base URL (default: $PUBLISHER_BASE_URL or http://localhost:8080)
+  --api-token string     API token (default: $PUBLISHER_API_TOKEN)
+  --timeout duration     HTTP timeout (default: 15s)
+  --json                 Print raw JSON output
+  --version              Print version
+  --help                 Show this help
+
+Commands:
+  schedule list          List scheduled posts from /schedule
+  posts create           Create post via /posts
+  posts validate         Validate payload via /posts/validate
+  dlq list               List failed dead letters via /dlq
+  dlq requeue            Requeue one dead letter via /dlq/{id}/requeue
+
+Examples:
+  publisher-cli schedule list --from 2026-03-01T00:00:00Z --to 2026-03-31T23:59:59Z
+  publisher-cli posts create --text "hello world" --scheduled-at 2026-03-01T10:00:00Z
+  publisher-cli posts validate --text "draft check" --scheduled-at 2026-03-01T10:00:00Z
+  publisher-cli dlq list --limit 50
+  publisher-cli dlq requeue --id dlq_abc123`)
+}
