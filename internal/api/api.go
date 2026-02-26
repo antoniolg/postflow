@@ -749,6 +749,12 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 			items[i].ScheduledAt = items[i].ScheduledAt.In(uiLoc)
 		}
 	}
+	publicationsItems := make([]domain.Post, 0, len(items))
+	for _, item := range items {
+		if item.Status == domain.PostStatusPublished || item.Status == domain.PostStatusScheduled {
+			publicationsItems = append(publicationsItems, item)
+		}
+	}
 	drafts, err := s.Store.ListDrafts(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
@@ -1970,7 +1976,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       {{if eq .View "publications"}}
       <div class="line">calendar</div>
       <section class="list">
-        {{range .Items}}
+        {{range .Publications}}
         <article class="card {{.Status}} {{if ne .Status "published"}}card-editable{{end}}" data-status="{{.Status}}" {{if ne .Status "published"}}data-edit-url="/?view=create&edit_id={{.ID}}&return_to={{urlquery $.CurrentViewURL}}"{{end}}>
           <div class="card-left">
             <div class="status">
@@ -2389,6 +2395,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		UITimezone           string
 		TimezoneConfigured   bool
 		Items                []domain.Post
+		Publications         []domain.Post
 		Drafts               []domain.Post
 		FailedItems          []failedQueueItem
 		CurrentViewURL       string
@@ -2426,6 +2433,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		UITimezone:           uiTimezone,
 		TimezoneConfigured:   timezoneConfigured,
 		Items:                items,
+		Publications:         publicationsItems,
 		Drafts:               drafts,
 		FailedItems:          failedItems,
 		CurrentViewURL:       currentViewURL,

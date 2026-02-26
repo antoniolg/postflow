@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -486,5 +487,55 @@ func TestCreatePostFromFormUsesConfiguredTimezone(t *testing.T) {
 	}
 	if !items[0].ScheduledAt.Equal(expectedUTC) {
 		t.Fatalf("expected UTC %s, got %s", expectedUTC.Format(time.RFC3339), items[0].ScheduledAt.Format(time.RFC3339))
+	}
+}
+
+func TestPublicationsViewDoesNotRenderDrafts(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	createDraftBody, _ := json.Marshal(map[string]any{
+		"platform": "x",
+		"text":     "this draft must stay out of publications",
+	})
+	createDraftReq := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(createDraftBody))
+	createDraftW := httptest.NewRecorder()
+	h.ServeHTTP(createDraftW, createDraftReq)
+	if createDraftW.Code != http.StatusCreated {
+		t.Fatalf("expected 201 for draft, got %d", createDraftW.Code)
+	}
+
+	createScheduledBody, _ := json.Marshal(map[string]any{
+		"platform":     "x",
+		"text":         "this scheduled post must appear in publications",
+		"scheduled_at": time.Now().UTC().Add(2 * time.Hour).Format(time.RFC3339),
+	})
+	createScheduledReq := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(createScheduledBody))
+	createScheduledW := httptest.NewRecorder()
+	h.ServeHTTP(createScheduledW, createScheduledReq)
+	if createScheduledW.Code != http.StatusCreated {
+		t.Fatalf("expected 201 for scheduled, got %d", createScheduledW.Code)
+	}
+
+	publicationsReq := httptest.NewRequest(http.MethodGet, "/?view=publications", nil)
+	publicationsW := httptest.NewRecorder()
+	h.ServeHTTP(publicationsW, publicationsReq)
+	if publicationsW.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", publicationsW.Code)
+	}
+
+	body := publicationsW.Body.String()
+	if strings.Contains(body, "this draft must stay out of publications") {
+		t.Fatalf("draft text should not appear in publications view")
+	}
+	if !strings.Contains(body, "this scheduled post must appear in publications") {
+		t.Fatalf("scheduled text should appear in publications view")
 	}
 }
