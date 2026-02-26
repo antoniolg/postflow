@@ -1056,6 +1056,8 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       border-right: 1px solid #191e29;
       padding: 24px 16px;
       background: rgba(13, 14, 19, 0.85);
+      display: flex;
+      flex-direction: column;
     }
     .logo {
       display: flex;
@@ -1080,6 +1082,8 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       display: flex;
       flex-direction: column;
       gap: 6px;
+      flex: 1;
+      min-height: 0;
     }
     .nav-item {
       border-radius: 10px;
@@ -1130,6 +1134,9 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       color: var(--text-primary);
       background: var(--bg-elevated);
       border-color: #31394b;
+    }
+    .nav-item-settings {
+      margin-top: auto;
     }
     .main {
       flex: 1;
@@ -1780,6 +1787,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     @media (max-width: 980px) {
       .app { flex-direction: column; }
       .sidebar {
+        display: block;
         width: 100%;
         border-right: 0;
         border-bottom: 1px solid #191e29;
@@ -1794,9 +1802,13 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         padding: 0 2px;
       }
       .nav {
+        flex: initial;
         flex-direction: row;
         overflow-x: auto;
         padding-bottom: 2px;
+      }
+      .nav-item-settings {
+        margin-top: 0;
       }
       .nav-item {
         white-space: nowrap;
@@ -1918,7 +1930,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
           </span>
           {{if gt .FailedCount 0}}<span class="nav-badge nav-badge-danger">{{.FailedCount}}</span>{{end}}
         </a>
-        <a class="nav-item {{if eq .ActiveNavView "settings"}}active{{end}}" href="/?view=settings">
+        <a class="nav-item nav-item-settings {{if eq .ActiveNavView "settings"}}active{{end}}" href="/?view=settings">
           <span class="nav-main">
             <svg class="nav-icon nav-icon-settings" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="8" cy="8" r="2.2" stroke="currentColor" stroke-width="1.2"/><path d="M8 2.2V3.6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M8 12.4V13.8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M3.9 3.9L4.9 4.9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M11.1 11.1L12.1 12.1" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M2.2 8H3.6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M12.4 8H13.8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M3.9 12.1L4.9 11.1" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M11.1 4.9L12.1 3.9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
             <span>settings</span>

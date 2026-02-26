@@ -679,6 +679,9 @@ func TestNavBadgesUseNeutralForScheduledAndDraftsAndRedForFailed(t *testing.T) {
 	if !strings.Contains(body, "nav-icon nav-icon-settings") {
 		t.Fatalf("expected settings nav icon")
 	}
+	if !strings.Contains(body, "nav-item-settings") {
+		t.Fatalf("expected settings nav item class for desktop bottom placement")
+	}
 	if !strings.Contains(body, "nav-icon nav-icon-scheduled") || !strings.Contains(body, "<span>scheduled</span>") {
 		t.Fatalf("expected scheduled nav badge with neutral style")
 	}
