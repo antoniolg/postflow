@@ -42,6 +42,7 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("GET /dlq", s.handleListDLQ)
 	mux.HandleFunc("POST /dlq/requeue", s.handleBulkRequeueDLQ)
 	mux.HandleFunc("POST /dlq/", s.handleRequeueDLQ)
+	mux.HandleFunc("POST /settings/timezone", s.handleSetTimezone)
 	mux.HandleFunc("GET /", s.handleScheduleHTML)
 	return s.withMiddlewares(mux)
 }
@@ -166,7 +167,16 @@ func (s Server) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, errors.New("text is required"))
 		return
 	}
-	scheduledAt, err := parseScheduledAtInput(req.ScheduledAt)
+	uiLoc, _, _, err := s.resolveUILocation(r.Context())
+	if err != nil {
+		if fromForm {
+			http.Redirect(w, r, createViewURL("", req.Text, req.ScheduledAt, req.ReturnTo, err.Error(), ""), http.StatusSeeOther)
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	scheduledAt, err := parseScheduledAtInputInLocation(req.ScheduledAt, uiLoc)
 	if err != nil {
 		if fromForm {
 			http.Redirect(w, r, createViewURL("", req.Text, req.ScheduledAt, req.ReturnTo, err.Error(), ""), http.StatusSeeOther)
@@ -299,12 +309,17 @@ func (s Server) handleScheduleDraftPost(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
+	uiLoc, _, _, err := s.resolveUILocation(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
 
 	scheduledAtRaw := strings.TrimSpace(r.FormValue("scheduled_at"))
 	if scheduledAtRaw == "" {
 		localRaw := strings.TrimSpace(r.FormValue("scheduled_at_local"))
 		if localRaw != "" {
-			localTime, err := time.ParseInLocation("2006-01-02T15:04", localRaw, time.Local)
+			localTime, err := time.ParseInLocation("2006-01-02T15:04", localRaw, uiLoc)
 			if err == nil {
 				scheduledAtRaw = localTime.UTC().Format(time.RFC3339)
 			}
@@ -347,6 +362,15 @@ func (s Server) handleEditPost(w http.ResponseWriter, r *http.Request) {
 	}
 	fromForm := !strings.Contains(strings.ToLower(r.Header.Get("content-type")), "application/json")
 	returnTo := strings.TrimSpace(r.FormValue("return_to"))
+	uiLoc, _, _, err := s.resolveUILocation(r.Context())
+	if err != nil {
+		if fromForm {
+			http.Redirect(w, r, createViewURL(postID, "", strings.TrimSpace(r.FormValue("scheduled_at_local")), returnTo, err.Error(), ""), http.StatusSeeOther)
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
 	text := strings.TrimSpace(r.FormValue("text"))
 	intent := strings.ToLower(strings.TrimSpace(r.FormValue("intent")))
 	if text == "" {
@@ -373,7 +397,7 @@ func (s Server) handleEditPost(w http.ResponseWriter, r *http.Request) {
 	}
 	var scheduledAt time.Time
 	if scheduledAtRaw != "" {
-		parsed, err := parseScheduledAtInput(scheduledAtRaw)
+		parsed, err := parseScheduledAtInputInLocation(scheduledAtRaw, uiLoc)
 		if err != nil {
 			if fromForm {
 				http.Redirect(w, r, createViewURL(postID, text, scheduledAtRaw, returnTo, err.Error(), ""), http.StatusSeeOther)
@@ -414,7 +438,7 @@ func (s Server) handleEditPost(w http.ResponseWriter, r *http.Request) {
 	}
 	scheduledLocal := ""
 	if !post.ScheduledAt.IsZero() {
-		scheduledLocal = post.ScheduledAt.In(time.Local).Format("2006-01-02T15:04")
+		scheduledLocal = post.ScheduledAt.In(uiLoc).Format("2006-01-02T15:04")
 	}
 	http.Redirect(w, r, createViewURL(post.ID, post.Text, scheduledLocal, returnTo, "", "changes saved"), http.StatusSeeOther)
 }
@@ -571,17 +595,130 @@ func (s Server) handleBulkRequeueDLQ(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s Server) handleSetTimezone(w http.ResponseWriter, r *http.Request) {
+	contentType := strings.ToLower(r.Header.Get("content-type"))
+	fromForm := strings.Contains(contentType, "application/x-www-form-urlencoded") || strings.Contains(contentType, "multipart/form-data")
+
+	timezone := ""
+	returnTo := "/?view=settings"
+	if fromForm {
+		if err := r.ParseForm(); err != nil {
+			http.Redirect(w, r, "/?view=settings&tz_error=invalid+form", http.StatusSeeOther)
+			return
+		}
+		timezone = strings.TrimSpace(r.FormValue("timezone"))
+		returnTo = sanitizeReturnTo(strings.TrimSpace(r.FormValue("return_to")))
+		if returnTo == "" {
+			returnTo = "/?view=settings"
+		}
+	} else {
+		var body struct {
+			Timezone string `json:"timezone"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeError(w, http.StatusBadRequest, fmt.Errorf("invalid json body: %w", err))
+			return
+		}
+		timezone = strings.TrimSpace(body.Timezone)
+	}
+
+	if timezone == "" {
+		if fromForm {
+			http.Redirect(w, r, withQueryValue(returnTo, "tz_error", "timezone is required"), http.StatusSeeOther)
+			return
+		}
+		writeError(w, http.StatusBadRequest, errors.New("timezone is required"))
+		return
+	}
+	if _, err := time.LoadLocation(timezone); err != nil {
+		if fromForm {
+			http.Redirect(w, r, withQueryValue(returnTo, "tz_error", "invalid timezone"), http.StatusSeeOther)
+			return
+		}
+		writeError(w, http.StatusBadRequest, fmt.Errorf("invalid timezone: %w", err))
+		return
+	}
+	if err := s.Store.SetUITimezone(r.Context(), timezone); err != nil {
+		if fromForm {
+			http.Redirect(w, r, withQueryValue(returnTo, "tz_error", err.Error()), http.StatusSeeOther)
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	if fromForm {
+		http.Redirect(w, r, withQueryValue(returnTo, "tz_success", "timezone saved"), http.StatusSeeOther)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"timezone": timezone})
+}
+
+func sanitizeReturnTo(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	if !strings.HasPrefix(raw, "/") || strings.HasPrefix(raw, "//") {
+		return ""
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.IsAbs() || parsed.Host != "" {
+		return ""
+	}
+	if parsed.Path == "" {
+		parsed.Path = "/"
+	}
+	return parsed.RequestURI()
+}
+
+func withQueryValue(rawURL, key, value string) string {
+	rawURL = sanitizeReturnTo(rawURL)
+	if rawURL == "" {
+		rawURL = "/"
+	}
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return "/"
+	}
+	q := parsed.Query()
+	q.Set(key, value)
+	parsed.RawQuery = q.Encode()
+	return parsed.RequestURI()
+}
+
+func (s Server) resolveUILocation(ctx context.Context) (*time.Location, string, bool, error) {
+	tz, err := s.Store.GetUITimezone(ctx)
+	if err != nil {
+		return nil, "", false, err
+	}
+	tz = strings.TrimSpace(tz)
+	if tz == "" {
+		return time.UTC, "UTC", false, nil
+	}
+	loc, err := time.LoadLocation(tz)
+	if err != nil {
+		return nil, "", false, fmt.Errorf("invalid configured timezone %q: %w", tz, err)
+	}
+	return loc, tz, true, nil
+}
+
 func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		writeError(w, http.StatusNotFound, errors.New("not found"))
 		return
 	}
-	nowLocal := time.Now().In(time.Local)
+	uiLoc, uiTimezone, timezoneConfigured, err := s.resolveUILocation(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	nowLocal := time.Now().In(uiLoc)
 	view := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("view")))
 	if view == "" {
 		view = "publications"
 	}
-	if view != "calendar" && view != "publications" && view != "drafts" && view != "create" && view != "failed" {
+	if view != "calendar" && view != "publications" && view != "drafts" && view != "create" && view != "failed" && view != "settings" {
 		view = "publications"
 	}
 	editID := strings.TrimSpace(r.URL.Query().Get("edit_id"))
@@ -590,10 +727,12 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	createSuccess := strings.TrimSpace(r.URL.Query().Get("success"))
 	failedError := strings.TrimSpace(r.URL.Query().Get("failed_error"))
 	failedSuccess := strings.TrimSpace(r.URL.Query().Get("failed_success"))
-	displayMonth := time.Date(nowLocal.Year(), nowLocal.Month(), 1, 0, 0, 0, 0, time.Local)
+	settingsError := strings.TrimSpace(r.URL.Query().Get("tz_error"))
+	settingsSuccess := strings.TrimSpace(r.URL.Query().Get("tz_success"))
+	displayMonth := time.Date(nowLocal.Year(), nowLocal.Month(), 1, 0, 0, 0, 0, uiLoc)
 	if monthRaw := strings.TrimSpace(r.URL.Query().Get("month")); monthRaw != "" {
-		if parsedMonth, err := time.ParseInLocation("2006-01", monthRaw, time.Local); err == nil {
-			displayMonth = time.Date(parsedMonth.Year(), parsedMonth.Month(), 1, 0, 0, 0, 0, time.Local)
+		if parsedMonth, err := time.ParseInLocation("2006-01", monthRaw, uiLoc); err == nil {
+			displayMonth = time.Date(parsedMonth.Year(), parsedMonth.Month(), 1, 0, 0, 0, 0, uiLoc)
 		}
 	}
 	monthStartLocal := displayMonth
@@ -604,6 +743,11 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
+	}
+	for i := range items {
+		if !items[i].ScheduledAt.IsZero() {
+			items[i].ScheduledAt = items[i].ScheduledAt.In(uiLoc)
+		}
 	}
 	drafts, err := s.Store.ListDrafts(r.Context())
 	if err != nil {
@@ -635,7 +779,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	}
 	nextRunLabel := "Sin próxima ejecución"
 	if nextRun != nil {
-		nextRunLabel = nextRun.Local().Format("2006-01-02 15:04 MST")
+		nextRunLabel = nextRun.In(uiLoc).Format("2006-01-02 15:04 MST")
 	}
 
 	type calendarEvent struct {
@@ -694,7 +838,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		if item.ScheduledAt.IsZero() {
 			continue
 		}
-		localTime := item.ScheduledAt.In(time.Local)
+		localTime := item.ScheduledAt.In(uiLoc)
 		key := localTime.Format("2006-01-02")
 		statusClass := "drft"
 		statusLabel := "DRFT"
@@ -738,7 +882,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		selectedDayLocal = monthStartLocal
 	}
 	if dayRaw := strings.TrimSpace(r.URL.Query().Get("day")); dayRaw != "" {
-		if parsedDay, err := time.ParseInLocation("2006-01-02", dayRaw, time.Local); err == nil {
+		if parsedDay, err := time.ParseInLocation("2006-01-02", dayRaw, uiLoc); err == nil {
 			selectedDayLocal = parsedDay
 		}
 	}
@@ -789,6 +933,8 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		currentViewURL = "/?view=drafts"
 	case "failed":
 		currentViewURL = "/?view=failed"
+	case "settings":
+		currentViewURL = "/?view=settings"
 	case "create":
 		if returnTo != "" {
 			currentViewURL = returnTo
@@ -806,7 +952,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 			if parsed, err := url.Parse(returnTo); err == nil {
 				sourceView := strings.ToLower(strings.TrimSpace(parsed.Query().Get("view")))
 				switch sourceView {
-				case "publications", "calendar", "drafts", "failed":
+				case "publications", "calendar", "drafts", "failed", "settings":
 					activeNavView = sourceView
 				}
 			}
@@ -820,9 +966,9 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		}
 		scheduledAtLabel := "no date"
 		if !post.ScheduledAt.IsZero() {
-			scheduledAtLabel = post.ScheduledAt.In(time.Local).Format("2006-01-02 15:04 MST")
+			scheduledAtLabel = post.ScheduledAt.In(uiLoc).Format("2006-01-02 15:04 MST")
 		}
-		failedAtLabel := dead.AttemptedAt.In(time.Local).Format("2006-01-02 15:04 MST")
+		failedAtLabel := dead.AttemptedAt.In(uiLoc).Format("2006-01-02 15:04 MST")
 		failedItems = append(failedItems, failedQueueItem{
 			DeadLetterID:     dead.ID,
 			PostID:           post.ID,
@@ -845,7 +991,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 			editingPost = &p
 			createText = p.Text
 			if !p.ScheduledAt.IsZero() {
-				createScheduledLocal = p.ScheduledAt.In(time.Local).Format("2006-01-02T15:04")
+				createScheduledLocal = p.ScheduledAt.In(uiLoc).Format("2006-01-02T15:04")
 			}
 		}
 	}
@@ -1680,7 +1826,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     }
   </style>
 </head>
-<body data-view="{{.View}}">
+<body data-view="{{.View}}" data-ui-timezone="{{.UITimezone}}">
   <div class="app">
     <aside class="sidebar">
       <div class="logo">
@@ -1692,13 +1838,14 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         <a class="nav-item {{if eq .ActiveNavView "calendar"}}active{{end}}" href="/?view=calendar&month={{.CurrentMonthParam}}&day={{.SelectedDayKey}}">// calendar</a>
         <a class="nav-item {{if eq .ActiveNavView "drafts"}}active{{end}}" href="/?view=drafts">// drafts</a>
         <a class="nav-item {{if eq .ActiveNavView "failed"}}active{{end}}" href="/?view=failed"><span>// failed</span>{{if gt .FailedCount 0}}<span class="nav-badge">{{.FailedCount}}</span>{{end}}</a>
+        <a class="nav-item {{if eq .ActiveNavView "settings"}}active{{end}}" href="/?view=settings">// settings</a>
       </nav>
     </aside>
     <main class="main">
       <header class="header">
         <div class="title-row">
           {{if and (eq .View "create") .BackURL}}<a class="title-back" href="{{.BackURL}}" aria-label="back">←</a>{{end}}
-          <h1>{{if eq .View "calendar"}}CALENDAR{{else if eq .View "drafts"}}DRAFTS{{else if eq .View "failed"}}FAILED{{else if eq .View "create"}}CREATE{{else}}PUBLICATIONS{{end}}</h1>
+          <h1>{{if eq .View "calendar"}}CALENDAR{{else if eq .View "drafts"}}DRAFTS{{else if eq .View "failed"}}FAILED{{else if eq .View "create"}}CREATE{{else if eq .View "settings"}}SETTINGS{{else}}PUBLICATIONS{{end}}</h1>
         </div>
         <a class="create-pill" href="{{.CreateViewURL}}">create_post</a>
       </header>
@@ -1907,13 +2054,45 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
             <textarea name="text" required placeholder="Write your post...">{{.CreateText}}</textarea>
           </div>
           <div class="field">
-            <label>Scheduled At</label>
+            <label>Scheduled At ({{.UITimezone}})</label>
             <input type="datetime-local" name="scheduled_at_local" value="{{.CreateScheduledLocal}}" />
           </div>
           <div class="editor-actions">
             <button class="btn-secondary" type="submit" name="intent" value="draft">save_draft</button>
             <button type="submit" name="intent" value="schedule">{{if .EditingPost}}update_schedule{{else}}create_scheduled{{end}}</button>
           </div>
+        </form>
+      </section>
+      {{end}}
+
+      {{if eq .View "settings"}}
+      <div class="line">preferences</div>
+      <section class="editor">
+        <div class="editor-head">timezone</div>
+        <form class="editor-body" method="post" action="/settings/timezone">
+          <input type="hidden" name="return_to" value="{{.CurrentViewURL}}" />
+          {{if .SettingsError}}<div class="alert error">{{.SettingsError}}</div>{{end}}
+          {{if .SettingsSuccess}}<div class="alert success">{{.SettingsSuccess}}</div>{{end}}
+          <div class="field">
+            <label>Timezone (IANA)</label>
+            <input type="text" name="timezone" id="timezone-input" list="timezone-options" value="{{.UITimezone}}" required placeholder="Europe/Madrid" />
+            <datalist id="timezone-options">
+              <option value="UTC"></option>
+              <option value="Europe/Madrid"></option>
+              <option value="Europe/London"></option>
+              <option value="America/New_York"></option>
+              <option value="America/Chicago"></option>
+              <option value="America/Los_Angeles"></option>
+              <option value="America/Mexico_City"></option>
+              <option value="America/Bogota"></option>
+              <option value="America/Buenos_Aires"></option>
+            </datalist>
+          </div>
+          <div class="editor-actions">
+            <button type="submit">save timezone</button>
+            <button type="button" class="btn-secondary" id="tz-detect">use browser timezone</button>
+          </div>
+          <div class="meta"><span class="meta-soft">current timezone: {{.UITimezone}}</span></div>
         </form>
       </section>
       {{end}}
@@ -2114,6 +2293,32 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
   syncChips();
   applyFilters();
 })();
+
+(() => {
+  const view = document.body.dataset.view || "";
+  if (view !== "settings") {
+    return;
+  }
+  const input = document.getElementById("timezone-input");
+  const detect = document.getElementById("tz-detect");
+  if (!(input instanceof HTMLInputElement)) {
+    return;
+  }
+  const browserTimezone = Intl?.DateTimeFormat?.().resolvedOptions?.().timeZone || "";
+  if (!input.value && browserTimezone) {
+    input.value = browserTimezone;
+  }
+  if (!(detect instanceof HTMLButtonElement)) {
+    return;
+  }
+  detect.addEventListener("click", () => {
+    if (!browserTimezone) {
+      return;
+    }
+    input.value = browserTimezone;
+    input.focus();
+  });
+})();
 </script>
 </body>
 </html>`
@@ -2126,6 +2331,8 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	type pageData struct {
 		View                 string
 		ActiveNavView        string
+		UITimezone           string
+		TimezoneConfigured   bool
 		Items                []domain.Post
 		Drafts               []domain.Post
 		FailedItems          []failedQueueItem
@@ -2140,6 +2347,8 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		CreateSuccess        string
 		FailedError          string
 		FailedSuccess        string
+		SettingsError        string
+		SettingsSuccess      string
 		ScheduledCount       int
 		DraftCount           int
 		PublishedCount       int
@@ -2159,6 +2368,8 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	_ = t.Execute(w, pageData{
 		View:                 view,
 		ActiveNavView:        activeNavView,
+		UITimezone:           uiTimezone,
+		TimezoneConfigured:   timezoneConfigured,
 		Items:                items,
 		Drafts:               drafts,
 		FailedItems:          failedItems,
@@ -2173,6 +2384,8 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		CreateSuccess:        createSuccess,
 		FailedError:          failedError,
 		FailedSuccess:        failedSuccess,
+		SettingsError:        settingsError,
+		SettingsSuccess:      settingsSuccess,
 		ScheduledCount:       scheduledCount,
 		DraftCount:           len(drafts),
 		PublishedCount:       publishedCount,
@@ -2231,12 +2444,19 @@ func parseCreatePostRequest(r *http.Request) (createPostRequest, bool, error) {
 }
 
 func parseScheduledAtInput(raw string) (time.Time, error) {
+	return parseScheduledAtInputInLocation(raw, time.Local)
+}
+
+func parseScheduledAtInputInLocation(raw string, loc *time.Location) (time.Time, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return time.Time{}, nil
 	}
+	if loc == nil {
+		loc = time.UTC
+	}
 
-	if localParsed, err := time.ParseInLocation("2006-01-02T15:04", raw, time.Local); err == nil {
+	if localParsed, err := time.ParseInLocation("2006-01-02T15:04", raw, loc); err == nil {
 		return localParsed.UTC(), nil
 	}
 

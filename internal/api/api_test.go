@@ -433,3 +433,58 @@ func TestBulkRequeueDeadLettersFromForm(t *testing.T) {
 		t.Fatalf("expected both posts scheduled after bulk requeue")
 	}
 }
+
+func TestCreatePostFromFormUsesConfiguredTimezone(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	settingsForm := url.Values{}
+	settingsForm.Set("timezone", "Europe/Madrid")
+	settingsReq := httptest.NewRequest(http.MethodPost, "/settings/timezone", bytes.NewBufferString(settingsForm.Encode()))
+	settingsReq.Header.Set("content-type", "application/x-www-form-urlencoded")
+	settingsW := httptest.NewRecorder()
+	h.ServeHTTP(settingsW, settingsReq)
+	if settingsW.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303 on timezone update, got %d", settingsW.Code)
+	}
+
+	form := url.Values{}
+	form.Set("platform", "x")
+	form.Set("text", "scheduled with timezone")
+	form.Set("scheduled_at_local", "2026-02-26T10:00")
+	req := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewBufferString(form.Encode()))
+	req.Header.Set("content-type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", w.Code)
+	}
+
+	loc, err := time.LoadLocation("Europe/Madrid")
+	if err != nil {
+		t.Fatalf("load location: %v", err)
+	}
+	localTime, err := time.ParseInLocation("2006-01-02T15:04", "2026-02-26T10:00", loc)
+	if err != nil {
+		t.Fatalf("parse local time: %v", err)
+	}
+	expectedUTC := localTime.UTC()
+
+	items, err := store.ListSchedule(t.Context(), expectedUTC.Add(-time.Minute), expectedUTC.Add(time.Minute))
+	if err != nil {
+		t.Fatalf("list schedule: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected 1 scheduled item, got %d", len(items))
+	}
+	if !items[0].ScheduledAt.Equal(expectedUTC) {
+		t.Fatalf("expected UTC %s, got %s", expectedUTC.Format(time.RFC3339), items[0].ScheduledAt.Format(time.RFC3339))
+	}
+}
