@@ -47,6 +47,8 @@ func TestMCPStreamableHTTPExposesToolsAndCreatesPost(t *testing.T) {
 		"publisher_list_failed",
 		"publisher_create_post",
 		"publisher_upload_media",
+		"publisher_list_media",
+		"publisher_delete_media",
 	} {
 		if !strings.Contains(string(listToolsRaw), expected) {
 			t.Fatalf("expected tools/list to include %q", expected)
@@ -90,6 +92,43 @@ func TestMCPStreamableHTTPExposesToolsAndCreatesPost(t *testing.T) {
 	}
 	if drafts[0].Media[0].ID != mediaID {
 		t.Fatalf("expected attached media id %q, got %q", mediaID, drafts[0].Media[0].ID)
+	}
+
+	listMediaBody := `{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"publisher_list_media","arguments":{"limit":50}}}`
+	listMediaResp, listMediaRaw := postMCPRequest(t, mcpURL, sessionID, listMediaBody)
+	if listMediaResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected list media status 200, got %d: %s", listMediaResp.StatusCode, string(listMediaRaw))
+	}
+	if strings.Contains(string(listMediaRaw), `"isError":true`) {
+		t.Fatalf("expected list media tool call without isError=true, got: %s", string(listMediaRaw))
+	}
+	if !strings.Contains(string(listMediaRaw), mediaID) {
+		t.Fatalf("expected media list to include uploaded media id %q", mediaID)
+	}
+
+	uploadDeletableBody := `{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"publisher_upload_media","arguments":{"platform":"x","kind":"image","original_name":"delete-me.txt","content_base64":"ZGVsZXRlLW1l"}}}`
+	uploadDeletableResp, uploadDeletableRaw := postMCPRequest(t, mcpURL, sessionID, uploadDeletableBody)
+	if uploadDeletableResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected second upload tools/call status 200, got %d: %s", uploadDeletableResp.StatusCode, string(uploadDeletableRaw))
+	}
+	if strings.Contains(string(uploadDeletableRaw), `"isError":true`) {
+		t.Fatalf("expected second upload tool call without isError=true, got: %s", string(uploadDeletableRaw))
+	}
+	deletableMediaID := extractToolStructuredString(uploadDeletableRaw, "media_id")
+	if deletableMediaID == "" {
+		t.Fatalf("expected media_id in second upload tool response: %s", string(uploadDeletableRaw))
+	}
+
+	deleteBody := `{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"publisher_delete_media","arguments":{"media_id":"` + deletableMediaID + `"}}}`
+	deleteResp, deleteRaw := postMCPRequest(t, mcpURL, sessionID, deleteBody)
+	if deleteResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected delete media status 200, got %d: %s", deleteResp.StatusCode, string(deleteRaw))
+	}
+	if strings.Contains(string(deleteRaw), `"isError":true`) {
+		t.Fatalf("expected delete media tool call without isError=true, got: %s", string(deleteRaw))
+	}
+	if !strings.Contains(string(deleteRaw), `"deleted":true`) {
+		t.Fatalf("expected delete tool response to confirm deletion: %s", string(deleteRaw))
 	}
 }
 

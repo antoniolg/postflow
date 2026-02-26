@@ -90,6 +90,18 @@ curl -X POST http://localhost:8080/media \
   -F file=@./clip.mp4
 ```
 
+### 1.1) Listar media subida
+
+```bash
+curl 'http://localhost:8080/media?limit=50'
+```
+
+### 1.2) Borrar media (solo si no está en uso)
+
+```bash
+curl -X DELETE http://localhost:8080/media/med_xxx
+```
+
 ### 2) Programar post
 
 ```bash
@@ -198,6 +210,8 @@ Soporta transporte streamable HTTP y expone estas tools:
 - `publisher_list_failed`
 - `publisher_create_post`
 - `publisher_upload_media`
+- `publisher_list_media`
+- `publisher_delete_media`
 
 Ejemplo para Claude Code:
 

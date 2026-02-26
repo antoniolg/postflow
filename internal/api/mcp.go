@@ -67,6 +67,23 @@ func (s Server) newMCPHandler() http.Handler {
 		},
 	}, s.mcpUploadMediaTool)
 
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "publisher_list_media",
+		Description: "List uploaded media with usage status (in use or deletable).",
+		Annotations: &mcp.ToolAnnotations{
+			ReadOnlyHint:   true,
+			IdempotentHint: true,
+		},
+	}, s.mcpListMediaTool)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "publisher_delete_media",
+		Description: "Delete an uploaded media item if it is not attached to any post.",
+		Annotations: &mcp.ToolAnnotations{
+			IdempotentHint: false,
+		},
+	}, s.mcpDeleteMediaTool)
+
 	base := mcp.NewStreamableHTTPHandler(func(_ *http.Request) *mcp.Server {
 		return server
 	}, nil)

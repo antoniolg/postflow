@@ -1,0 +1,217 @@
+package api
+
+import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/antoniolg/publisher/internal/db"
+	"github.com/antoniolg/publisher/internal/domain"
+)
+
+func TestMediaAPIListAndDeleteLifecycle(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	mediaPath := filepath.Join(tempDir, "sample.txt")
+	if err := os.WriteFile(mediaPath, []byte("hello media"), 0o644); err != nil {
+		t.Fatalf("seed media file: %v", err)
+	}
+	created, err := store.CreateMedia(t.Context(), domain.Media{
+		Platform:     domain.PlatformX,
+		Kind:         "image",
+		OriginalName: "sample.txt",
+		StoragePath:  mediaPath,
+		MimeType:     "text/plain; charset=utf-8",
+		SizeBytes:    11,
+	})
+	if err != nil {
+		t.Fatalf("create media row: %v", err)
+	}
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	listReq := httptest.NewRequest(http.MethodGet, "/media?limit=10", nil)
+	listW := httptest.NewRecorder()
+	h.ServeHTTP(listW, listReq)
+	if listW.Code != http.StatusOK {
+		t.Fatalf("expected list status 200, got %d", listW.Code)
+	}
+	var listResp struct {
+		Count int `json:"count"`
+		Items []struct {
+			ID         string `json:"id"`
+			PreviewURL string `json:"preview_url"`
+			UsageCount int    `json:"usage_count"`
+			InUse      bool   `json:"in_use"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(listW.Body.Bytes(), &listResp); err != nil {
+		t.Fatalf("decode list response: %v", err)
+	}
+	if listResp.Count != 1 || len(listResp.Items) != 1 {
+		t.Fatalf("expected 1 media item in list, got count=%d items=%d", listResp.Count, len(listResp.Items))
+	}
+	if listResp.Items[0].ID != created.ID {
+		t.Fatalf("expected listed media id %q, got %q", created.ID, listResp.Items[0].ID)
+	}
+	if listResp.Items[0].UsageCount != 0 || listResp.Items[0].InUse {
+		t.Fatalf("expected listed media to be unused")
+	}
+	if !strings.Contains(listResp.Items[0].PreviewURL, "/media/"+created.ID+"/content") {
+		t.Fatalf("expected preview url for media content endpoint, got %q", listResp.Items[0].PreviewURL)
+	}
+
+	deleteReq := httptest.NewRequest(http.MethodDelete, "/media/"+created.ID, nil)
+	deleteW := httptest.NewRecorder()
+	h.ServeHTTP(deleteW, deleteReq)
+	if deleteW.Code != http.StatusOK {
+		t.Fatalf("expected delete status 200, got %d: %s", deleteW.Code, deleteW.Body.String())
+	}
+	if _, err := os.Stat(mediaPath); !os.IsNotExist(err) {
+		t.Fatalf("expected media file to be removed from disk")
+	}
+
+	listAfterReq := httptest.NewRequest(http.MethodGet, "/media?limit=10", nil)
+	listAfterW := httptest.NewRecorder()
+	h.ServeHTTP(listAfterW, listAfterReq)
+	if listAfterW.Code != http.StatusOK {
+		t.Fatalf("expected list-after-delete status 200, got %d", listAfterW.Code)
+	}
+	var listAfterResp struct {
+		Count int `json:"count"`
+	}
+	if err := json.Unmarshal(listAfterW.Body.Bytes(), &listAfterResp); err != nil {
+		t.Fatalf("decode list-after-delete response: %v", err)
+	}
+	if listAfterResp.Count != 0 {
+		t.Fatalf("expected no media after delete, got count=%d", listAfterResp.Count)
+	}
+}
+
+func TestMediaAPIDeleteRejectsInUseMedia(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	mediaPath := filepath.Join(tempDir, "in-use.png")
+	if err := os.WriteFile(mediaPath, []byte("in use"), 0o644); err != nil {
+		t.Fatalf("seed media file: %v", err)
+	}
+	createdMedia, err := store.CreateMedia(t.Context(), domain.Media{
+		Platform:     domain.PlatformX,
+		Kind:         "image",
+		OriginalName: "in-use.png",
+		StoragePath:  mediaPath,
+		MimeType:     "image/png",
+		SizeBytes:    6,
+	})
+	if err != nil {
+		t.Fatalf("create media: %v", err)
+	}
+	if _, err := store.CreatePost(t.Context(), db.CreatePostParams{
+		Post: domain.Post{
+			Platform:    domain.PlatformX,
+			Text:        "post with in-use media",
+			Status:      domain.PostStatusDraft,
+			MaxAttempts: 3,
+		},
+		MediaIDs: []string{createdMedia.ID},
+	}); err != nil {
+		t.Fatalf("create post: %v", err)
+	}
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	deleteReq := httptest.NewRequest(http.MethodDelete, "/media/"+createdMedia.ID, nil)
+	deleteW := httptest.NewRecorder()
+	h.ServeHTTP(deleteW, deleteReq)
+	if deleteW.Code != http.StatusConflict {
+		t.Fatalf("expected delete status 409 for in-use media, got %d: %s", deleteW.Code, deleteW.Body.String())
+	}
+	if _, err := os.Stat(mediaPath); err != nil {
+		t.Fatalf("expected in-use file to remain on disk, stat err=%v", err)
+	}
+}
+
+func TestCreateAndSettingsViewsRenderMediaManagementSections(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	mediaPath := filepath.Join(tempDir, "preview.png")
+	if err := os.WriteFile(mediaPath, []byte("preview"), 0o644); err != nil {
+		t.Fatalf("seed media file: %v", err)
+	}
+	createdMedia, err := store.CreateMedia(t.Context(), domain.Media{
+		Platform:     domain.PlatformX,
+		Kind:         "image",
+		OriginalName: "preview.png",
+		StoragePath:  mediaPath,
+		MimeType:     "image/png",
+		SizeBytes:    7,
+	})
+	if err != nil {
+		t.Fatalf("create media: %v", err)
+	}
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	createReq := httptest.NewRequest(http.MethodGet, "/?view=create", nil)
+	createW := httptest.NewRecorder()
+	h.ServeHTTP(createW, createReq)
+	if createW.Code != http.StatusOK {
+		t.Fatalf("expected create view status 200, got %d", createW.Code)
+	}
+	createBody := createW.Body.String()
+	if !strings.Contains(createBody, `id="create-media-library"`) {
+		t.Fatalf("expected create media library section")
+	}
+	if !strings.Contains(createBody, `data-media-attach="`+createdMedia.ID+`"`) {
+		t.Fatalf("expected create media library to include attach action for uploaded media")
+	}
+
+	settingsReq := httptest.NewRequest(http.MethodGet, "/?view=settings", nil)
+	settingsW := httptest.NewRecorder()
+	h.ServeHTTP(settingsW, settingsReq)
+	if settingsW.Code != http.StatusOK {
+		t.Fatalf("expected settings view status 200, got %d", settingsW.Code)
+	}
+	settingsBody := settingsW.Body.String()
+	if !strings.Contains(settingsBody, "media library") || !strings.Contains(settingsBody, "files ·") {
+		t.Fatalf("expected settings media section with totals")
+	}
+	if !strings.Contains(settingsBody, `/media/`+createdMedia.ID+`/delete`) {
+		t.Fatalf("expected settings media delete form action for media item")
+	}
+
+	deleteForm := bytes.NewBufferString("return_to=%2F%3Fview%3Dsettings")
+	deleteFormReq := httptest.NewRequest(http.MethodPost, "/media/"+createdMedia.ID+"/delete", deleteForm)
+	deleteFormReq.Header.Set("content-type", "application/x-www-form-urlencoded")
+	deleteFormW := httptest.NewRecorder()
+	h.ServeHTTP(deleteFormW, deleteFormReq)
+	if deleteFormW.Code != http.StatusSeeOther {
+		t.Fatalf("expected form delete redirect, got %d", deleteFormW.Code)
+	}
+	if loc := deleteFormW.Header().Get("Location"); !strings.Contains(loc, "media_success=") {
+		t.Fatalf("expected success redirect query, got %q", loc)
+	}
+}

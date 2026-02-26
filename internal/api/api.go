@@ -38,6 +38,10 @@ func (s Server) Handler() http.Handler {
 	mux.Handle("GET /mcp", mcpHandler)
 	mux.Handle("POST /mcp", mcpHandler)
 	mux.Handle("DELETE /mcp", mcpHandler)
+	mux.HandleFunc("GET /media", s.handleListMedia)
+	mux.HandleFunc("GET /media/{id}/content", s.handleMediaContent)
+	mux.HandleFunc("DELETE /media/{id}", s.handleDeleteMedia)
+	mux.HandleFunc("POST /media/{id}/delete", s.handleDeleteMediaForm)
 	mux.HandleFunc("POST /media", s.handleUploadMedia)
 	mux.HandleFunc("POST /posts", s.handleCreatePost)
 	mux.HandleFunc("POST /posts/", s.handlePostActions)
@@ -128,7 +132,22 @@ func (s Server) handleUploadMedia(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, created)
+	mimeLower := strings.ToLower(strings.TrimSpace(created.MimeType))
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"id":            created.ID,
+		"platform":      created.Platform,
+		"kind":          created.Kind,
+		"original_name": created.OriginalName,
+		"storage_path":  created.StoragePath,
+		"mime_type":     created.MimeType,
+		"size_bytes":    created.SizeBytes,
+		"created_at":    created.CreatedAt.UTC().Format(time.RFC3339),
+		"usage_count":   0,
+		"in_use":        false,
+		"is_image":      strings.HasPrefix(mimeLower, "image/"),
+		"is_video":      strings.HasPrefix(mimeLower, "video/"),
+		"preview_url":   mediaContentURL(created.ID),
+	})
 }
 
 type createPostRequest struct {
@@ -740,6 +759,8 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	failedSuccess := strings.TrimSpace(r.URL.Query().Get("failed_success"))
 	settingsError := strings.TrimSpace(r.URL.Query().Get("tz_error"))
 	settingsSuccess := strings.TrimSpace(r.URL.Query().Get("tz_success"))
+	mediaError := strings.TrimSpace(r.URL.Query().Get("media_error"))
+	mediaSuccess := strings.TrimSpace(r.URL.Query().Get("media_success"))
 	displayMonth := time.Date(nowLocal.Year(), nowLocal.Month(), 1, 0, 0, 0, 0, uiLoc)
 	if monthRaw := strings.TrimSpace(r.URL.Query().Get("month")); monthRaw != "" {
 		if parsedMonth, err := time.ParseInLocation("2006-01", monthRaw, uiLoc); err == nil {
@@ -1006,6 +1027,24 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 			ScheduledAtLabel: scheduledAtLabel,
 		})
 	}
+	mediaLibrary, err := s.listMediaItems(r.Context(), 200, uiLoc)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	createRecentMedia := mediaLibrary
+	if len(createRecentMedia) > 18 {
+		createRecentMedia = createRecentMedia[:18]
+	}
+	var mediaInUseCount int
+	var mediaTotalBytes int64
+	for _, item := range mediaLibrary {
+		mediaTotalBytes += item.SizeBytes
+		if item.InUse {
+			mediaInUseCount++
+		}
+	}
+	mediaTotalSizeLabel := formatByteSize(mediaTotalBytes)
 	var editingPost *domain.Post
 	var createText string
 	var createScheduledLocal string
@@ -1530,37 +1569,17 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       align-items: center;
       gap: 16px;
     }
+    .calendar-toolbar {
+      width: min(100%, 1540px);
+      margin: 0 auto;
+      padding-top: 6px;
+      display: flex;
+      justify-content: flex-end;
+    }
     .calendar-controls {
       display: flex;
       align-items: center;
       gap: 8px;
-    }
-    .calendar-legend {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      margin-left: 10px;
-    }
-    .legend-item {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 11px;
-      letter-spacing: 0.03em;
-      color: #b8b8b8;
-      text-transform: lowercase;
-    }
-    .legend-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 999px;
-      display: inline-block;
-    }
-    .legend-item.pending .legend-dot {
-      background: #7a8cff;
-    }
-    .legend-item.published .legend-dot {
-      background: #2eccb5;
     }
     .month-link {
       color: var(--text-primary);
@@ -2544,6 +2563,103 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       background: #2d2d2d;
       color: #ff4444;
     }
+    .media-library-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .media-library {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 260px;
+      overflow: auto;
+      padding-right: 2px;
+    }
+    .settings-media-library {
+      max-height: 440px;
+    }
+    .media-library-item {
+      border: 0;
+      border-radius: 12px;
+      background: #2a2a2a;
+      padding: 8px 10px;
+      display: grid;
+      grid-template-columns: 44px minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+    }
+    .media-library-item.in-use {
+      opacity: 0.9;
+    }
+    .media-library-thumb {
+      width: 44px;
+      height: 44px;
+      border-radius: 8px;
+      background: #2d2d2d;
+      overflow: hidden;
+      display: grid;
+      place-items: center;
+      color: #a8a8a8;
+      font-size: 10px;
+      text-transform: uppercase;
+    }
+    .media-library-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .media-library-info {
+      min-width: 0;
+    }
+    .media-library-name {
+      font-size: 12px;
+      color: #ffffff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .media-library-meta {
+      margin-top: 2px;
+      font-size: 11px;
+      color: #a8a8a8;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .media-library-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .media-library-actions form {
+      margin: 0;
+    }
+    .media-library-actions .btn-secondary,
+    .media-library-actions .btn-danger {
+      min-height: 26px;
+      font-size: 11px;
+      padding: 5px 9px;
+      border-radius: 12px;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .media-library-actions [data-media-attach].attached {
+      background: rgba(0, 212, 170, 0.2);
+      color: #8be7d7;
+    }
+    .media-pill-used {
+      background: #2d2d2d;
+      color: #a8a8a8;
+      font-size: 10px;
+      padding: 5px 8px;
+    }
     .preview-panel {
       border: 0;
       background: transparent;
@@ -2745,11 +2861,16 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         gap: 10px;
       }
       .header-right {
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
         gap: 8px;
+      }
+      .calendar-toolbar {
+        width: 100%;
       }
       .calendar-controls {
         gap: 4px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
       }
       .month-label {
         font-size: 16px;
@@ -2902,16 +3023,6 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         </div>
         {{if eq .View "calendar"}}
         <div class="header-right">
-          <div class="calendar-controls">
-            <a class="month-link" href="/?view=calendar&month={{.PrevMonthParam}}&day={{.SelectedDayKey}}" aria-label="Previous month"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 12L6 8l4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-            <span class="month-label">{{.CalendarMonthLabel}}</span>
-            <a class="month-link" href="/?view=calendar&month={{.NextMonthParam}}&day={{.SelectedDayKey}}" aria-label="Next month"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-            <a class="month-go" href="/?view=calendar&month={{.TodayMonthParam}}&day={{.TodayDayKey}}">today</a>
-            <div class="calendar-legend" aria-label="Calendar legend">
-              <span class="legend-item pending"><span class="legend-dot"></span>to publish</span>
-              <span class="legend-item published"><span class="legend-dot"></span>published</span>
-            </div>
-          </div>
           <a class="create-pill" href="{{.CreateViewURL}}">create_post</a>
         </div>
         {{else if eq .View "create"}}
@@ -2925,6 +3036,14 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         {{end}}
       </header>
       {{if eq .View "calendar"}}
+      <div class="calendar-toolbar">
+        <div class="calendar-controls">
+          <a class="month-link" href="/?view=calendar&month={{.PrevMonthParam}}&day={{.SelectedDayKey}}" aria-label="Previous month"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 12L6 8l4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+          <span class="month-label">{{.CalendarMonthLabel}}</span>
+          <a class="month-link" href="/?view=calendar&month={{.NextMonthParam}}&day={{.SelectedDayKey}}" aria-label="Next month"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+          <a class="month-go" href="/?view=calendar&month={{.TodayMonthParam}}&day={{.TodayDayKey}}">today</a>
+        </div>
+      </div>
       <div class="calendar-layout">
       <div class="calendar-wrap">
         <div class="calendar-grid-scroll">
@@ -3118,6 +3237,8 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
               <div id="create-media-hidden"></div>
               {{if .CreateError}}<div class="alert error">{{.CreateError}}</div>{{end}}
               {{if .CreateSuccess}}<div class="alert success">{{.CreateSuccess}}</div>{{end}}
+              {{if .MediaError}}<div class="alert error">{{.MediaError}}</div>{{end}}
+              {{if .MediaSuccess}}<div class="alert success">{{.MediaSuccess}}</div>{{end}}
 
               <div class="field create-field create-field-networks">
                 <div class="composer-label">// select networks</div>
@@ -3156,6 +3277,32 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
                     <span class="upload-notice" id="create-upload-notice">no media uploaded</span>
                   </div>
                   <div class="media-list" id="create-media-list"></div>
+                  <div class="media-library-wrap">
+                    <div class="composer-label">// recent library</div>
+                    <div class="media-library" id="create-media-library">
+                      {{range .CreateRecentMedia}}
+                      <article class="media-library-item {{if .InUse}}in-use{{end}}" data-media-library-item data-media-id="{{.ID}}" data-media-name="{{.OriginalName}}" data-media-size="{{.SizeBytes}}" data-media-mime="{{.MimeType}}" data-media-preview="{{.PreviewURL}}">
+                        <div class="media-library-thumb">
+                          {{if .IsImage}}<img src="{{.PreviewURL}}" alt="{{.OriginalName}}" loading="lazy" />{{else if .IsVideo}}<span>video</span>{{else}}<span>file</span>{{end}}
+                        </div>
+                        <div class="media-library-info">
+                          <div class="media-library-name">{{.OriginalName}}</div>
+                          <div class="media-library-meta">{{.SizeLabel}} · {{.CreatedLabel}}{{if .InUse}} · used {{.UsageCount}}{{end}}</div>
+                        </div>
+                        <div class="media-library-actions">
+                          <button type="button" class="btn-secondary" data-media-attach="{{.ID}}">attach</button>
+                          {{if .InUse}}
+                          <span class="pill media-pill-used">in_use</span>
+                          {{else}}
+                          <button type="button" class="btn-danger" data-media-delete="{{.ID}}">delete</button>
+                          {{end}}
+                        </div>
+                      </article>
+                      {{else}}
+                      <div class="empty">No media uploaded yet.</div>
+                      {{end}}
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -3227,6 +3374,42 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
           </div>
           <div class="meta"><span class="meta-soft">current timezone: {{.UITimezone}}</span></div>
         </form>
+      </section>
+      <section class="editor editor-wide">
+        <div class="editor-head">media library</div>
+        <div class="editor-body">
+          {{if .MediaError}}<div class="alert error">{{.MediaError}}</div>{{end}}
+          {{if .MediaSuccess}}<div class="alert success">{{.MediaSuccess}}</div>{{end}}
+          <div class="meta">
+            <span class="meta-soft">{{len .MediaLibrary}} files · {{.MediaInUseCount}} in use · {{.MediaTotalSizeLabel}}</span>
+          </div>
+          <div class="media-library settings-media-library">
+            {{range .MediaLibrary}}
+            <article class="media-library-item {{if .InUse}}in-use{{end}}">
+              <div class="media-library-thumb">
+                {{if .IsImage}}<img src="{{.PreviewURL}}" alt="{{.OriginalName}}" loading="lazy" />{{else if .IsVideo}}<span>video</span>{{else}}<span>file</span>{{end}}
+              </div>
+              <div class="media-library-info">
+                <div class="media-library-name">{{.OriginalName}}</div>
+                <div class="media-library-meta">{{.SizeLabel}} · {{.MimeType}} · {{.CreatedLabel}}</div>
+              </div>
+              <div class="media-library-actions">
+                <a class="btn-secondary" href="{{.PreviewURL}}" target="_blank" rel="noreferrer">view</a>
+                {{if .InUse}}
+                <span class="pill media-pill-used">used {{.UsageCount}}</span>
+                {{else}}
+                <form method="post" action="/media/{{.ID}}/delete">
+                  <input type="hidden" name="return_to" value="/?view=settings" />
+                  <button type="submit" class="btn-danger">delete</button>
+                </form>
+                {{end}}
+              </div>
+            </article>
+            {{else}}
+            <div class="empty">No media uploaded yet.</div>
+            {{end}}
+          </div>
+        </div>
       </section>
       <section class="editor editor-wide">
         <div class="editor-head">mcp · streamable http</div>
@@ -4006,6 +4189,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
   const mediaInput = document.getElementById("create-media-input");
   const mediaTrigger = document.getElementById("create-media-trigger");
   const mediaList = document.getElementById("create-media-list");
+  const mediaLibrary = document.getElementById("create-media-library");
   const mediaHidden = document.getElementById("create-media-hidden");
   const uploadNotice = document.getElementById("create-upload-notice");
   const previewMedia = document.getElementById("preview-media");
@@ -4108,11 +4292,150 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     });
   };
 
+  const isAttachedMedia = (id) => attachments.some((item) => item.id === id);
+
+  const syncLibraryAttachButtons = () => {
+    if (!(mediaLibrary instanceof HTMLElement)) {
+      return;
+    }
+    mediaLibrary.querySelectorAll("[data-media-attach]").forEach((node) => {
+      if (!(node instanceof HTMLButtonElement)) {
+        return;
+      }
+      const id = (node.getAttribute("data-media-attach") || "").trim();
+      if (!id) {
+        return;
+      }
+      const attached = isAttachedMedia(id);
+      node.classList.toggle("attached", attached);
+      node.textContent = attached ? "attached" : "attach";
+    });
+  };
+
+  const parseLibraryNode = (node) => {
+    if (!(node instanceof HTMLElement)) {
+      return null;
+    }
+    const id = (node.dataset.mediaId || "").trim();
+    if (!id) {
+      return null;
+    }
+    const size = Number(node.dataset.mediaSize || "0");
+    const mime = (node.dataset.mediaMime || "").trim();
+    const previewUrl = (node.dataset.mediaPreview || "").trim();
+    return {
+      id,
+      name: (node.dataset.mediaName || "file").trim() || "file",
+      size: Number.isFinite(size) ? size : 0,
+      mime,
+      previewUrl: previewUrl
+    };
+  };
+
+  const removeAttachmentByID = (mediaID) => {
+    const index = attachments.findIndex((item) => item.id === mediaID);
+    if (index < 0) {
+      return false;
+    }
+    destroyPreviewURL(attachments[index]);
+    attachments.splice(index, 1);
+    return true;
+  };
+
+  const upsertLibraryItem = (item, inUse) => {
+    if (!(mediaLibrary instanceof HTMLElement) || !item || !item.id) {
+      return;
+    }
+
+    let row = mediaLibrary.querySelector('[data-media-library-item][data-media-id="' + item.id + '"]');
+    if (row instanceof HTMLElement) {
+      row.dataset.mediaName = item.name || "file";
+      row.dataset.mediaSize = String(Number(item.size || 0));
+      row.dataset.mediaMime = item.mime || "";
+      row.dataset.mediaPreview = item.previewUrl || "";
+      const nameNode = row.querySelector(".media-library-name");
+      if (nameNode) {
+        nameNode.textContent = item.name || "file";
+      }
+      const metaNode = row.querySelector(".media-library-meta");
+      if (metaNode) {
+        metaNode.textContent = formatBytes(Number(item.size || 0)) + " · just now";
+      }
+      syncLibraryAttachButtons();
+      return;
+    }
+
+    row = document.createElement("article");
+    row.className = "media-library-item";
+    row.setAttribute("data-media-library-item", "");
+    row.dataset.mediaId = item.id;
+    row.dataset.mediaName = item.name || "file";
+    row.dataset.mediaSize = String(Number(item.size || 0));
+    row.dataset.mediaMime = item.mime || "";
+    row.dataset.mediaPreview = item.previewUrl || "";
+
+    const thumb = document.createElement("div");
+    thumb.className = "media-library-thumb";
+    if (item.previewUrl) {
+      const img = document.createElement("img");
+      img.src = item.previewUrl;
+      img.alt = item.name || "media";
+      img.loading = "lazy";
+      thumb.appendChild(img);
+    } else if (String(item.mime || "").startsWith("video/")) {
+      thumb.textContent = "video";
+    } else {
+      thumb.textContent = "file";
+    }
+
+    const info = document.createElement("div");
+    info.className = "media-library-info";
+    const name = document.createElement("div");
+    name.className = "media-library-name";
+    name.textContent = item.name || "file";
+    const meta = document.createElement("div");
+    meta.className = "media-library-meta";
+    meta.textContent = formatBytes(Number(item.size || 0)) + " · just now";
+    info.appendChild(name);
+    info.appendChild(meta);
+
+    const actions = document.createElement("div");
+    actions.className = "media-library-actions";
+    const attach = document.createElement("button");
+    attach.type = "button";
+    attach.className = "btn-secondary";
+    attach.setAttribute("data-media-attach", item.id);
+    attach.textContent = "attach";
+    actions.appendChild(attach);
+
+    if (inUse) {
+      const used = document.createElement("span");
+      used.className = "pill media-pill-used";
+      used.textContent = "in_use";
+      actions.appendChild(used);
+    } else {
+      const del = document.createElement("button");
+      del.type = "button";
+      del.className = "btn-danger";
+      del.setAttribute("data-media-delete", item.id);
+      del.textContent = "delete";
+      actions.appendChild(del);
+    }
+
+    row.appendChild(thumb);
+    row.appendChild(info);
+    row.appendChild(actions);
+    mediaLibrary.prepend(row);
+    syncLibraryAttachButtons();
+  };
+
   const destroyPreviewURL = (item) => {
     if (!item || !item.previewUrl) {
       return;
     }
-    URL.revokeObjectURL(item.previewUrl);
+    if (item.previewUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(item.previewUrl);
+    }
   };
 
   const renderMediaList = () => {
@@ -4120,6 +4443,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       mediaList.innerHTML = '<div class="empty">No media yet. Upload up to ' + maxMedia + " files.</div>";
       setNotice("no media uploaded");
       updatePreviewMedia();
+      syncLibraryAttachButtons();
       return;
     }
 
@@ -4169,6 +4493,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     });
     setNotice(attachments.length + "/" + maxMedia + " media uploaded", "success");
     updatePreviewMedia();
+    syncLibraryAttachButtons();
   };
 
   const detectKind = (file) => file.type.startsWith("video/") ? "video" : "image";
@@ -4207,12 +4532,13 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 
     try {
       const uploaded = await uploadMediaFile(file);
+      const uploadedPreview = typeof uploaded.preview_url === "string" ? uploaded.preview_url.trim() : "";
       const item = {
         id: String(uploaded.id || ""),
         name: String(uploaded.original_name || file.name),
         size: Number(uploaded.size_bytes || file.size || 0),
         mime: String(uploaded.mime_type || file.type || ""),
-        previewUrl: file.type.startsWith("image/") ? URL.createObjectURL(file) : ""
+        previewUrl: uploadedPreview || (file.type.startsWith("image/") ? URL.createObjectURL(file) : "")
       };
 
       if (item.id === "") {
@@ -4228,6 +4554,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 
       syncHiddenMediaInputs();
       renderMediaList();
+      upsertLibraryItem(item, false);
     } catch (err) {
       const message = err instanceof Error ? err.message : "upload failed";
       setNotice(message, "error");
@@ -4289,6 +4616,71 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         replaceIndex = index;
         mediaInput.click();
       }
+    }
+  });
+
+  mediaLibrary?.addEventListener("click", async (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) {
+      return;
+    }
+
+    const attachID = (target.getAttribute("data-media-attach") || "").trim();
+    if (attachID) {
+      if (isAttachedMedia(attachID)) {
+        removeAttachmentByID(attachID);
+        syncHiddenMediaInputs();
+        renderMediaList();
+        return;
+      }
+      if (attachments.length >= maxMedia) {
+        setNotice("max " + maxMedia + " files", "error");
+        return;
+      }
+      const itemNode = target.closest("[data-media-library-item]");
+      const libraryItem = parseLibraryNode(itemNode);
+      if (!libraryItem) {
+        return;
+      }
+      attachments.push(libraryItem);
+      syncHiddenMediaInputs();
+      renderMediaList();
+      return;
+    }
+
+    const deleteID = (target.getAttribute("data-media-delete") || "").trim();
+    if (!deleteID) {
+      return;
+    }
+    target.setAttribute("disabled", "true");
+    try {
+      const res = await fetch("/media/" + encodeURIComponent(deleteID), { method: "DELETE" });
+      if (!res.ok) {
+        let message = "delete failed (" + res.status + ")";
+        try {
+          const payload = await res.json();
+          if (payload && typeof payload.error === "string" && payload.error.trim() !== "") {
+            message = payload.error.trim();
+          }
+        } catch (_) {}
+        throw new Error(message);
+      }
+      const node = target.closest("[data-media-library-item]");
+      if (node instanceof HTMLElement) {
+        node.remove();
+      }
+      if (removeAttachmentByID(deleteID)) {
+        syncHiddenMediaInputs();
+        renderMediaList();
+      } else {
+        syncLibraryAttachButtons();
+      }
+      setNotice("media deleted", "success");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "delete failed";
+      setNotice(message, "error");
+    } finally {
+      target.removeAttribute("disabled");
     }
   });
 
@@ -4432,10 +4824,16 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		FailedSuccess             string
 		SettingsError             string
 		SettingsSuccess           string
+		MediaError                string
+		MediaSuccess              string
 		ScheduledCount            int
 		PublicationsWindowDays    int
 		DraftCount                int
 		FailedCount               int
+		MediaLibrary              []mediaListItem
+		CreateRecentMedia         []mediaListItem
+		MediaInUseCount           int
+		MediaTotalSizeLabel       string
 		NextRunLabel              string
 		CalendarMonthLabel        string
 		CalendarWeeks             [][]calendarDay
@@ -4478,10 +4876,16 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		FailedSuccess:             failedSuccess,
 		SettingsError:             settingsError,
 		SettingsSuccess:           settingsSuccess,
+		MediaError:                mediaError,
+		MediaSuccess:              mediaSuccess,
 		ScheduledCount:            scheduledCount,
 		PublicationsWindowDays:    publicationsWindowDays,
 		DraftCount:                len(drafts),
 		FailedCount:               failedCount,
+		MediaLibrary:              mediaLibrary,
+		CreateRecentMedia:         createRecentMedia,
+		MediaInUseCount:           mediaInUseCount,
+		MediaTotalSizeLabel:       mediaTotalSizeLabel,
 		NextRunLabel:              nextRunLabel,
 		CalendarMonthLabel:        calendarMonthLabel,
 		CalendarWeeks:             calendarWeeks,
