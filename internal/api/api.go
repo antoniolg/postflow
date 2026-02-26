@@ -40,6 +40,7 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("POST /posts/validate", s.handleValidatePost)
 	mux.HandleFunc("GET /schedule", s.handleScheduleJSON)
 	mux.HandleFunc("GET /dlq", s.handleListDLQ)
+	mux.HandleFunc("POST /dlq/requeue", s.handleBulkRequeueDLQ)
 	mux.HandleFunc("POST /dlq/", s.handleRequeueDLQ)
 	mux.HandleFunc("GET /", s.handleScheduleHTML)
 	return s.withMiddlewares(mux)
@@ -132,13 +133,14 @@ type createPostRequest struct {
 	MediaIDs    []string `json:"media_ids"`
 	MaxAttempts int      `json:"max_attempts"`
 	Intent      string   `json:"intent"`
+	ReturnTo    string   `json:"return_to"`
 }
 
 func (s Server) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 	req, fromForm, err := parseCreatePostRequest(r)
 	if err != nil {
 		if fromForm {
-			http.Redirect(w, r, createViewURL("", req.Text, req.ScheduledAt, err.Error(), ""), http.StatusSeeOther)
+			http.Redirect(w, r, createViewURL("", req.Text, req.ScheduledAt, req.ReturnTo, err.Error(), ""), http.StatusSeeOther)
 			return
 		}
 		writeError(w, http.StatusBadRequest, err)
@@ -150,7 +152,7 @@ func (s Server) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 	}
 	if platform != domain.PlatformX {
 		if fromForm {
-			http.Redirect(w, r, createViewURL("", req.Text, req.ScheduledAt, "only platform 'x' is supported in this MVP", ""), http.StatusSeeOther)
+			http.Redirect(w, r, createViewURL("", req.Text, req.ScheduledAt, req.ReturnTo, "only platform 'x' is supported in this MVP", ""), http.StatusSeeOther)
 			return
 		}
 		writeError(w, http.StatusBadRequest, errors.New("only platform 'x' is supported in this MVP"))
@@ -158,7 +160,7 @@ func (s Server) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.TrimSpace(req.Text) == "" {
 		if fromForm {
-			http.Redirect(w, r, createViewURL("", req.Text, req.ScheduledAt, "text is required", ""), http.StatusSeeOther)
+			http.Redirect(w, r, createViewURL("", req.Text, req.ScheduledAt, req.ReturnTo, "text is required", ""), http.StatusSeeOther)
 			return
 		}
 		writeError(w, http.StatusBadRequest, errors.New("text is required"))
@@ -167,7 +169,7 @@ func (s Server) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 	scheduledAt, err := parseScheduledAtInput(req.ScheduledAt)
 	if err != nil {
 		if fromForm {
-			http.Redirect(w, r, createViewURL("", req.Text, req.ScheduledAt, err.Error(), ""), http.StatusSeeOther)
+			http.Redirect(w, r, createViewURL("", req.Text, req.ScheduledAt, req.ReturnTo, err.Error(), ""), http.StatusSeeOther)
 			return
 		}
 		writeError(w, http.StatusBadRequest, err)
@@ -180,14 +182,14 @@ func (s Server) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 			scheduledAt = time.Time{}
 		case "schedule":
 			if scheduledAt.IsZero() {
-				http.Redirect(w, r, createViewURL("", req.Text, req.ScheduledAt, "scheduled_at is required to schedule", ""), http.StatusSeeOther)
+				http.Redirect(w, r, createViewURL("", req.Text, req.ScheduledAt, req.ReturnTo, "scheduled_at is required to schedule", ""), http.StatusSeeOther)
 				return
 			}
 		}
 	}
 	if _, err := s.Store.GetMediaByIDs(r.Context(), req.MediaIDs); err != nil {
 		if fromForm {
-			http.Redirect(w, r, createViewURL("", req.Text, req.ScheduledAt, err.Error(), ""), http.StatusSeeOther)
+			http.Redirect(w, r, createViewURL("", req.Text, req.ScheduledAt, req.ReturnTo, err.Error(), ""), http.StatusSeeOther)
 			return
 		}
 		writeError(w, http.StatusBadRequest, err)
@@ -203,7 +205,7 @@ func (s Server) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
 	if len(idempotencyKey) > 128 {
 		if fromForm {
-			http.Redirect(w, r, createViewURL("", req.Text, req.ScheduledAt, "idempotency key too long (max 128 chars)", ""), http.StatusSeeOther)
+			http.Redirect(w, r, createViewURL("", req.Text, req.ScheduledAt, req.ReturnTo, "idempotency key too long (max 128 chars)", ""), http.StatusSeeOther)
 			return
 		}
 		writeError(w, http.StatusBadRequest, errors.New("Idempotency-Key too long (max 128 chars)"))
@@ -222,7 +224,7 @@ func (s Server) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if fromForm {
-			http.Redirect(w, r, createViewURL("", req.Text, req.ScheduledAt, err.Error(), ""), http.StatusSeeOther)
+			http.Redirect(w, r, createViewURL("", req.Text, req.ScheduledAt, req.ReturnTo, err.Error(), ""), http.StatusSeeOther)
 			return
 		}
 		writeError(w, http.StatusInternalServerError, err)
@@ -230,14 +232,14 @@ func (s Server) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 	}
 	if result.Created {
 		if fromForm {
-			http.Redirect(w, r, createViewURL("", "", "", "", "post created"), http.StatusSeeOther)
+			http.Redirect(w, r, createViewURL("", "", "", req.ReturnTo, "", "post created"), http.StatusSeeOther)
 			return
 		}
 		writeJSON(w, http.StatusCreated, result.Post)
 		return
 	}
 	if fromForm {
-		http.Redirect(w, r, createViewURL("", "", "", "", "post updated"), http.StatusSeeOther)
+		http.Redirect(w, r, createViewURL("", "", "", req.ReturnTo, "", "post updated"), http.StatusSeeOther)
 		return
 	}
 	writeJSON(w, http.StatusOK, result.Post)
@@ -344,6 +346,7 @@ func (s Server) handleEditPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	fromForm := !strings.Contains(strings.ToLower(r.Header.Get("content-type")), "application/json")
+	returnTo := strings.TrimSpace(r.FormValue("return_to"))
 	text := strings.TrimSpace(r.FormValue("text"))
 	intent := strings.ToLower(strings.TrimSpace(r.FormValue("intent")))
 	if text == "" {
@@ -358,7 +361,7 @@ func (s Server) handleEditPost(w http.ResponseWriter, r *http.Request) {
 	}
 	if text == "" {
 		if fromForm {
-			http.Redirect(w, r, createViewURL(postID, text, strings.TrimSpace(r.FormValue("scheduled_at_local")), "text is required", ""), http.StatusSeeOther)
+			http.Redirect(w, r, createViewURL(postID, text, strings.TrimSpace(r.FormValue("scheduled_at_local")), returnTo, "text is required", ""), http.StatusSeeOther)
 			return
 		}
 		writeError(w, http.StatusBadRequest, errors.New("text is required"))
@@ -373,7 +376,7 @@ func (s Server) handleEditPost(w http.ResponseWriter, r *http.Request) {
 		parsed, err := parseScheduledAtInput(scheduledAtRaw)
 		if err != nil {
 			if fromForm {
-				http.Redirect(w, r, createViewURL(postID, text, scheduledAtRaw, err.Error(), ""), http.StatusSeeOther)
+				http.Redirect(w, r, createViewURL(postID, text, scheduledAtRaw, returnTo, err.Error(), ""), http.StatusSeeOther)
 				return
 			}
 			writeError(w, http.StatusBadRequest, err)
@@ -386,7 +389,7 @@ func (s Server) handleEditPost(w http.ResponseWriter, r *http.Request) {
 	}
 	if intent == "schedule" && scheduledAt.IsZero() {
 		if fromForm {
-			http.Redirect(w, r, createViewURL(postID, text, scheduledAtRaw, "scheduled_at is required to schedule", ""), http.StatusSeeOther)
+			http.Redirect(w, r, createViewURL(postID, text, scheduledAtRaw, returnTo, "scheduled_at is required to schedule", ""), http.StatusSeeOther)
 			return
 		}
 		writeError(w, http.StatusBadRequest, errors.New("scheduled_at is required"))
@@ -394,7 +397,7 @@ func (s Server) handleEditPost(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := s.Store.UpdatePostEditable(r.Context(), postID, text, scheduledAt); err != nil {
 		if fromForm {
-			http.Redirect(w, r, createViewURL(postID, text, scheduledAtRaw, err.Error(), ""), http.StatusSeeOther)
+			http.Redirect(w, r, createViewURL(postID, text, scheduledAtRaw, returnTo, err.Error(), ""), http.StatusSeeOther)
 			return
 		}
 		writeError(w, http.StatusConflict, err)
@@ -413,7 +416,7 @@ func (s Server) handleEditPost(w http.ResponseWriter, r *http.Request) {
 	if !post.ScheduledAt.IsZero() {
 		scheduledLocal = post.ScheduledAt.In(time.Local).Format("2006-01-02T15:04")
 	}
-	http.Redirect(w, r, createViewURL(post.ID, post.Text, scheduledLocal, "", "changes saved"), http.StatusSeeOther)
+	http.Redirect(w, r, createViewURL(post.ID, post.Text, scheduledLocal, returnTo, "", "changes saved"), http.StatusSeeOther)
 }
 
 func (s Server) handleListDLQ(w http.ResponseWriter, r *http.Request) {
@@ -450,7 +453,13 @@ func (s Server) handleRequeueDLQ(w http.ResponseWriter, r *http.Request) {
 	trimmed := strings.TrimPrefix(r.URL.Path, "/dlq/")
 	id := strings.TrimSuffix(trimmed, "/requeue")
 	id = strings.TrimSuffix(id, "/")
+	contentType := strings.ToLower(r.Header.Get("content-type"))
+	fromForm := strings.Contains(contentType, "application/x-www-form-urlencoded") || strings.Contains(contentType, "multipart/form-data")
 	if id == "" {
+		if fromForm {
+			http.Redirect(w, r, "/?view=failed&failed_error=invalid+dead+letter+id", http.StatusSeeOther)
+			return
+		}
 		writeError(w, http.StatusBadRequest, errors.New("invalid dead letter id"))
 		return
 	}
@@ -458,20 +467,107 @@ func (s Server) handleRequeueDLQ(w http.ResponseWriter, r *http.Request) {
 	post, err := s.Store.RequeueDeadLetter(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
+			if fromForm {
+				http.Redirect(w, r, "/?view=failed&failed_error=dead+letter+not+found", http.StatusSeeOther)
+				return
+			}
 			writeError(w, http.StatusNotFound, errors.New("dead letter not found"))
 			return
 		}
 		if strings.Contains(err.Error(), "not requeueable") {
+			if fromForm {
+				http.Redirect(w, r, "/?view=failed&failed_error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+				return
+			}
 			writeError(w, http.StatusConflict, err)
+			return
+		}
+		if fromForm {
+			http.Redirect(w, r, "/?view=failed&failed_error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 			return
 		}
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 
+	if fromForm {
+		http.Redirect(w, r, "/?view=failed&failed_success=requeued", http.StatusSeeOther)
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"dead_letter_id": id,
 		"post":           post,
+	})
+}
+
+func (s Server) handleBulkRequeueDLQ(w http.ResponseWriter, r *http.Request) {
+	contentType := strings.ToLower(r.Header.Get("content-type"))
+	fromForm := strings.Contains(contentType, "application/x-www-form-urlencoded") || strings.Contains(contentType, "multipart/form-data")
+
+	var ids []string
+	if fromForm {
+		if err := r.ParseForm(); err != nil {
+			http.Redirect(w, r, "/?view=failed&failed_error=invalid+form", http.StatusSeeOther)
+			return
+		}
+		ids = r.Form["ids"]
+	} else {
+		var body struct {
+			IDs []string `json:"ids"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeError(w, http.StatusBadRequest, fmt.Errorf("invalid json body: %w", err))
+			return
+		}
+		ids = body.IDs
+	}
+
+	cleaned := make([]string, 0, len(ids))
+	seen := map[string]struct{}{}
+	for _, id := range ids {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		cleaned = append(cleaned, id)
+	}
+	if len(cleaned) == 0 {
+		if fromForm {
+			http.Redirect(w, r, "/?view=failed&failed_error=no+items+selected", http.StatusSeeOther)
+			return
+		}
+		writeError(w, http.StatusBadRequest, errors.New("ids are required"))
+		return
+	}
+
+	success := 0
+	failed := 0
+	for _, id := range cleaned {
+		if _, err := s.Store.RequeueDeadLetter(r.Context(), id); err != nil {
+			failed++
+			continue
+		}
+		success++
+	}
+
+	if fromForm {
+		q := url.Values{}
+		q.Set("view", "failed")
+		q.Set("failed_success", fmt.Sprintf("requeued %d", success))
+		if failed > 0 {
+			q.Set("failed_error", fmt.Sprintf("failed %d", failed))
+		}
+		http.Redirect(w, r, "/?"+q.Encode(), http.StatusSeeOther)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"selected": len(cleaned),
+		"success":  success,
+		"failed":   failed,
 	})
 }
 
@@ -485,12 +581,15 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	if view == "" {
 		view = "publications"
 	}
-	if view != "calendar" && view != "publications" && view != "drafts" && view != "create" {
+	if view != "calendar" && view != "publications" && view != "drafts" && view != "create" && view != "failed" {
 		view = "publications"
 	}
 	editID := strings.TrimSpace(r.URL.Query().Get("edit_id"))
+	returnTo := strings.TrimSpace(r.URL.Query().Get("return_to"))
 	createError := strings.TrimSpace(r.URL.Query().Get("error"))
 	createSuccess := strings.TrimSpace(r.URL.Query().Get("success"))
+	failedError := strings.TrimSpace(r.URL.Query().Get("failed_error"))
+	failedSuccess := strings.TrimSpace(r.URL.Query().Get("failed_success"))
 	displayMonth := time.Date(nowLocal.Year(), nowLocal.Month(), 1, 0, 0, 0, 0, time.Local)
 	if monthRaw := strings.TrimSpace(r.URL.Query().Get("month")); monthRaw != "" {
 		if parsedMonth, err := time.ParseInLocation("2006-01", monthRaw, time.Local); err == nil {
@@ -507,6 +606,11 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	drafts, err := s.Store.ListDrafts(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	deadLetters, err := s.Store.ListDeadLetters(r.Context(), 200)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
@@ -542,6 +646,8 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		TextPreview string
 	}
 	type dayDetailItem struct {
+		PostID      string
+		Editable    bool
 		TimeLabel   string
 		StatusClass string
 		StatusLabel string
@@ -549,6 +655,18 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		Text        string
 		Platform    domain.Platform
 		MediaCount  int
+	}
+	type failedQueueItem struct {
+		DeadLetterID     string
+		PostID           string
+		Text             string
+		Platform         domain.Platform
+		MediaCount       int
+		Attempts         int
+		MaxAttempts      int
+		LastError        string
+		FailedAtLabel    string
+		ScheduledAtLabel string
 	}
 	type calendarDay struct {
 		DateKey        string
@@ -603,6 +721,8 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 			TextPreview: text,
 		})
 		detailsByDate[key] = append(detailsByDate[key], dayDetailItem{
+			PostID:      item.ID,
+			Editable:    item.Status != domain.PostStatusPublished,
 			TimeLabel:   localTime.Format("15:04"),
 			StatusClass: statusClass,
 			StatusLabel: statusLabel,
@@ -661,6 +781,61 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	selectedDayItems := detailsByDate[selectedDayKey]
 	todayMonthParam := nowLocal.Format("2006-01")
 	todayDayKey := nowLocal.Format("2006-01-02")
+	currentViewURL := "/?view=publications&month=" + currentMonthParam
+	switch view {
+	case "calendar":
+		currentViewURL = "/?view=calendar&month=" + currentMonthParam + "&day=" + selectedDayKey
+	case "drafts":
+		currentViewURL = "/?view=drafts"
+	case "failed":
+		currentViewURL = "/?view=failed"
+	case "create":
+		if returnTo != "" {
+			currentViewURL = returnTo
+		}
+	}
+	createViewURL := "/?view=create&return_to=" + url.QueryEscape(currentViewURL)
+	backURL := "/?view=publications&month=" + currentMonthParam
+	if returnTo != "" {
+		backURL = returnTo
+	}
+	activeNavView := view
+	if activeNavView == "create" {
+		activeNavView = "publications"
+		if returnTo != "" {
+			if parsed, err := url.Parse(returnTo); err == nil {
+				sourceView := strings.ToLower(strings.TrimSpace(parsed.Query().Get("view")))
+				switch sourceView {
+				case "publications", "calendar", "drafts", "failed":
+					activeNavView = sourceView
+				}
+			}
+		}
+	}
+	failedItems := make([]failedQueueItem, 0, len(deadLetters))
+	for _, dead := range deadLetters {
+		post, err := s.Store.GetPost(r.Context(), dead.PostID)
+		if err != nil {
+			continue
+		}
+		scheduledAtLabel := "no date"
+		if !post.ScheduledAt.IsZero() {
+			scheduledAtLabel = post.ScheduledAt.In(time.Local).Format("2006-01-02 15:04 MST")
+		}
+		failedAtLabel := dead.AttemptedAt.In(time.Local).Format("2006-01-02 15:04 MST")
+		failedItems = append(failedItems, failedQueueItem{
+			DeadLetterID:     dead.ID,
+			PostID:           post.ID,
+			Text:             strings.TrimSpace(post.Text),
+			Platform:         post.Platform,
+			MediaCount:       len(post.Media),
+			Attempts:         post.Attempts,
+			MaxAttempts:      post.MaxAttempts,
+			LastError:        strings.TrimSpace(dead.LastError),
+			FailedAtLabel:    failedAtLabel,
+			ScheduledAtLabel: scheduledAtLabel,
+		})
+	}
 	var editingPost *domain.Post
 	var createText string
 	var createScheduledLocal string
@@ -755,8 +930,26 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       font-size: 12px;
       color: var(--text-secondary);
       border: 1px solid transparent;
-      display: block;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
       text-decoration: none;
+    }
+    .nav-badge {
+      min-width: 18px;
+      height: 18px;
+      padding: 0 6px;
+      border-radius: 999px;
+      background: #ff5f70;
+      color: #fff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 1;
+      border: 1px solid rgba(255, 255, 255, 0.15);
     }
     .nav-item.active {
       color: var(--text-primary);
@@ -774,18 +967,36 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       gap: 16px;
       align-items: center;
     }
+    .title-row {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .title-back {
+      color: var(--text-secondary);
+      text-decoration: none;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      width: 30px;
+      height: 30px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      line-height: 1;
+    }
+    .title-back:hover {
+      color: var(--text-primary);
+      border-color: #31394b;
+      background: var(--bg-elevated);
+    }
     h1 {
-      margin: 0 0 4px;
+      margin: 0;
       font-family: "Oswald", sans-serif;
       font-weight: 700;
       letter-spacing: 0.02em;
       font-size: 50px;
       line-height: 1;
-    }
-    .subtitle {
-      margin: 0;
-      color: var(--text-secondary);
-      font-size: 12px;
     }
     .create-pill {
       display: inline-flex;
@@ -846,6 +1057,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     .dot.live { background: var(--accent-teal); }
     .dot.scheduled { background: var(--accent-orange); }
     .dot.draft { background: #646f88; }
+    .dot.fail { background: #ff5f70; }
     .stats {
       margin-top: 14px;
       display: grid;
@@ -1100,6 +1312,12 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       gap: 12px;
       align-items: center;
     }
+    .card-editable {
+      cursor: pointer;
+    }
+    .day-item[data-edit-url] {
+      cursor: pointer;
+    }
     .card.scheduled {
       border-color: rgba(255, 122, 48, 0.28);
       box-shadow: inset 0 0 0 1px rgba(255, 122, 48, 0.08);
@@ -1111,6 +1329,10 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     .card.draft {
       border-color: #283041;
       box-shadow: inset 0 0 0 1px rgba(133, 148, 182, 0.05);
+    }
+    .card.failed {
+      border-color: rgba(255, 95, 112, 0.35);
+      box-shadow: inset 0 0 0 1px rgba(255, 95, 112, 0.1);
     }
     .card-left {
       display: flex;
@@ -1287,6 +1509,24 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     .status-live { color: var(--accent-teal); }
     .status-schd { color: var(--accent-orange); }
     .status-drft { color: #7f8ca8; }
+    .status-fail { color: #ff8a97; }
+    .bulk-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 4px;
+    }
+    .bulk-actions .pill {
+      cursor: pointer;
+    }
+    .failed-checkbox {
+      margin-top: 3px;
+      width: 14px;
+      height: 14px;
+      accent-color: var(--accent-orange);
+      cursor: pointer;
+    }
     .meta-accent { color: var(--accent-orange); }
     .meta-soft { color: #7f8ca8; }
     form {
@@ -1363,12 +1603,11 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         padding: 16px 12px 18px;
       }
       .header {
-        flex-direction: column;
-        align-items: flex-start;
+        flex-direction: row;
+        align-items: center;
         gap: 10px;
       }
       h1 { font-size: 34px; }
-      .subtitle { font-size: 11px; }
       .create-pill {
         padding: 8px 12px;
         font-size: 10px;
@@ -1449,26 +1688,24 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         <span>post_flow</span>
       </div>
       <nav class="nav">
-        <a class="nav-item {{if eq .View "publications"}}active{{end}}" href="/?view=publications&month={{.CurrentMonthParam}}">// publications</a>
-        <a class="nav-item {{if eq .View "calendar"}}active{{end}}" href="/?view=calendar&month={{.CurrentMonthParam}}&day={{.SelectedDayKey}}">// calendar</a>
-        <a class="nav-item {{if eq .View "drafts"}}active{{end}}" href="/?view=drafts">// drafts</a>
-        <a class="nav-item {{if eq .View "create"}}active{{end}}" href="/?view=create">// create</a>
-        <div class="nav-item">// dlq</div>
+        <a class="nav-item {{if eq .ActiveNavView "publications"}}active{{end}}" href="/?view=publications&month={{.CurrentMonthParam}}">// publications</a>
+        <a class="nav-item {{if eq .ActiveNavView "calendar"}}active{{end}}" href="/?view=calendar&month={{.CurrentMonthParam}}&day={{.SelectedDayKey}}">// calendar</a>
+        <a class="nav-item {{if eq .ActiveNavView "drafts"}}active{{end}}" href="/?view=drafts">// drafts</a>
+        <a class="nav-item {{if eq .ActiveNavView "failed"}}active{{end}}" href="/?view=failed"><span>// failed</span>{{if gt .FailedCount 0}}<span class="nav-badge">{{.FailedCount}}</span>{{end}}</a>
       </nav>
     </aside>
     <main class="main">
       <header class="header">
-        <div>
-          <h1>PUBLICATIONS</h1>
-          <p class="subtitle">// manage your social posts and draft queue</p>
+        <div class="title-row">
+          {{if and (eq .View "create") .BackURL}}<a class="title-back" href="{{.BackURL}}" aria-label="back">←</a>{{end}}
+          <h1>{{if eq .View "calendar"}}CALENDAR{{else if eq .View "drafts"}}DRAFTS{{else if eq .View "failed"}}FAILED{{else if eq .View "create"}}CREATE{{else}}PUBLICATIONS{{end}}</h1>
         </div>
-        <a class="create-pill" href="/?view=create">create_post</a>
+        <a class="create-pill" href="{{.CreateViewURL}}">create_post</a>
       </header>
       {{if eq .View "publications"}}
       <div class="tabs">
         <button type="button" class="tab filter-chip active" data-filter="published" aria-pressed="true"><span class="dot live"></span> published</button>
         <button type="button" class="tab filter-chip active" data-filter="scheduled" aria-pressed="true"><span class="dot scheduled"></span> scheduled</button>
-        <button type="button" class="tab filter-chip active" data-filter="draft" aria-pressed="true"><span class="dot draft"></span> draft mode</button>
       </div>
       {{end}}
       {{if eq .View "publications"}}
@@ -1536,7 +1773,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         </div>
         <div class="day-panel-body">
           {{range .SelectedDayItems}}
-          <article class="day-item {{.StatusClass}}" data-status="{{.StatusKey}}">
+          <article class="day-item {{.StatusClass}}" data-status="{{.StatusKey}}" {{if .Editable}}data-edit-url="/?view=create&edit_id={{.PostID}}&return_to={{urlquery $.CurrentViewURL}}"{{end}}>
             <div class="day-item-head">
               <span class="day-item-time">{{.TimeLabel}}</span>
               <span class="label status-{{.StatusClass}}">{{.StatusLabel}}</span>
@@ -1559,7 +1796,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       <div class="line">calendar</div>
       <section class="list">
         {{range .Items}}
-        <article class="card {{.Status}}" data-status="{{.Status}}">
+        <article class="card {{.Status}} {{if ne .Status "published"}}card-editable{{end}}" data-status="{{.Status}}" {{if ne .Status "published"}}data-edit-url="/?view=create&edit_id={{.ID}}&return_to={{urlquery $.CurrentViewURL}}"{{end}}>
           <div class="card-left">
             <div class="status">
               {{if eq .Status "published"}}<span class="dot live"></span><span class="label status-live">LIVE</span>{{else if eq .Status "scheduled"}}<span class="dot scheduled"></span><span class="label status-schd">SCHD</span>{{else}}<span class="dot draft"></span><span class="label status-drft">DRFT</span>{{end}}
@@ -1573,13 +1810,6 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
               </div>
             </div>
           </div>
-          <div class="card-actions">
-            {{if or (eq .Status "scheduled") (eq .Status "draft") (eq .Status "failed") (eq .Status "canceled")}}
-            <a class="pill pill-link" href="/?view=create&edit_id={{.ID}}">edit</a>
-            {{end}}
-            <span class="pill">details</span>
-            <span class="ghost-toggle"></span>
-          </div>
         </article>
         {{else}}
         <div class="empty">No hay publicaciones en esta ventana de calendario.</div>
@@ -1591,7 +1821,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       <div class="line">draft queue</div>
       <section class="list">
         {{range .Drafts}}
-        <article class="card draft" data-status="draft">
+        <article class="card draft card-editable" data-status="draft" data-edit-url="/?view=create&edit_id={{.ID}}&return_to={{urlquery $.CurrentViewURL}}">
           <div class="card-left">
             <div class="status">
               <span class="dot draft"></span>
@@ -1607,7 +1837,6 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
             </div>
           </div>
           <div class="card-actions">
-            <a class="pill pill-link" href="/?view=create&edit_id={{.ID}}">edit</a>
             <form method="post" action="/posts/{{.ID}}/schedule">
               <input type="datetime-local" name="scheduled_at_local" required />
               <button type="submit">schedule</button>
@@ -1620,12 +1849,57 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       </section>
       {{end}}
 
+      {{if eq .View "failed"}}
+      <div class="line">failed queue</div>
+      <section class="list">
+        {{if .FailedError}}<div class="alert error">{{.FailedError}}</div>{{end}}
+        {{if .FailedSuccess}}<div class="alert success">{{.FailedSuccess}}</div>{{end}}
+        <div class="bulk-actions">
+          <button type="button" class="pill" id="failed-select-all">mark all</button>
+          <button type="button" class="pill" id="failed-clear-all">clear all</button>
+          <form method="post" action="/dlq/requeue" id="failed-bulk-form">
+            <button type="submit" id="failed-requeue-selected" disabled>requeue selected</button>
+          </form>
+        </div>
+        {{range .FailedItems}}
+        <article class="card failed card-editable" data-edit-url="/?view=create&edit_id={{.PostID}}&return_to={{urlquery $.CurrentViewURL}}">
+          <div class="card-left">
+            <div class="status">
+              <input class="failed-checkbox" type="checkbox" value="{{.DeadLetterID}}" data-failed-checkbox />
+              <span class="dot fail"></span>
+              <span class="label status-fail">FAIL</span>
+            </div>
+            <div class="content">
+              <div class="text">{{.Text}}</div>
+              <div class="meta">
+                <span class="meta-soft">{{.ScheduledAtLabel}}</span>
+                <span>{{.Platform}}</span>
+                <span>{{.MediaCount}} media</span>
+                <span>attempts {{.Attempts}}/{{.MaxAttempts}}</span>
+                <span>failed {{.FailedAtLabel}}</span>
+                <span>{{.LastError}}</span>
+              </div>
+            </div>
+          </div>
+          <div class="card-actions">
+            <form method="post" action="/dlq/{{.DeadLetterID}}/requeue">
+              <button type="submit">requeue</button>
+            </form>
+          </div>
+        </article>
+        {{else}}
+        <div class="empty">No hay publicaciones fallidas en cola.</div>
+        {{end}}
+      </section>
+      {{end}}
+
       {{if eq .View "create"}}
       <div class="line">composer</div>
       <section class="editor">
         <div class="editor-head">{{if .EditingPost}}edit publication{{else}}create publication{{end}}</div>
         <form class="editor-body" method="post" action="{{if .EditingPost}}/posts/{{.EditingPost.ID}}/edit{{else}}/posts{{end}}">
           <input type="hidden" name="platform" value="x" />
+          <input type="hidden" name="return_to" value="{{.ReturnTo}}" />
           {{if .CreateError}}<div class="alert error">{{.CreateError}}</div>{{end}}
           {{if .CreateSuccess}}<div class="alert success">{{.CreateSuccess}}</div>{{end}}
           <div class="field">
@@ -1639,7 +1913,6 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
           <div class="editor-actions">
             <button class="btn-secondary" type="submit" name="intent" value="draft">save_draft</button>
             <button type="submit" name="intent" value="schedule">{{if .EditingPost}}update_schedule{{else}}create_scheduled{{end}}</button>
-            <a class="ghost-btn" href="/?view=publications">back</a>
           </div>
         </form>
       </section>
@@ -1648,12 +1921,146 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
   </div>
 <script>
 (() => {
+  const isInteractive = (node) => !!node.closest("a,button,input,select,textarea,form,label");
+  document.querySelectorAll("[data-edit-url]").forEach((el) => {
+    el.addEventListener("click", (e) => {
+      const target = e.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
+      if (isInteractive(target)) {
+        return;
+      }
+      const url = el.getAttribute("data-edit-url");
+      if (url) {
+        window.location.href = url;
+      }
+    });
+  });
+})();
+
+(() => {
+  const view = document.body.dataset.view || "";
+  if (view !== "calendar") {
+    return;
+  }
+
+  const storageKey = "publisher.ui.calendar.scroll.v1";
+  const grid = document.querySelector(".calendar-grid-scroll");
+  const panelBody = document.querySelector(".day-panel-body");
+
+  const saveScrollState = () => {
+    const payload = {
+      y: window.scrollY || window.pageYOffset || 0,
+      x: grid ? grid.scrollLeft : 0,
+      panelY: panelBody ? panelBody.scrollTop : 0
+    };
+    try {
+      sessionStorage.setItem(storageKey, JSON.stringify(payload));
+    } catch (_) {}
+  };
+
+  const restoreScrollState = () => {
+    let payload = null;
+    try {
+      const raw = sessionStorage.getItem(storageKey);
+      if (raw) {
+        payload = JSON.parse(raw);
+      }
+    } catch (_) {}
+    if (!payload) {
+      return;
+    }
+
+    const y = Number(payload.y || 0);
+    const x = Number(payload.x || 0);
+    const panelY = Number(payload.panelY || 0);
+
+    requestAnimationFrame(() => {
+      if (grid) {
+        grid.scrollLeft = x;
+      }
+      if (panelBody) {
+        panelBody.scrollTop = panelY;
+      }
+      window.scrollTo(0, y);
+      setTimeout(() => {
+        if (grid) {
+          grid.scrollLeft = x;
+        }
+        if (panelBody) {
+          panelBody.scrollTop = panelY;
+        }
+        window.scrollTo(0, y);
+      }, 0);
+    });
+  };
+
+  document.querySelectorAll(".day-link").forEach((link) => {
+    link.addEventListener("click", saveScrollState);
+  });
+  window.addEventListener("beforeunload", saveScrollState);
+
+  restoreScrollState();
+})();
+
+(() => {
+  const view = document.body.dataset.view || "";
+  if (view !== "failed") {
+    return;
+  }
+
+  const checkboxes = Array.from(document.querySelectorAll("[data-failed-checkbox]"));
+  const selectAll = document.getElementById("failed-select-all");
+  const clearAll = document.getElementById("failed-clear-all");
+  const form = document.getElementById("failed-bulk-form");
+  const submit = document.getElementById("failed-requeue-selected");
+
+  const updateSubmit = () => {
+    const count = checkboxes.filter((cb) => cb.checked).length;
+    submit.disabled = count === 0;
+    submit.textContent = count > 0 ? "requeue selected (" + count + ")" : "requeue selected";
+  };
+
+  selectAll?.addEventListener("click", () => {
+    checkboxes.forEach((cb) => { cb.checked = true; });
+    updateSubmit();
+  });
+
+  clearAll?.addEventListener("click", () => {
+    checkboxes.forEach((cb) => { cb.checked = false; });
+    updateSubmit();
+  });
+
+  checkboxes.forEach((cb) => cb.addEventListener("change", updateSubmit));
+
+  form?.addEventListener("submit", (e) => {
+    const selected = checkboxes.filter((cb) => cb.checked).map((cb) => cb.value);
+    if (selected.length === 0) {
+      e.preventDefault();
+      updateSubmit();
+      return;
+    }
+    form.querySelectorAll('input[name="ids"]').forEach((el) => el.remove());
+    selected.forEach((id) => {
+      const input = document.createElement("input");
+      input.type = "hidden";
+      input.name = "ids";
+      input.value = id;
+      form.appendChild(input);
+    });
+  });
+
+  updateSubmit();
+})();
+
+(() => {
   const view = document.body.dataset.view || "";
   if (view !== "publications") {
     return;
   }
   const storageKey = "publisher.ui.status-filters.v1";
-  const defaultFilters = { published: true, scheduled: true, draft: true };
+  const defaultFilters = { published: true, scheduled: true };
   let filters = { ...defaultFilters };
 
   try {
@@ -1718,13 +2125,21 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	type pageData struct {
 		View                 string
+		ActiveNavView        string
 		Items                []domain.Post
 		Drafts               []domain.Post
+		FailedItems          []failedQueueItem
+		CurrentViewURL       string
+		CreateViewURL        string
+		ReturnTo             string
+		BackURL              string
 		EditingPost          *domain.Post
 		CreateText           string
 		CreateScheduledLocal string
 		CreateError          string
 		CreateSuccess        string
+		FailedError          string
+		FailedSuccess        string
 		ScheduledCount       int
 		DraftCount           int
 		PublishedCount       int
@@ -1743,13 +2158,21 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = t.Execute(w, pageData{
 		View:                 view,
+		ActiveNavView:        activeNavView,
 		Items:                items,
 		Drafts:               drafts,
+		FailedItems:          failedItems,
+		CurrentViewURL:       currentViewURL,
+		CreateViewURL:        createViewURL,
+		ReturnTo:             returnTo,
+		BackURL:              backURL,
 		EditingPost:          editingPost,
 		CreateText:           createText,
 		CreateScheduledLocal: createScheduledLocal,
 		CreateError:          createError,
 		CreateSuccess:        createSuccess,
+		FailedError:          failedError,
+		FailedSuccess:        failedSuccess,
 		ScheduledCount:       scheduledCount,
 		DraftCount:           len(drafts),
 		PublishedCount:       publishedCount,
@@ -1794,6 +2217,7 @@ func parseCreatePostRequest(r *http.Request) (createPostRequest, bool, error) {
 		Platform: strings.TrimSpace(r.FormValue("platform")),
 		Text:     strings.TrimSpace(r.FormValue("text")),
 		Intent:   strings.ToLower(strings.TrimSpace(r.FormValue("intent"))),
+		ReturnTo: strings.TrimSpace(r.FormValue("return_to")),
 	}
 	if req.Platform == "" {
 		req.Platform = "x"
@@ -1823,11 +2247,14 @@ func parseScheduledAtInput(raw string) (time.Time, error) {
 	return parsed.UTC(), nil
 }
 
-func createViewURL(editID, text, scheduledAtLocal, errorMsg, successMsg string) string {
+func createViewURL(editID, text, scheduledAtLocal, returnTo, errorMsg, successMsg string) string {
 	q := url.Values{}
 	q.Set("view", "create")
 	if strings.TrimSpace(editID) != "" {
 		q.Set("edit_id", strings.TrimSpace(editID))
+	}
+	if strings.TrimSpace(returnTo) != "" {
+		q.Set("return_to", strings.TrimSpace(returnTo))
 	}
 	if strings.TrimSpace(text) != "" {
 		q.Set("text", strings.TrimSpace(text))
