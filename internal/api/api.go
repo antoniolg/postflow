@@ -1873,8 +1873,8 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         <span>post_flow</span>
       </div>
       <nav class="nav">
-        <a class="nav-item {{if eq .ActiveNavView "publications"}}active{{end}}" href="/?view=publications">// publications</a>
         <a class="nav-item {{if eq .ActiveNavView "calendar"}}active{{end}}" href="/?view=calendar&month={{.CurrentMonthParam}}&day={{.SelectedDayKey}}">// calendar</a>
+        <a class="nav-item {{if eq .ActiveNavView "publications"}}active{{end}}" href="/?view=publications">// scheduled</a>
         <a class="nav-item {{if eq .ActiveNavView "drafts"}}active{{end}}" href="/?view=drafts">// drafts</a>
         <a class="nav-item {{if eq .ActiveNavView "failed"}}active{{end}}" href="/?view=failed"><span>// failed</span>{{if gt .FailedCount 0}}<span class="nav-badge">{{.FailedCount}}</span>{{end}}</a>
         <a class="nav-item {{if eq .ActiveNavView "settings"}}active{{end}}" href="/?view=settings">// settings</a>
@@ -1884,7 +1884,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       <header class="header">
         <div class="title-row">
           {{if and (eq .View "create") .BackURL}}<a class="title-back" href="{{.BackURL}}" aria-label="back">←</a>{{end}}
-          <h1>{{if eq .View "calendar"}}CALENDAR{{else if eq .View "drafts"}}DRAFTS{{else if eq .View "failed"}}FAILED{{else if eq .View "create"}}CREATE{{else if eq .View "settings"}}SETTINGS{{else}}PUBLICATIONS{{end}}</h1>
+          <h1>{{if eq .View "calendar"}}CALENDAR{{else if eq .View "drafts"}}DRAFTS{{else if eq .View "failed"}}FAILED{{else if eq .View "create"}}CREATE{{else if eq .View "settings"}}SETTINGS{{else}}SCHEDULED{{end}}</h1>
         </div>
         <a class="create-pill" href="{{.CreateViewURL}}">create_post</a>
       </header>
