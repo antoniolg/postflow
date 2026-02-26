@@ -135,6 +135,19 @@ Incluye vista `settings` para definir la zona horaria de la UI (`IANA`, por ejem
 - La persistencia sigue en UTC.
 - La visualización y los campos `datetime-local` se muestran/interpretan en la zona configurada.
 
+## Revisión de accesibilidad
+
+Chequeo automático con axe en las vistas principales:
+
+```bash
+scripts/a11y-check.sh
+```
+
+Notas:
+- Usa `@axe-core/cli` vía `npx` (sin instalación global).
+- Si hay `UI_BASIC_USER` y `UI_BASIC_PASS` en `.env`, el script los usa automáticamente.
+- Guarda JSON por vista en `/tmp/publisher-a11y` y devuelve código `1` si encuentra violaciones.
+
 ### 7) Guardar timezone de UI
 
 ```bash
