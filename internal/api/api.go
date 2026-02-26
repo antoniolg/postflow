@@ -1238,16 +1238,30 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     .create-header-actions {
       display: inline-flex;
       align-items: center;
-      gap: 10px;
+      gap: 12px;
       flex-wrap: wrap;
       justify-content: flex-end;
     }
     .create-header-actions button {
-      min-height: 34px;
-      padding: 0 14px;
+      min-height: 36px;
+      padding: 0 16px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: 12px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .create-header-actions button svg {
+      flex: 0 0 auto;
     }
     .create-header-actions .btn-secondary {
-      color: #b8b8b8;
+      color: var(--text-secondary);
+      background: var(--bg-elevated, #2d2d2d);
+    }
+    .create-header-actions .btn-schedule {
+      color: var(--accent-orange);
     }
     .tabs {
       margin-top: 18px;
@@ -2233,9 +2247,9 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     .composer-layout {
       margin-top: 12px;
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 320px;
+      grid-template-columns: minmax(0, 1fr) 360px;
       gap: 24px;
-      align-items: start;
+      align-items: stretch;
     }
     .composer-main {
       min-width: 0;
@@ -2256,10 +2270,12 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       gap: 18px;
     }
     .composer-label {
+      font-family: 'JetBrains Mono', monospace;
       font-size: 11px;
-      color: #a8a8a8;
+      color: var(--text-secondary);
       text-transform: lowercase;
       letter-spacing: 0.08em;
+      font-weight: 600;
       margin-bottom: 2px;
     }
     .create-field {
@@ -2270,15 +2286,18 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     .create-field-content .composer-text-wrap,
     .create-field-media .media-block,
     .create-field-schedule .schedule-block {
-      background: #212121;
-      border-radius: 16px;
-      padding: 16px 18px;
+      background: var(--bg-card, #212121);
+      border-radius: 12px;
+      padding: 20px;
     }
     .create-field-content .composer-text-wrap {
       gap: 12px;
       display: flex;
       flex-direction: column;
       min-height: clamp(320px, 46vh, 520px);
+    }
+    .create-field-content .composer-text-wrap .composer-label {
+      margin-bottom: 0;
     }
     .create-field-schedule .schedule-block {
       padding: 12px 14px;
@@ -2301,37 +2320,39 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     }
     .network-chip {
       border: 0;
-      background: #2d2d2d;
-      color: #a8a8a8;
-      border-radius: 16px;
-      padding: 8px 14px;
+      background: var(--bg-card, #212121);
+      color: var(--text-secondary);
+      border-radius: 12px;
+      padding: 10px 14px;
+      font-family: 'JetBrains Mono', monospace;
       font-size: 12px;
       font-weight: 600;
-      text-transform: lowercase;
       display: inline-flex;
       align-items: center;
-      gap: 6px;
+      gap: 8px;
       cursor: pointer;
     }
-    .network-chip::before {
-      content: "●";
-      font-size: 8px;
-      line-height: 1;
-      opacity: 0.85;
+    .network-chip svg {
+      flex: 0 0 auto;
     }
     .network-chip.active {
-      background: #2d2d2d;
+      background: var(--bg-elevated, #2d2d2d);
       color: var(--accent-orange);
       box-shadow: inset 0 0 0 2px var(--accent-orange);
     }
+    .network-chip.active::after {
+      content: "✓";
+      font-size: 11px;
+      line-height: 1;
+    }
     .network-chip.disabled {
-      background: #212121;
+      background: var(--bg-card, #212121);
       opacity: 1;
       cursor: not-allowed;
     }
     .composer-text-wrap {
       border: 0;
-      border-radius: 16px;
+      border-radius: 12px;
       background: transparent;
       overflow: hidden;
     }
@@ -2356,7 +2377,13 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       font-size: 11px;
     }
     .char-over {
-      color: #ff6b35;
+      color: var(--accent-orange);
+    }
+    .composer-format-btns {
+      display: flex;
+      gap: 8px;
+      font-size: 16px;
+      color: var(--text-secondary);
     }
     .media-upload-actions {
       display: flex;
@@ -2445,15 +2472,12 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     }
     .preview-panel {
       border: 0;
-      border-radius: 18px;
-      background: #212121;
+      background: transparent;
       overflow: visible;
-      position: sticky;
-      top: 16px;
-      padding: 14px;
+      padding: 0;
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 16px;
     }
     .preview-head {
       padding: 0;
@@ -2461,31 +2485,33 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       background: transparent;
     }
     .preview-title {
-      font-size: 12px;
+      font-size: 11px;
       letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: #b8b8b8;
-      font-weight: 700;
+      text-transform: lowercase;
+      color: var(--text-secondary);
+      font-weight: 600;
       margin-bottom: 6px;
     }
     .preview-platforms {
       display: flex;
-      gap: 8px;
+      gap: 4px;
       flex-wrap: wrap;
+      font-family: 'JetBrains Mono', monospace;
       font-size: 11px;
-      color: #a8a8a8;
+      font-weight: 600;
+      color: var(--text-secondary);
     }
     .preview-platforms span {
-      border-radius: 999px;
-      background: #2d2d2d;
-      padding: 2px 8px;
+      border-radius: 8px;
+      background: var(--bg-elevated, #2d2d2d);
+      padding: 6px 12px;
       min-width: 24px;
       text-align: center;
-      text-transform: lowercase;
+      text-transform: uppercase;
     }
     .preview-platforms .active {
-      color: var(--accent-orange);
-      box-shadow: inset 0 0 0 1px rgba(255, 107, 53, 0.45);
+      color: var(--text-primary);
+      background: var(--bg-elevated, #2d2d2d);
     }
     .preview-body {
       padding: 0;
@@ -2494,10 +2520,10 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     }
     .preview-card {
       border: 0;
-      border-radius: 16px;
-      background: #1f1f1f;
-      padding: 14px;
-      min-height: 520px;
+      border-radius: 12px;
+      background: var(--bg-card, #212121);
+      padding: 16px;
+      flex: 1;
       display: flex;
       flex-direction: column;
     }
@@ -2722,8 +2748,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         grid-template-columns: 1fr;
       }
       .preview-panel {
-        position: static;
-        padding: 12px;
+        padding: 0;
       }
       .composer-submit-actions {
         display: flex;
@@ -3005,7 +3030,6 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       {{end}}
 
       {{if eq .View "create"}}
-      <div class="line">composer</div>
       <div class="composer-layout">
         <section class="composer-main">
           <section class="editor">
@@ -3020,20 +3044,20 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
               <div class="field create-field create-field-networks">
                 <div class="composer-label">// select networks</div>
                 <div class="network-picker" id="create-network-picker">
-                  <button type="button" class="network-chip active" data-network-chip data-platform="x" aria-pressed="true">x</button>
-                  <button type="button" class="network-chip disabled" disabled aria-disabled="true">linkedin</button>
-                  <button type="button" class="network-chip disabled" disabled aria-disabled="true">instagram</button>
-                  <button type="button" class="network-chip disabled" disabled aria-disabled="true">facebook</button>
+                  <button type="button" class="network-chip active" data-network-chip data-platform="x" aria-pressed="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4l11.733 16h4.267l-11.733-16zM4 20l6.768-6.768M20 4l-6.768 6.768"/></svg> X</button>
+                  <button type="button" class="network-chip disabled" disabled aria-disabled="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8a6 6 0 016 6v7h-4v-7a2 2 0 00-4 0v7h-4v-7a6 6 0 016-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg> LinkedIn</button>
+                  <button type="button" class="network-chip disabled" disabled aria-disabled="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg> Instagram</button>
+                  <button type="button" class="network-chip disabled" disabled aria-disabled="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z"/></svg> Facebook</button>
                 </div>
               </div>
 
               <div class="field create-field create-field-content">
-                <div class="composer-label">// post content</div>
                 <div class="composer-text-wrap">
+                  <div class="composer-label">// post content</div>
                   <textarea id="create-text" name="text" required placeholder="Write your post...">{{.CreateText}}</textarea>
                   <div class="composer-text-meta">
-                    <span id="create-char-count">0/280 chars (x limit)</span>
-                    <span>o # @</span>
+                    <span id="create-char-count">// 0/280 chars (X limit)</span>
+                    <span class="composer-format-btns">☺ # @</span>
                   </div>
                 </div>
               </div>
@@ -3070,10 +3094,10 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
           <div class="preview-head">
             <div class="preview-title">// live preview</div>
             <div class="preview-platforms">
-              <span class="active" id="preview-network">x</span>
-              <span>li</span>
-              <span>ig</span>
-              <span>fb</span>
+              <span class="active" id="preview-network">X</span>
+              <span>LI</span>
+              <span>IG</span>
+              <span>FB</span>
             </div>
           </div>
           <div class="preview-body">
@@ -3935,7 +3959,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 
   const updateCharCount = () => {
     const count = textInput.value.length;
-    charCount.textContent = count + "/" + limit + " chars (x limit)";
+    charCount.textContent = "// " + count + "/" + limit + " chars (X limit)";
     charCount.classList.toggle("char-over", count > limit);
   };
 
