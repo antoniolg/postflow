@@ -131,6 +131,18 @@ curl -X POST http://localhost:8080/dlq/dlq_xxx/requeue
 
 Abre `http://localhost:8080/` para ver una tabla de publicaciones (solo lectura).
 
+Incluye vista `settings` para definir la zona horaria de la UI (`IANA`, por ejemplo `Europe/Madrid`).
+- La persistencia sigue en UTC.
+- La visualización y los campos `datetime-local` se muestran/interpretan en la zona configurada.
+
+### 7) Guardar timezone de UI
+
+```bash
+curl -X POST http://localhost:8080/settings/timezone \
+  -H 'content-type: application/json' \
+  -d '{"timezone":"Europe/Madrid"}'
+```
+
 ## Publicación real en X
 
 ```bash
