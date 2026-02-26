@@ -1292,9 +1292,14 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       grid-template-columns: minmax(0, 1fr) clamp(300px, 28vw, 390px);
       align-items: stretch;
     }
-    body[data-view="calendar"] .calendar-wrap,
-    body[data-view="calendar"] .day-panel {
-      height: 100%;
+    body[data-view="calendar"] .calendar-wrap {
+      display: flex;
+      flex-direction: column;
+    }
+    body[data-view="calendar"] .calendar-grid-scroll {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
     }
     body[data-view="calendar"] .day-panel {
       display: flex;
@@ -2289,8 +2294,40 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
   }
 
   const storageKey = "publisher.ui.calendar.scroll.v1";
+  const layout = document.querySelector(".calendar-layout");
+  const calendarWrap = document.querySelector(".calendar-wrap");
+  const dayPanel = document.querySelector(".day-panel");
   const grid = document.querySelector(".calendar-grid-scroll");
   const panelBody = document.querySelector(".day-panel-body");
+  const mobileQuery = window.matchMedia("(max-width: 980px)");
+
+  const syncDayPanelHeightToCalendar = () => {
+    if (!layout || !calendarWrap || !dayPanel) {
+      return;
+    }
+    if (mobileQuery.matches) {
+      calendarWrap.style.minHeight = "";
+      dayPanel.style.height = "";
+      return;
+    }
+
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+    const top = layout.getBoundingClientRect().top;
+    const availableHeight = Math.max(460, Math.floor(viewportHeight - top - 16));
+    calendarWrap.style.minHeight = availableHeight + "px";
+    dayPanel.style.height = calendarWrap.offsetHeight + "px";
+  };
+
+  let syncFrame = 0;
+  const scheduleHeightSync = () => {
+    if (syncFrame) {
+      cancelAnimationFrame(syncFrame);
+    }
+    syncFrame = requestAnimationFrame(() => {
+      syncDayPanelHeightToCalendar();
+      syncFrame = 0;
+    });
+  };
 
   const saveScrollState = () => {
     const payload = {
@@ -2320,6 +2357,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     const panelY = Number(payload.panelY || 0);
 
     requestAnimationFrame(() => {
+      syncDayPanelHeightToCalendar();
       if (grid) {
         grid.scrollLeft = x;
       }
@@ -2328,6 +2366,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       }
       window.scrollTo(0, y);
       setTimeout(() => {
+        syncDayPanelHeightToCalendar();
         if (grid) {
           grid.scrollLeft = x;
         }
@@ -2343,7 +2382,9 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     link.addEventListener("click", saveScrollState);
   });
   window.addEventListener("beforeunload", saveScrollState);
+  window.addEventListener("resize", scheduleHeightSync);
 
+  scheduleHeightSync();
   restoreScrollState();
 })();
 
