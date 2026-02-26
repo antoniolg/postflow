@@ -1596,6 +1596,34 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       width: 100%;
       max-width: 280px;
     }
+    .field select {
+      min-width: 0;
+      width: 100%;
+      max-width: 320px;
+      padding: 8px 34px 8px 10px;
+      border-radius: 10px;
+      border: 1px solid #364058;
+      background-color: #11141b;
+      color: var(--text-primary);
+      font: inherit;
+      font-size: 12px;
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      background-image:
+        linear-gradient(45deg, transparent 50%, #8ea0c2 50%),
+        linear-gradient(135deg, #8ea0c2 50%, transparent 50%);
+      background-position:
+        calc(100% - 16px) calc(50% - 1px),
+        calc(100% - 11px) calc(50% - 1px);
+      background-size: 5px 5px, 5px 5px;
+      background-repeat: no-repeat;
+    }
+    .field select:focus {
+      outline: none;
+      border-color: #516286;
+      box-shadow: 0 0 0 2px rgba(81, 98, 134, 0.2);
+    }
     .editor-actions {
       display: flex;
       gap: 8px;
@@ -2075,18 +2103,17 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
           {{if .SettingsSuccess}}<div class="alert success">{{.SettingsSuccess}}</div>{{end}}
           <div class="field">
             <label>Timezone (IANA)</label>
-            <input type="text" name="timezone" id="timezone-input" list="timezone-options" value="{{.UITimezone}}" required placeholder="Europe/Madrid" />
-            <datalist id="timezone-options">
-              <option value="UTC"></option>
-              <option value="Europe/Madrid"></option>
-              <option value="Europe/London"></option>
-              <option value="America/New_York"></option>
-              <option value="America/Chicago"></option>
-              <option value="America/Los_Angeles"></option>
-              <option value="America/Mexico_City"></option>
-              <option value="America/Bogota"></option>
-              <option value="America/Buenos_Aires"></option>
-            </datalist>
+            <select name="timezone" id="timezone-select" data-current-timezone="{{.UITimezone}}" required>
+              <option value="UTC">UTC</option>
+              <option value="Europe/Madrid">Europe/Madrid</option>
+              <option value="Europe/London">Europe/London</option>
+              <option value="America/New_York">America/New_York</option>
+              <option value="America/Chicago">America/Chicago</option>
+              <option value="America/Los_Angeles">America/Los_Angeles</option>
+              <option value="America/Mexico_City">America/Mexico_City</option>
+              <option value="America/Bogota">America/Bogota</option>
+              <option value="America/Buenos_Aires">America/Buenos_Aires</option>
+            </select>
           </div>
           <div class="editor-actions">
             <button type="submit">save timezone</button>
@@ -2299,14 +2326,35 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
   if (view !== "settings") {
     return;
   }
-  const input = document.getElementById("timezone-input");
+  const input = document.getElementById("timezone-select");
   const detect = document.getElementById("tz-detect");
-  if (!(input instanceof HTMLInputElement)) {
+  if (!(input instanceof HTMLSelectElement)) {
     return;
   }
+  const currentTimezone = (input.dataset.currentTimezone || "").trim();
+  const fallbackZones = Array.from(input.options).map((opt) => opt.value).filter(Boolean);
   const browserTimezone = Intl?.DateTimeFormat?.().resolvedOptions?.().timeZone || "";
-  if (!input.value && browserTimezone) {
+  const runtimeZones = typeof Intl?.supportedValuesOf === "function"
+    ? Intl.supportedValuesOf("timeZone")
+    : [];
+  const zoneSet = new Set([...fallbackZones, ...runtimeZones]);
+  if (currentTimezone) {
+    zoneSet.add(currentTimezone);
+  }
+  const zones = Array.from(zoneSet).sort((a, b) => a.localeCompare(b));
+  input.innerHTML = "";
+  zones.forEach((zone) => {
+    const option = document.createElement("option");
+    option.value = zone;
+    option.textContent = zone;
+    input.appendChild(option);
+  });
+  if (currentTimezone && zoneSet.has(currentTimezone)) {
+    input.value = currentTimezone;
+  } else if (browserTimezone && zoneSet.has(browserTimezone)) {
     input.value = browserTimezone;
+  } else {
+    input.value = "UTC";
   }
   if (!(detect instanceof HTMLButtonElement)) {
     return;
@@ -2314,6 +2362,13 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
   detect.addEventListener("click", () => {
     if (!browserTimezone) {
       return;
+    }
+    if (!zoneSet.has(browserTimezone)) {
+      const option = document.createElement("option");
+      option.value = browserTimezone;
+      option.textContent = browserTimezone;
+      input.appendChild(option);
+      zoneSet.add(browserTimezone);
     }
     input.value = browserTimezone;
     input.focus();
