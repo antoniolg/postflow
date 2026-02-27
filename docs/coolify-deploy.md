@@ -18,6 +18,8 @@ Set these in Coolify:
 - `API_TOKEN=<long-random-token>`
 - `UI_BASIC_USER=<your-user>`
 - `UI_BASIC_PASS=<long-password>`
+- `PUBLISHER_MASTER_KEY=<base64-32-bytes>`
+- `PUBLIC_BASE_URL=https://<your-coolify-domain>`
 
 Optional recommended:
 
@@ -35,6 +37,14 @@ For real X publishing:
 - `X_ACCESS_TOKEN=...`
 - `X_ACCESS_TOKEN_SECRET=...`
 
+For LinkedIn OAuth:
+- `LINKEDIN_CLIENT_ID=...`
+- `LINKEDIN_CLIENT_SECRET=...`
+
+For Facebook/Instagram OAuth:
+- `META_APP_ID=...`
+- `META_APP_SECRET=...`
+
 Notes:
 
 - For local development, use `.env` (template available at `.env.example`).
@@ -50,16 +60,18 @@ export API_TOKEN="<same-token-as-coolify>"
 
 curl -H "Authorization: Bearer $API_TOKEN" "$BASE_URL/healthz"
 curl -H "Authorization: Bearer $API_TOKEN" "$BASE_URL/schedule"
+curl -H "Authorization: Bearer $API_TOKEN" "$BASE_URL/accounts"
 curl -H "Authorization: Bearer $API_TOKEN" \
   -H 'content-type: application/json' \
   -X POST "$BASE_URL/posts/validate" \
-  -d '{"platform":"x","text":"smoke","scheduled_at":"2026-03-01T10:00:00Z"}'
+  -d '{"account_id":"<account-id-from-/accounts>","text":"smoke","scheduled_at":"2026-03-01T10:00:00Z"}'
 ```
 
 Expected:
 
 - `/healthz` returns `{"status":"ok"}`
 - `/schedule` returns `200`
+- `/accounts` returns `200`
 - `/posts/validate` returns `200` and `valid: true`
 
 ## 4) Backup strategy with persistent volume

@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: Publisher API
-  version: 0.1.0
-  description: API mínima para programación de publicaciones en X orientada a consumo por LLMs.
+  version: 0.2.0
+  description: API v2 para publicación multi-red y multi-cuenta por account_id.
 servers:
   - url: http://localhost:8080
 security:
@@ -24,6 +24,146 @@ paths:
                   status:
                     type: string
                     example: ok
+
+  /accounts:
+    get:
+      summary: Lista cuentas conectadas/registradas
+      responses:
+        '200':
+          description: Lista de cuentas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Account'
+
+  /accounts/static:
+    post:
+      summary: Crea o actualiza cuenta estática y guarda credenciales cifradas
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateStaticAccountRequest'
+      responses:
+        '201':
+          description: Cuenta creada/actualizada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '400':
+          $ref: '#/components/responses/Error'
+
+  /accounts/{id}/disconnect:
+    post:
+      summary: Marca una cuenta como desconectada
+      parameters:
+        - $ref: '#/components/parameters/AccountID'
+      responses:
+        '200':
+          description: Cuenta desconectada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  status:
+                    type: string
+                    example: disconnected
+        '404':
+          $ref: '#/components/responses/Error'
+
+  /accounts/{id}:
+    delete:
+      summary: Elimina una cuenta desconectada sin posts asociados
+      parameters:
+        - $ref: '#/components/parameters/AccountID'
+      responses:
+        '200':
+          description: Cuenta eliminada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: boolean
+                  id:
+                    type: string
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+
+  /oauth/{platform}/start:
+    post:
+      summary: Inicia OAuth para una plataforma
+      parameters:
+        - $ref: '#/components/parameters/PlatformPath'
+      responses:
+        '200':
+          description: URL de autorización
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  platform:
+                    $ref: '#/components/schemas/Platform'
+                  auth_url:
+                    type: string
+                  state:
+                    type: string
+                  expires:
+                    type: string
+                    format: date-time
+        '400':
+          $ref: '#/components/responses/Error'
+
+  /oauth/{platform}/callback:
+    get:
+      summary: Completa OAuth y crea/actualiza cuenta(s)
+      parameters:
+        - $ref: '#/components/parameters/PlatformPath'
+        - in: query
+          name: state
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: code
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Cuentas conectadas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  platform:
+                    $ref: '#/components/schemas/Platform'
+                  count:
+                    type: integer
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Account'
+        '400':
+          $ref: '#/components/responses/Error'
+
   /media:
     post:
       summary: Sube un archivo multimedia
@@ -35,10 +175,6 @@ paths:
               type: object
               required: [file]
               properties:
-                platform:
-                  type: string
-                  enum: [x]
-                  default: x
                 kind:
                   type: string
                   enum: [video, image]
@@ -55,9 +191,60 @@ paths:
                 $ref: '#/components/schemas/Media'
         '400':
           $ref: '#/components/responses/Error'
+    get:
+      summary: Lista media subida
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 100
+      responses:
+        '200':
+          description: Lista de media
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MediaListItem'
+
+  /media/{id}:
+    delete:
+      summary: Borra media si no está en uso
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Media borrada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: boolean
+                  media:
+                    $ref: '#/components/schemas/MediaListItem'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+
   /posts:
     post:
-      summary: Crea una publicación programada
+      summary: Crea una publicación draft o scheduled
       parameters:
         - in: header
           name: Idempotency-Key
@@ -70,25 +257,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [platform, text, scheduled_at]
-              properties:
-                platform:
-                  type: string
-                  enum: [x]
-                text:
-                  type: string
-                scheduled_at:
-                  type: string
-                  format: date-time
-                max_attempts:
-                  type: integer
-                  minimum: 1
-                  default: 3
-                media_ids:
-                  type: array
-                  items:
-                    type: string
+              $ref: '#/components/schemas/CreatePostRequest'
       responses:
         '201':
           description: Post creado
@@ -97,17 +266,14 @@ paths:
               schema:
                 $ref: '#/components/schemas/Post'
         '200':
-          description: Repetición idempotente (devuelve el post existente)
+          description: Repetición idempotente (post existente)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Post'
         '400':
           $ref: '#/components/responses/Error'
-        '401':
-          $ref: '#/components/responses/Error'
-        '429':
-          $ref: '#/components/responses/Error'
+
   /posts/validate:
     post:
       summary: Valida una publicación sin persistirla (dry-run)
@@ -116,25 +282,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [platform, text, scheduled_at]
-              properties:
-                platform:
-                  type: string
-                  enum: [x]
-                text:
-                  type: string
-                scheduled_at:
-                  type: string
-                  format: date-time
-                max_attempts:
-                  type: integer
-                  minimum: 1
-                  default: 3
-                media_ids:
-                  type: array
-                  items:
-                    type: string
+              $ref: '#/components/schemas/CreatePostRequest'
       responses:
         '200':
           description: Validación correcta
@@ -148,8 +296,10 @@ paths:
                   normalized:
                     type: object
                     properties:
-                      platform:
+                      account_id:
                         type: string
+                      platform:
+                        $ref: '#/components/schemas/Platform'
                       text:
                         type: string
                       scheduled_at:
@@ -167,10 +317,34 @@ paths:
                       type: string
         '400':
           $ref: '#/components/responses/Error'
-        '401':
+
+  /posts/{id}/cancel:
+    post:
+      summary: Cancela una publicación scheduled
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Post cancelado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  status:
+                    type: string
+                    example: canceled
+        '404':
           $ref: '#/components/responses/Error'
-        '429':
+        '409':
           $ref: '#/components/responses/Error'
+
   /schedule:
     get:
       summary: Lista publicaciones por rango
@@ -203,41 +377,13 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Post'
-        '400':
-          $ref: '#/components/responses/Error'
-  /posts/{id}/cancel:
-    post:
-      summary: Cancela una publicación en estado scheduled
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Cancelado
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  id:
-                    type: string
-                  status:
-                    type: string
-                    example: canceled
-        '409':
-          $ref: '#/components/responses/Error'
-        '401':
-          $ref: '#/components/responses/Error'
+
   /dlq:
     get:
-      summary: Lista entradas en dead-letter queue
+      summary: Lista entradas de dead-letter queue
       parameters:
         - in: query
           name: limit
-          required: false
           schema:
             type: integer
             minimum: 1
@@ -257,10 +403,7 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/DeadLetter'
-        '400':
-          $ref: '#/components/responses/Error'
-        '401':
-          $ref: '#/components/responses/Error'
+
   /dlq/{id}/requeue:
     post:
       summary: Reencola un post que estaba en DLQ
@@ -286,8 +429,7 @@ paths:
           $ref: '#/components/responses/Error'
         '409':
           $ref: '#/components/responses/Error'
-        '401':
-          $ref: '#/components/responses/Error'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -300,6 +442,21 @@ components:
     basicAuth:
       type: http
       scheme: basic
+
+  parameters:
+    AccountID:
+      in: path
+      name: id
+      required: true
+      schema:
+        type: string
+    PlatformPath:
+      in: path
+      name: platform
+      required: true
+      schema:
+        $ref: '#/components/schemas/Platform'
+
   responses:
     Error:
       description: Error de validación o negocio
@@ -310,13 +467,78 @@ components:
             properties:
               error:
                 type: string
+
   schemas:
-    Media:
+    Platform:
+      type: string
+      enum: [x, linkedin, facebook, instagram]
+
+    Account:
       type: object
       properties:
         id:
           type: string
         platform:
+          $ref: '#/components/schemas/Platform'
+        display_name:
+          type: string
+        external_account_id:
+          type: string
+        auth_method:
+          type: string
+          enum: [static, oauth]
+        status:
+          type: string
+          enum: [connected, disconnected, error]
+        last_error:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateStaticAccountRequest:
+      type: object
+      required: [platform, external_account_id, credentials]
+      properties:
+        platform:
+          $ref: '#/components/schemas/Platform'
+        display_name:
+          type: string
+        external_account_id:
+          type: string
+        credentials:
+          type: object
+          additionalProperties: true
+
+    CreatePostRequest:
+      type: object
+      required: [account_id, text]
+      properties:
+        account_id:
+          type: string
+        text:
+          type: string
+        scheduled_at:
+          type: string
+          format: date-time
+          description: Opcional. Vacío crea draft.
+        max_attempts:
+          type: integer
+          minimum: 1
+          default: 3
+        media_ids:
+          type: array
+          items:
+            type: string
+
+    Media:
+      type: object
+      properties:
+        id:
           type: string
         kind:
           type: string
@@ -331,18 +553,50 @@ components:
         created_at:
           type: string
           format: date-time
+        usage_count:
+          type: integer
+        in_use:
+          type: boolean
+        preview_url:
+          type: string
+
+    MediaListItem:
+      type: object
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+        original_name:
+          type: string
+        mime_type:
+          type: string
+        size_bytes:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        usage_count:
+          type: integer
+        in_use:
+          type: boolean
+        preview_url:
+          type: string
+
     Post:
       type: object
       properties:
         id:
           type: string
-        platform:
+        account_id:
           type: string
+        platform:
+          $ref: '#/components/schemas/Platform'
         text:
           type: string
         status:
           type: string
-          enum: [scheduled, publishing, published, failed, canceled]
+          enum: [draft, scheduled, publishing, published, failed, canceled]
         scheduled_at:
           type: string
           format: date-time
@@ -376,7 +630,8 @@ components:
         media:
           type: array
           items:
-            $ref: '#/components/schemas/Media'
+            $ref: '#/components/schemas/MediaListItem'
+
     DeadLetter:
       type: object
       properties:
