@@ -9,11 +9,8 @@ import (
 	"fmt"
 	"html/template"
 	"io"
-	"mime"
 	"net/http"
 	"net/url"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -60,18 +57,19 @@ func (s Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s Server) handleUploadMedia(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseMultipartForm(1 << 30); err != nil {
-		writeError(w, http.StatusBadRequest, fmt.Errorf("invalid multipart form: %w", err))
-		return
-	}
-	f, hdr, err := r.FormFile("file")
+	upload, status, err := s.saveUploadToDisk(r)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, fmt.Errorf("missing file field: %w", err))
+		writeError(w, status, err)
 		return
 	}
-	defer f.Close()
+	cleanupFile := true
+	defer func() {
+		if cleanupFile && upload.StoragePath != "" {
+			_ = removeFileQuiet(upload.StoragePath)
+		}
+	}()
 
-	platform := domain.Platform(strings.ToLower(r.FormValue("platform")))
+	platform := domain.Platform(strings.ToLower(upload.Platform))
 	if platform == "" {
 		platform = domain.PlatformX
 	}
@@ -79,59 +77,25 @@ func (s Server) handleUploadMedia(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, errors.New("only platform 'x' is supported in this MVP"))
 		return
 	}
-	kind := strings.ToLower(r.FormValue("kind"))
+	kind := strings.ToLower(upload.Kind)
 	if kind == "" {
 		kind = "video"
 	}
 
-	mediaID, err := db.NewID("med")
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	name := sanitizeName(hdr.Filename)
-	if name == "" {
-		name = "upload.bin"
-	}
-	storageDir := filepath.Join(s.DataDir, "media")
-	if err := os.MkdirAll(storageDir, 0o755); err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	storagePath := filepath.Join(storageDir, mediaID+"_"+name)
-	out, err := os.Create(storagePath)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	size, copyErr := io.Copy(out, f)
-	closeErr := out.Close()
-	if copyErr != nil || closeErr != nil {
-		writeError(w, http.StatusInternalServerError, errors.Join(copyErr, closeErr))
-		return
-	}
-
-	mimeType := hdr.Header.Get("Content-Type")
-	if mimeType == "" {
-		mimeType = mime.TypeByExtension(filepath.Ext(hdr.Filename))
-		if mimeType == "" {
-			mimeType = "application/octet-stream"
-		}
-	}
-
 	created, err := s.Store.CreateMedia(r.Context(), domain.Media{
-		ID:           mediaID,
+		ID:           upload.MediaID,
 		Platform:     platform,
 		Kind:         kind,
-		OriginalName: hdr.Filename,
-		StoragePath:  storagePath,
-		MimeType:     mimeType,
-		SizeBytes:    size,
+		OriginalName: upload.OriginalName,
+		StoragePath:  upload.StoragePath,
+		MimeType:     upload.MimeType,
+		SizeBytes:    upload.SizeBytes,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+	cleanupFile = false
 	mimeLower := strings.ToLower(strings.TrimSpace(created.MimeType))
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"id":            created.ID,

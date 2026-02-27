@@ -23,6 +23,17 @@ La app carga automáticamente variables desde `.env` si existe.
 - Las variables exportadas en shell tienen prioridad sobre `.env`.
 - Puedes usar otro fichero con `ENV_FILE=/ruta/a/otro.env`.
 
+## Docker multi-arch (amd64 + arm64)
+
+Para publicar imagen compatible con servidores x86 y Raspberry Pi (64-bit):
+
+```bash
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  -t antoniolg/publisher:latest \
+  --push .
+```
+
 ## Desarrollo con hot reload
 
 Con `air` el servidor recompila/reinicia al guardar cambios:

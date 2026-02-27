@@ -1,13 +1,21 @@
 # syntax=docker/dockerfile:1
 
-FROM golang:1.23-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS builder
+ARG TARGETOS
+ARG TARGETARCH
+ARG TARGETVARIANT
 WORKDIR /app
 
 COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags='-s -w' -o /out/publisher ./cmd/publisher
+RUN set -eux; \
+	goos="${TARGETOS:-linux}"; \
+	goarch="${TARGETARCH:-amd64}"; \
+	goarm=""; \
+	if [ "$goarch" = "arm" ] && [ -n "${TARGETVARIANT:-}" ]; then goarm="${TARGETVARIANT#v}"; fi; \
+	CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" GOARM="$goarm" go build -trimpath -ldflags='-s -w' -o /out/publisher ./cmd/publisher
 
 FROM alpine:3.21
 RUN apk add --no-cache ca-certificates tzdata && adduser -D -u 10001 app

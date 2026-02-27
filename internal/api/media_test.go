@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -213,5 +214,154 @@ func TestCreateAndSettingsViewsRenderMediaManagementSections(t *testing.T) {
 	}
 	if loc := deleteFormW.Header().Get("Location"); !strings.Contains(loc, "media_success=") {
 		t.Fatalf("expected success redirect query, got %q", loc)
+	}
+}
+
+func TestUploadMediaAcceptsOutOfOrderMultipartFields(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+
+	filePart, err := writer.CreateFormFile("file", "clip.txt")
+	if err != nil {
+		t.Fatalf("create form file: %v", err)
+	}
+	payload := []byte("hello streaming upload")
+	if _, err := filePart.Write(payload); err != nil {
+		t.Fatalf("write file payload: %v", err)
+	}
+	if err := writer.WriteField("kind", "image"); err != nil {
+		t.Fatalf("write kind field: %v", err)
+	}
+	if err := writer.WriteField("platform", "x"); err != nil {
+		t.Fatalf("write platform field: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close writer: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/media", &body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		ID           string `json:"id"`
+		Kind         string `json:"kind"`
+		OriginalName string `json:"original_name"`
+		StoragePath  string `json:"storage_path"`
+		SizeBytes    int64  `json:"size_bytes"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.ID == "" {
+		t.Fatalf("expected media id in response")
+	}
+	if resp.Kind != "image" {
+		t.Fatalf("expected kind=image, got %q", resp.Kind)
+	}
+	if resp.OriginalName != "clip.txt" {
+		t.Fatalf("expected original_name=clip.txt, got %q", resp.OriginalName)
+	}
+	if resp.SizeBytes != int64(len(payload)) {
+		t.Fatalf("expected size_bytes=%d, got %d", len(payload), resp.SizeBytes)
+	}
+
+	stored, err := os.ReadFile(resp.StoragePath)
+	if err != nil {
+		t.Fatalf("read stored file: %v", err)
+	}
+	if !bytes.Equal(stored, payload) {
+		t.Fatalf("stored file contents mismatch")
+	}
+}
+
+func TestUploadMediaMissingFileReturnsBadRequest(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	if err := writer.WriteField("platform", "x"); err != nil {
+		t.Fatalf("write platform field: %v", err)
+	}
+	if err := writer.WriteField("kind", "video"); err != nil {
+		t.Fatalf("write kind field: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close writer: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/media", &body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestUploadMediaInvalidPlatformRemovesUploadedFile(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	if err := writer.WriteField("platform", "linkedin"); err != nil {
+		t.Fatalf("write platform field: %v", err)
+	}
+	filePart, err := writer.CreateFormFile("file", "tmp.txt")
+	if err != nil {
+		t.Fatalf("create form file: %v", err)
+	}
+	if _, err := filePart.Write([]byte("will be discarded")); err != nil {
+		t.Fatalf("write file payload: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close writer: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/media", &body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+
+	mediaDir := filepath.Join(tempDir, "media")
+	entries, err := os.ReadDir(mediaDir)
+	if err != nil && !os.IsNotExist(err) {
+		t.Fatalf("read media dir: %v", err)
+	}
+	if len(entries) > 0 {
+		t.Fatalf("expected no persisted media files on invalid platform, found %d", len(entries))
 	}
 }
