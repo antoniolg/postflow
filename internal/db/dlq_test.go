@@ -18,9 +18,10 @@ func TestRequeueDeadLetter(t *testing.T) {
 	defer store.Close()
 
 	ctx := context.Background()
+	account := createTestAccount(t, store, domain.PlatformX)
 	created, err := store.CreatePost(ctx, CreatePostParams{
 		Post: domain.Post{
-			Platform:    domain.PlatformX,
+			AccountID:   account.ID,
 			Text:        "needs requeue",
 			Status:      domain.PostStatusScheduled,
 			ScheduledAt: time.Now().UTC().Add(-1 * time.Minute),

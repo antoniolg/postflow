@@ -1,16 +1,25 @@
 package config
 
 import (
+	"encoding/base64"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 )
 
+func testMasterKey() string {
+	key := make([]byte, 32)
+	for i := range key {
+		key[i] = byte(i + 1)
+	}
+	return base64.StdEncoding.EncodeToString(key)
+}
+
 func TestLoadReadsDotEnvFile(t *testing.T) {
 	tempDir := t.TempDir()
 	envPath := filepath.Join(tempDir, "publisher.env")
-	envContent := "PORT=9090\nWORKER_INTERVAL_SECONDS=45\nPUBLISHER_DRIVER=x\nX_API_KEY=abc123\n"
+	envContent := "PORT=9090\nWORKER_INTERVAL_SECONDS=45\nPUBLISHER_DRIVER=x\nX_API_KEY=abc123\nPUBLISHER_MASTER_KEY=" + testMasterKey() + "\n"
 	if err := os.WriteFile(envPath, []byte(envContent), 0o600); err != nil {
 		t.Fatalf("write env file: %v", err)
 	}
@@ -20,6 +29,7 @@ func TestLoadReadsDotEnvFile(t *testing.T) {
 	unsetEnvForTest(t, "WORKER_INTERVAL_SECONDS")
 	unsetEnvForTest(t, "PUBLISHER_DRIVER")
 	unsetEnvForTest(t, "X_API_KEY")
+	unsetEnvForTest(t, "PUBLISHER_MASTER_KEY")
 
 	cfg, err := Load()
 	if err != nil {
@@ -37,6 +47,9 @@ func TestLoadReadsDotEnvFile(t *testing.T) {
 	}
 	if cfg.X.APIKey != "abc123" {
 		t.Fatalf("X.APIKey = %q, want %q", cfg.X.APIKey, "abc123")
+	}
+	if cfg.MasterKeyBase64 == "" {
+		t.Fatalf("expected master key loaded")
 	}
 }
 
@@ -58,7 +71,7 @@ func unsetEnvForTest(t *testing.T, key string) {
 func TestLoadEnvVarsOverrideDotEnvFile(t *testing.T) {
 	tempDir := t.TempDir()
 	envPath := filepath.Join(tempDir, "publisher.env")
-	if err := os.WriteFile(envPath, []byte("PORT=9999\n"), 0o600); err != nil {
+	if err := os.WriteFile(envPath, []byte("PORT=9999\nPUBLISHER_MASTER_KEY="+testMasterKey()+"\n"), 0o600); err != nil {
 		t.Fatalf("write env file: %v", err)
 	}
 
@@ -76,8 +89,17 @@ func TestLoadEnvVarsOverrideDotEnvFile(t *testing.T) {
 
 func TestLoadMissingDotEnvFileDoesNotFail(t *testing.T) {
 	t.Setenv("ENV_FILE", filepath.Join(t.TempDir(), "missing.env"))
+	t.Setenv("PUBLISHER_MASTER_KEY", testMasterKey())
 
 	if _, err := Load(); err != nil {
 		t.Fatalf("Load() error = %v, want nil", err)
+	}
+}
+
+func TestLoadRequiresMasterKey(t *testing.T) {
+	t.Setenv("ENV_FILE", filepath.Join(t.TempDir(), "missing.env"))
+	unsetEnvForTest(t, "PUBLISHER_MASTER_KEY")
+	if _, err := Load(); err == nil {
+		t.Fatalf("expected missing key error")
 	}
 }

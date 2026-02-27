@@ -18,8 +18,8 @@ func TestListMediaIncludesUsageCount(t *testing.T) {
 	defer store.Close()
 
 	ctx := context.Background()
+	account := createTestAccount(t, store, domain.PlatformX)
 	mediaA, err := store.CreateMedia(ctx, domain.Media{
-		Platform:     domain.PlatformX,
 		Kind:         "image",
 		OriginalName: "a.png",
 		StoragePath:  "/tmp/a.png",
@@ -31,7 +31,6 @@ func TestListMediaIncludesUsageCount(t *testing.T) {
 	}
 	time.Sleep(2 * time.Millisecond)
 	mediaB, err := store.CreateMedia(ctx, domain.Media{
-		Platform:     domain.PlatformX,
 		Kind:         "image",
 		OriginalName: "b.png",
 		StoragePath:  "/tmp/b.png",
@@ -44,7 +43,7 @@ func TestListMediaIncludesUsageCount(t *testing.T) {
 
 	_, err = store.CreatePost(ctx, CreatePostParams{
 		Post: domain.Post{
-			Platform:    domain.PlatformX,
+			AccountID:   account.ID,
 			Text:        "post with media",
 			Status:      domain.PostStatusDraft,
 			MaxAttempts: 3,
@@ -84,7 +83,6 @@ func TestDeleteMediaIfUnused(t *testing.T) {
 
 	ctx := context.Background()
 	created, err := store.CreateMedia(ctx, domain.Media{
-		Platform:     domain.PlatformX,
 		Kind:         "image",
 		OriginalName: "preview.png",
 		StoragePath:  "/tmp/preview.png",
@@ -121,7 +119,6 @@ func TestDeleteMediaIfUnusedRejectsInUse(t *testing.T) {
 
 	ctx := context.Background()
 	created, err := store.CreateMedia(ctx, domain.Media{
-		Platform:     domain.PlatformX,
 		Kind:         "image",
 		OriginalName: "preview.png",
 		StoragePath:  "/tmp/preview.png",
@@ -134,7 +131,7 @@ func TestDeleteMediaIfUnusedRejectsInUse(t *testing.T) {
 
 	_, err = store.CreatePost(ctx, CreatePostParams{
 		Post: domain.Post{
-			Platform:    domain.PlatformX,
+			AccountID:   createTestAccount(t, store, domain.PlatformX).ID,
 			Text:        "post with media",
 			Status:      domain.PostStatusDraft,
 			MaxAttempts: 3,

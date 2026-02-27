@@ -5,7 +5,25 @@ import "time"
 type Platform string
 
 const (
-	PlatformX Platform = "x"
+	PlatformX         Platform = "x"
+	PlatformLinkedIn  Platform = "linkedin"
+	PlatformFacebook  Platform = "facebook"
+	PlatformInstagram Platform = "instagram"
+)
+
+type AuthMethod string
+
+const (
+	AuthMethodStatic AuthMethod = "static"
+	AuthMethodOAuth  AuthMethod = "oauth"
+)
+
+type AccountStatus string
+
+const (
+	AccountStatusConnected    AccountStatus = "connected"
+	AccountStatusDisconnected AccountStatus = "disconnected"
+	AccountStatusError        AccountStatus = "error"
 )
 
 type PostStatus string
@@ -21,7 +39,6 @@ const (
 
 type Media struct {
 	ID           string    `json:"id"`
-	Platform     Platform  `json:"platform"`
 	Kind         string    `json:"kind"`
 	OriginalName string    `json:"original_name"`
 	StoragePath  string    `json:"storage_path"`
@@ -30,8 +47,30 @@ type Media struct {
 	CreatedAt    time.Time `json:"created_at"`
 }
 
+type SocialAccount struct {
+	ID                string        `json:"id"`
+	Platform          Platform      `json:"platform"`
+	DisplayName       string        `json:"display_name"`
+	ExternalAccountID string        `json:"external_account_id"`
+	AuthMethod        AuthMethod    `json:"auth_method"`
+	Status            AccountStatus `json:"status"`
+	LastError         *string       `json:"last_error,omitempty"`
+	CreatedAt         time.Time     `json:"created_at"`
+	UpdatedAt         time.Time     `json:"updated_at"`
+}
+
+type OauthState struct {
+	ID           string    `json:"id"`
+	Platform     Platform  `json:"platform"`
+	State        string    `json:"state"`
+	CodeVerifier string    `json:"code_verifier"`
+	ExpiresAt    time.Time `json:"expires_at"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
 type Post struct {
 	ID             string     `json:"id"`
+	AccountID      string     `json:"account_id"`
 	Platform       Platform   `json:"platform"`
 	Text           string     `json:"text"`
 	Status         PostStatus `json:"status"`

@@ -14,8 +14,10 @@ import (
 	"github.com/antoniolg/publisher/internal/api"
 	"github.com/antoniolg/publisher/internal/config"
 	"github.com/antoniolg/publisher/internal/db"
+	"github.com/antoniolg/publisher/internal/domain"
 	"github.com/antoniolg/publisher/internal/observability"
 	"github.com/antoniolg/publisher/internal/publisher"
+	"github.com/antoniolg/publisher/internal/secure"
 	"github.com/antoniolg/publisher/internal/worker"
 )
 
@@ -38,6 +40,23 @@ func main() {
 	}
 	defer store.Close()
 
+	cipher, err := secure.NewCipherFromBase64(cfg.MasterKeyBase64, 1)
+	if err != nil {
+		slog.Error("build credentials cipher", "error", err)
+		os.Exit(1)
+	}
+
+	registry, err := buildProviderRegistry(cfg)
+	if err != nil {
+		slog.Error("build provider registry", "error", err)
+		os.Exit(1)
+	}
+
+	if err := bootstrapXAccount(context.Background(), store, cipher, cfg); err != nil {
+		slog.Error("bootstrap x account", "error", err)
+		os.Exit(1)
+	}
+
 	apiServer := api.Server{
 		Store:             store,
 		DataDir:           cfg.DataDir,
@@ -46,20 +65,18 @@ func main() {
 		APIToken:          cfg.APIToken,
 		UIBasicUser:       cfg.UIBasicUser,
 		UIBasicPass:       cfg.UIBasicPass,
+		Registry:          registry,
+		Cipher:            cipher,
+		PublicBaseURL:     cfg.PublicBaseURL,
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	client, err := buildPublisherClient(cfg)
-	if err != nil {
-		slog.Error("build publisher client", "error", err, "publisher_driver", cfg.PublisherDriver)
-		os.Exit(1)
-	}
-
 	w := worker.Worker{
 		Store:        store,
-		Client:       client,
+		Registry:     registry,
+		Cipher:       cipher,
 		Interval:     cfg.WorkerInterval,
 		RetryBackoff: cfg.RetryBackoff,
 	}
@@ -87,12 +104,18 @@ func main() {
 	}
 }
 
-func buildPublisherClient(cfg config.Config) (publisher.Client, error) {
-	switch strings.ToLower(strings.TrimSpace(cfg.PublisherDriver)) {
+func buildProviderRegistry(cfg config.Config) (*publisher.ProviderRegistry, error) {
+	driver := strings.ToLower(strings.TrimSpace(cfg.PublisherDriver))
+	switch driver {
 	case "", "mock":
-		return publisher.MockClient{}, nil
+		return publisher.NewProviderRegistry(
+			publisher.NewMockProvider(domain.PlatformX),
+			publisher.NewMockProvider(domain.PlatformLinkedIn),
+			publisher.NewMockProvider(domain.PlatformFacebook),
+			publisher.NewMockProvider(domain.PlatformInstagram),
+		), nil
 	case "x":
-		client, err := publisher.NewXClient(publisher.XConfig{
+		xProvider := publisher.NewXProvider(publisher.XConfig{
 			APIBaseURL:        cfg.X.APIBaseURL,
 			UploadBaseURL:     cfg.X.UploadBaseURL,
 			APIKey:            cfg.X.APIKey,
@@ -100,11 +123,48 @@ func buildPublisherClient(cfg config.Config) (publisher.Client, error) {
 			AccessToken:       cfg.X.AccessToken,
 			AccessTokenSecret: cfg.X.AccessTokenSecret,
 		})
-		if err != nil {
-			return nil, err
+		linkedinProvider := publisher.NewLinkedInProvider(publisher.LinkedInProviderConfig{
+			ClientID:     cfg.LinkedIn.ClientID,
+			ClientSecret: cfg.LinkedIn.ClientSecret,
+		})
+		metaCfg := publisher.MetaProviderConfig{
+			AppID:     cfg.Meta.AppID,
+			AppSecret: cfg.Meta.AppSecret,
 		}
-		return client, nil
+		facebookProvider := publisher.NewFacebookProvider(metaCfg)
+		instagramProvider := publisher.NewInstagramProvider(metaCfg)
+		return publisher.NewProviderRegistry(xProvider, linkedinProvider, facebookProvider, instagramProvider), nil
 	default:
 		return nil, fmt.Errorf("unsupported PUBLISHER_DRIVER=%q (valid: mock, x)", cfg.PublisherDriver)
 	}
+}
+
+func bootstrapXAccount(ctx context.Context, store *db.Store, cipher *secure.Cipher, cfg config.Config) error {
+	if strings.TrimSpace(cfg.X.AccessToken) == "" || strings.TrimSpace(cfg.X.AccessTokenSecret) == "" {
+		return nil
+	}
+	account, err := store.UpsertAccount(ctx, db.UpsertAccountParams{
+		Platform:          domain.PlatformX,
+		DisplayName:       "X Default",
+		ExternalAccountID: "x-default",
+		AuthMethod:        domain.AuthMethodStatic,
+		Status:            domain.AccountStatusConnected,
+	})
+	if err != nil {
+		return err
+	}
+	sealed, nonce, err := cipher.EncryptJSON(publisher.Credentials{
+		AccessToken:       strings.TrimSpace(cfg.X.AccessToken),
+		AccessTokenSecret: strings.TrimSpace(cfg.X.AccessTokenSecret),
+		TokenType:         "oauth1",
+	})
+	if err != nil {
+		return err
+	}
+	return store.SaveAccountCredentials(ctx, account.ID, db.EncryptedCredentials{
+		Ciphertext: sealed,
+		Nonce:      nonce,
+		KeyVersion: cipher.KeyVersion(),
+		UpdatedAt:  time.Now().UTC(),
+	})
 }

@@ -24,7 +24,11 @@ type Config struct {
 	UIBasicPass       string
 	LogLevel          string
 	PublisherDriver   string
+	PublicBaseURL     string
+	MasterKeyBase64   string
 	X                 XConfig
+	LinkedIn          LinkedInConfig
+	Meta              MetaConfig
 }
 
 type XConfig struct {
@@ -34,6 +38,16 @@ type XConfig struct {
 	APIKeySecret      string
 	AccessToken       string
 	AccessTokenSecret string
+}
+
+type LinkedInConfig struct {
+	ClientID     string
+	ClientSecret string
+}
+
+type MetaConfig struct {
+	AppID     string
+	AppSecret string
 }
 
 func Load() (Config, error) {
@@ -89,6 +103,8 @@ func Load() (Config, error) {
 		UIBasicPass:       os.Getenv("UI_BASIC_PASS"),
 		LogLevel:          getenv("LOG_LEVEL", "info"),
 		PublisherDriver:   getenv("PUBLISHER_DRIVER", "mock"),
+		PublicBaseURL:     strings.TrimRight(strings.TrimSpace(os.Getenv("PUBLIC_BASE_URL")), "/"),
+		MasterKeyBase64:   strings.TrimSpace(os.Getenv("PUBLISHER_MASTER_KEY")),
 		X: XConfig{
 			APIBaseURL:        getenv("X_API_BASE_URL", "https://api.twitter.com"),
 			UploadBaseURL:     getenv("X_UPLOAD_BASE_URL", "https://upload.twitter.com"),
@@ -97,6 +113,20 @@ func Load() (Config, error) {
 			AccessToken:       os.Getenv("X_ACCESS_TOKEN"),
 			AccessTokenSecret: os.Getenv("X_ACCESS_TOKEN_SECRET"),
 		},
+		LinkedIn: LinkedInConfig{
+			ClientID:     strings.TrimSpace(os.Getenv("LINKEDIN_CLIENT_ID")),
+			ClientSecret: strings.TrimSpace(os.Getenv("LINKEDIN_CLIENT_SECRET")),
+		},
+		Meta: MetaConfig{
+			AppID:     strings.TrimSpace(os.Getenv("META_APP_ID")),
+			AppSecret: strings.TrimSpace(os.Getenv("META_APP_SECRET")),
+		},
+	}
+	if cfg.MasterKeyBase64 == "" {
+		return Config{}, errors.New("PUBLISHER_MASTER_KEY is required")
+	}
+	if cfg.PublicBaseURL == "" {
+		cfg.PublicBaseURL = "http://localhost:" + cfg.Port
 	}
 	return cfg, nil
 }

@@ -15,6 +15,8 @@ import (
 	"github.com/antoniolg/publisher/internal/domain"
 )
 
+const schemaVersion = "2"
+
 type Store struct {
 	db *sql.DB
 }
@@ -28,6 +30,13 @@ type CreatePostParams struct {
 type CreatePostResult struct {
 	Post    domain.Post
 	Created bool
+}
+
+type EncryptedCredentials struct {
+	Ciphertext []byte
+	Nonce      []byte
+	KeyVersion int
+	UpdatedAt  time.Time
 }
 
 func Open(path string) (*Store, error) {
@@ -49,10 +58,70 @@ func Open(path string) (*Store, error) {
 func (s *Store) Close() error { return s.db.Close() }
 
 func (s *Store) migrate(ctx context.Context) error {
-	baseQueries := []string{
+	if _, err := s.db.ExecContext(ctx, `PRAGMA foreign_keys = ON;`); err != nil {
+		return err
+	}
+
+	needsRecreate, err := s.needsSchemaReset(ctx)
+	if err != nil {
+		return err
+	}
+	if needsRecreate {
+		if err := s.resetSchema(ctx); err != nil {
+			return err
+		}
+	}
+
+	if err := s.createSchema(ctx); err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx, `INSERT INTO settings (key, value) VALUES ('schema_version', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, schemaVersion)
+	return err
+}
+
+func (s *Store) needsSchemaReset(ctx context.Context) (bool, error) {
+	var hasSettings int
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='settings'`).Scan(&hasSettings)
+	if err != nil {
+		return false, err
+	}
+	if hasSettings == 0 {
+		return false, nil
+	}
+	var version string
+	err = s.db.QueryRowContext(ctx, `SELECT value FROM settings WHERE key='schema_version'`).Scan(&version)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return true, nil
+		}
+		return false, err
+	}
+	return strings.TrimSpace(version) != schemaVersion, nil
+}
+
+func (s *Store) resetSchema(ctx context.Context) error {
+	queries := []string{
+		`DROP TABLE IF EXISTS dead_letters;`,
+		`DROP TABLE IF EXISTS post_media;`,
+		`DROP TABLE IF EXISTS posts;`,
+		`DROP TABLE IF EXISTS oauth_states;`,
+		`DROP TABLE IF EXISTS account_credentials;`,
+		`DROP TABLE IF EXISTS accounts;`,
+		`DROP TABLE IF EXISTS media;`,
+		`DROP TABLE IF EXISTS settings;`,
+	}
+	for _, query := range queries {
+		if _, err := s.db.ExecContext(ctx, query); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Store) createSchema(ctx context.Context) error {
+	queries := []string{
 		`CREATE TABLE IF NOT EXISTS media (
 			id TEXT PRIMARY KEY,
-			platform TEXT NOT NULL,
 			kind TEXT NOT NULL,
 			original_name TEXT NOT NULL,
 			storage_path TEXT NOT NULL,
@@ -60,9 +129,37 @@ func (s *Store) migrate(ctx context.Context) error {
 			size_bytes INTEGER NOT NULL,
 			created_at TEXT NOT NULL
 		);`,
-		`CREATE TABLE IF NOT EXISTS posts (
+		`CREATE TABLE IF NOT EXISTS accounts (
 			id TEXT PRIMARY KEY,
 			platform TEXT NOT NULL,
+			display_name TEXT NOT NULL,
+			external_account_id TEXT NOT NULL,
+			auth_method TEXT NOT NULL,
+			status TEXT NOT NULL,
+			last_error TEXT,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL,
+			UNIQUE(platform, external_account_id)
+		);`,
+		`CREATE TABLE IF NOT EXISTS account_credentials (
+			account_id TEXT PRIMARY KEY,
+			ciphertext BLOB NOT NULL,
+			nonce BLOB NOT NULL,
+			key_version INTEGER NOT NULL,
+			updated_at TEXT NOT NULL,
+			FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
+		);`,
+		`CREATE TABLE IF NOT EXISTS oauth_states (
+			id TEXT PRIMARY KEY,
+			platform TEXT NOT NULL,
+			state TEXT NOT NULL UNIQUE,
+			code_verifier TEXT NOT NULL,
+			expires_at TEXT NOT NULL,
+			created_at TEXT NOT NULL
+		);`,
+		`CREATE TABLE IF NOT EXISTS posts (
+			id TEXT PRIMARY KEY,
+			account_id TEXT NOT NULL,
 			text TEXT NOT NULL,
 			status TEXT NOT NULL,
 			scheduled_at TEXT NOT NULL,
@@ -74,7 +171,8 @@ func (s *Store) migrate(ctx context.Context) error {
 			external_id TEXT,
 			error TEXT,
 			created_at TEXT NOT NULL,
-			updated_at TEXT NOT NULL
+			updated_at TEXT NOT NULL,
+			FOREIGN KEY(account_id) REFERENCES accounts(id)
 		);`,
 		`CREATE TABLE IF NOT EXISTS post_media (
 			post_id TEXT NOT NULL,
@@ -95,43 +193,18 @@ func (s *Store) migrate(ctx context.Context) error {
 			key TEXT PRIMARY KEY,
 			value TEXT NOT NULL
 		);`,
-	}
-	for _, q := range baseQueries {
-		if _, err := s.db.ExecContext(ctx, q); err != nil {
-			return err
-		}
-	}
-	compatAlterQueries := []string{
-		`ALTER TABLE posts ADD COLUMN next_retry_at TEXT;`,
-		`ALTER TABLE posts ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0;`,
-		`ALTER TABLE posts ADD COLUMN max_attempts INTEGER NOT NULL DEFAULT 3;`,
-		`ALTER TABLE posts ADD COLUMN idempotency_key TEXT;`,
-	}
-	for _, q := range compatAlterQueries {
-		if _, err := s.db.ExecContext(ctx, q); err != nil && !isDuplicateColumnErr(err) {
-			return err
-		}
-	}
-	indexQueries := []string{
 		`CREATE INDEX IF NOT EXISTS idx_posts_status_scheduled_at ON posts(status, scheduled_at);`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_posts_idempotency_key ON posts(idempotency_key) WHERE idempotency_key IS NOT NULL;`,
 		`CREATE INDEX IF NOT EXISTS idx_posts_status_next_retry_at ON posts(status, next_retry_at);`,
 		`CREATE INDEX IF NOT EXISTS idx_dead_letters_post_id ON dead_letters(post_id);`,
+		`CREATE INDEX IF NOT EXISTS idx_accounts_platform ON accounts(platform);`,
 	}
-	for _, q := range indexQueries {
-		if _, err := s.db.ExecContext(ctx, q); err != nil {
+	for _, query := range queries {
+		if _, err := s.db.ExecContext(ctx, query); err != nil {
 			return err
 		}
 	}
 	return nil
-}
-
-func isDuplicateColumnErr(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "duplicate column name")
 }
 
 func NewID(prefix string) (string, error) {
@@ -143,7 +216,7 @@ func NewID(prefix string) (string, error) {
 }
 
 func (s *Store) CreateMedia(ctx context.Context, m domain.Media) (domain.Media, error) {
-	if m.ID == "" {
+	if strings.TrimSpace(m.ID) == "" {
 		id, err := NewID("med")
 		if err != nil {
 			return domain.Media{}, err
@@ -152,9 +225,9 @@ func (s *Store) CreateMedia(ctx context.Context, m domain.Media) (domain.Media, 
 	}
 	m.CreatedAt = time.Now().UTC()
 	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO media (id, platform, kind, original_name, storage_path, mime_type, size_bytes, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-	`, m.ID, m.Platform, m.Kind, m.OriginalName, m.StoragePath, m.MimeType, m.SizeBytes, m.CreatedAt.Format(time.RFC3339Nano))
+		INSERT INTO media (id, kind, original_name, storage_path, mime_type, size_bytes, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`, m.ID, strings.TrimSpace(m.Kind), strings.TrimSpace(m.OriginalName), strings.TrimSpace(m.StoragePath), strings.TrimSpace(m.MimeType), m.SizeBytes, m.CreatedAt.Format(time.RFC3339Nano))
 	if err != nil {
 		return domain.Media{}, err
 	}
@@ -170,17 +243,16 @@ func (s *Store) GetMediaByIDs(ctx context.Context, ids []string) ([]domain.Media
 		var m domain.Media
 		var created string
 		err := s.db.QueryRowContext(ctx, `
-			SELECT id, platform, kind, original_name, storage_path, mime_type, size_bytes, created_at
+			SELECT id, kind, original_name, storage_path, mime_type, size_bytes, created_at
 			FROM media WHERE id = ?
-		`, id).Scan(&m.ID, &m.Platform, &m.Kind, &m.OriginalName, &m.StoragePath, &m.MimeType, &m.SizeBytes, &created)
+		`, strings.TrimSpace(id)).Scan(&m.ID, &m.Kind, &m.OriginalName, &m.StoragePath, &m.MimeType, &m.SizeBytes, &created)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				return nil, fmt.Errorf("media %s not found", id)
+				return nil, fmt.Errorf("media %s not found", strings.TrimSpace(id))
 			}
 			return nil, err
 		}
-		parsed, _ := time.Parse(time.RFC3339Nano, created)
-		m.CreatedAt = parsed
+		m.CreatedAt, _ = time.Parse(time.RFC3339Nano, created)
 		out = append(out, m)
 	}
 	return out, nil
@@ -190,6 +262,9 @@ func (s *Store) CreatePost(ctx context.Context, params CreatePostParams) (Create
 	p := params.Post
 	mediaIDs := params.MediaIDs
 	idempotencyKey := strings.TrimSpace(params.IdempotencyKey)
+	if strings.TrimSpace(p.AccountID) == "" {
+		return CreatePostResult{}, fmt.Errorf("account_id is required")
+	}
 
 	if idempotencyKey != "" {
 		existing, err := s.GetPostByIdempotencyKey(ctx, idempotencyKey)
@@ -232,9 +307,9 @@ func (s *Store) CreatePost(ctx context.Context, params CreatePostParams) (Create
 	defer tx.Rollback()
 
 	_, err = tx.ExecContext(ctx, `
-		INSERT INTO posts (id, platform, text, status, scheduled_at, next_retry_at, attempts, max_attempts, idempotency_key, created_at, updated_at)
+		INSERT INTO posts (id, account_id, text, status, scheduled_at, next_retry_at, attempts, max_attempts, idempotency_key, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, p.ID, p.Platform, p.Text, p.Status, formatScheduledAt(p.ScheduledAt), sqlNullTimeString(p.NextRetryAt), p.Attempts, p.MaxAttempts, sqlNullString(p.IdempotencyKey), p.CreatedAt.Format(time.RFC3339Nano), p.UpdatedAt.Format(time.RFC3339Nano))
+	`, p.ID, p.AccountID, strings.TrimSpace(p.Text), p.Status, formatScheduledAt(p.ScheduledAt), sqlNullTimeString(p.NextRetryAt), p.Attempts, p.MaxAttempts, sqlNullString(p.IdempotencyKey), p.CreatedAt.Format(time.RFC3339Nano), p.UpdatedAt.Format(time.RFC3339Nano))
 	if err != nil {
 		if idempotencyKey != "" && strings.Contains(strings.ToLower(err.Error()), "unique") {
 			existing, findErr := s.GetPostByIdempotencyKey(ctx, idempotencyKey)
@@ -247,7 +322,7 @@ func (s *Store) CreatePost(ctx context.Context, params CreatePostParams) (Create
 	}
 
 	for _, mediaID := range mediaIDs {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO post_media (post_id, media_id) VALUES (?, ?)`, p.ID, mediaID); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO post_media (post_id, media_id) VALUES (?, ?)`, p.ID, strings.TrimSpace(mediaID)); err != nil {
 			return CreatePostResult{}, err
 		}
 	}
@@ -266,36 +341,49 @@ func (s *Store) GetPost(ctx context.Context, id string) (domain.Post, error) {
 	var scheduled, created, updated string
 	var published, nextRetry sql.NullString
 	var external, failed, idempotencyKey sql.NullString
+	var platform string
 	err := s.db.QueryRowContext(ctx, `
-		SELECT id, platform, text, status, scheduled_at, next_retry_at, attempts, max_attempts, idempotency_key, published_at, external_id, error, created_at, updated_at
-		FROM posts WHERE id = ?
-	`, id).Scan(&p.ID, &p.Platform, &p.Text, &p.Status, &scheduled, &nextRetry, &p.Attempts, &p.MaxAttempts, &idempotencyKey, &published, &external, &failed, &created, &updated)
+		SELECT p.id, p.account_id, a.platform, p.text, p.status, p.scheduled_at, p.next_retry_at, p.attempts, p.max_attempts, p.idempotency_key, p.published_at, p.external_id, p.error, p.created_at, p.updated_at
+		FROM posts p
+		JOIN accounts a ON a.id = p.account_id
+		WHERE p.id = ?
+	`, strings.TrimSpace(id)).Scan(&p.ID, &p.AccountID, &platform, &p.Text, &p.Status, &scheduled, &nextRetry, &p.Attempts, &p.MaxAttempts, &idempotencyKey, &published, &external, &failed, &created, &updated)
 	if err != nil {
 		return domain.Post{}, err
 	}
+	p.Platform = domain.Platform(strings.TrimSpace(platform))
 	p.ScheduledAt, _ = time.Parse(time.RFC3339Nano, scheduled)
-	if nextRetry.Valid && nextRetry.String != "" {
+	if nextRetry.Valid && strings.TrimSpace(nextRetry.String) != "" {
 		t, _ := time.Parse(time.RFC3339Nano, nextRetry.String)
 		p.NextRetryAt = &t
 	}
 	if idempotencyKey.Valid {
-		p.IdempotencyKey = &idempotencyKey.String
+		value := strings.TrimSpace(idempotencyKey.String)
+		if value != "" {
+			p.IdempotencyKey = &value
+		}
 	}
-	if published.Valid && published.String != "" {
+	if published.Valid && strings.TrimSpace(published.String) != "" {
 		t, _ := time.Parse(time.RFC3339Nano, published.String)
 		p.PublishedAt = &t
 	}
 	if external.Valid {
-		p.ExternalID = &external.String
+		value := strings.TrimSpace(external.String)
+		if value != "" {
+			p.ExternalID = &value
+		}
 	}
 	if failed.Valid {
-		p.Error = &failed.String
+		value := strings.TrimSpace(failed.String)
+		if value != "" {
+			p.Error = &value
+		}
 	}
 	p.CreatedAt, _ = time.Parse(time.RFC3339Nano, created)
 	p.UpdatedAt, _ = time.Parse(time.RFC3339Nano, updated)
 
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT m.id, m.platform, m.kind, m.original_name, m.storage_path, m.mime_type, m.size_bytes, m.created_at
+		SELECT m.id, m.kind, m.original_name, m.storage_path, m.mime_type, m.size_bytes, m.created_at
 		FROM media m
 		JOIN post_media pm ON pm.media_id = m.id
 		WHERE pm.post_id = ?
@@ -309,7 +397,7 @@ func (s *Store) GetPost(ctx context.Context, id string) (domain.Post, error) {
 	for rows.Next() {
 		var m domain.Media
 		var c string
-		if err := rows.Scan(&m.ID, &m.Platform, &m.Kind, &m.OriginalName, &m.StoragePath, &m.MimeType, &m.SizeBytes, &c); err != nil {
+		if err := rows.Scan(&m.ID, &m.Kind, &m.OriginalName, &m.StoragePath, &m.MimeType, &m.SizeBytes, &c); err != nil {
 			return domain.Post{}, err
 		}
 		m.CreatedAt, _ = time.Parse(time.RFC3339Nano, c)
@@ -320,7 +408,7 @@ func (s *Store) GetPost(ctx context.Context, id string) (domain.Post, error) {
 
 func (s *Store) GetPostByIdempotencyKey(ctx context.Context, idempotencyKey string) (domain.Post, error) {
 	var id string
-	err := s.db.QueryRowContext(ctx, `SELECT id FROM posts WHERE idempotency_key = ?`, idempotencyKey).Scan(&id)
+	err := s.db.QueryRowContext(ctx, `SELECT id FROM posts WHERE idempotency_key = ?`, strings.TrimSpace(idempotencyKey)).Scan(&id)
 	if err != nil {
 		return domain.Post{}, err
 	}
@@ -337,6 +425,7 @@ func (s *Store) ListSchedule(ctx context.Context, from, to time.Time) ([]domain.
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 
 	var ids []string
 	for rows.Next() {
@@ -347,10 +436,6 @@ func (s *Store) ListSchedule(ctx context.Context, from, to time.Time) ([]domain.
 		ids = append(ids, id)
 	}
 	if err := rows.Err(); err != nil {
-		_ = rows.Close()
-		return nil, err
-	}
-	if err := rows.Close(); err != nil {
 		return nil, err
 	}
 
@@ -405,7 +490,7 @@ func (s *Store) ScheduleDraftPost(ctx context.Context, id string, scheduledAt ti
 		UPDATE posts
 		SET status = ?, scheduled_at = ?, next_retry_at = NULL, attempts = 0, error = NULL, updated_at = ?
 		WHERE id = ? AND status = ?
-	`, domain.PostStatusScheduled, formatScheduledAt(scheduledAt.UTC()), time.Now().UTC().Format(time.RFC3339Nano), id, domain.PostStatusDraft)
+	`, domain.PostStatusScheduled, formatScheduledAt(scheduledAt.UTC()), time.Now().UTC().Format(time.RFC3339Nano), strings.TrimSpace(id), domain.PostStatusDraft)
 	if err != nil {
 		return err
 	}
@@ -421,7 +506,7 @@ func (s *Store) CancelPost(ctx context.Context, id string) error {
 		UPDATE posts
 		SET status = ?, updated_at = ?
 		WHERE id = ? AND status = ?
-	`, domain.PostStatusCanceled, time.Now().UTC().Format(time.RFC3339Nano), id, domain.PostStatusScheduled)
+	`, domain.PostStatusCanceled, time.Now().UTC().Format(time.RFC3339Nano), strings.TrimSpace(id), domain.PostStatusScheduled)
 	if err != nil {
 		return err
 	}
@@ -443,7 +528,7 @@ func (s *Store) UpdatePostEditable(ctx context.Context, id, text string, schedul
 		SET text = ?, status = ?, scheduled_at = ?, next_retry_at = NULL, attempts = 0, error = NULL, updated_at = ?
 		WHERE id = ?
 		  AND status IN (?, ?, ?, ?)
-	`, strings.TrimSpace(text), status, formatScheduledAt(scheduledAt.UTC()), time.Now().UTC().Format(time.RFC3339Nano), id, domain.PostStatusDraft, domain.PostStatusScheduled, domain.PostStatusFailed, domain.PostStatusCanceled)
+	`, strings.TrimSpace(text), status, formatScheduledAt(scheduledAt.UTC()), time.Now().UTC().Format(time.RFC3339Nano), strings.TrimSpace(id), domain.PostStatusDraft, domain.PostStatusScheduled, domain.PostStatusFailed, domain.PostStatusCanceled)
 	if err != nil {
 		return err
 	}
@@ -509,7 +594,7 @@ func (s *Store) MarkPublished(ctx context.Context, id, externalID string) error 
 		UPDATE posts
 		SET status = ?, published_at = ?, external_id = ?, error = NULL, next_retry_at = NULL, updated_at = ?
 		WHERE id = ?
-	`, domain.PostStatusPublished, now.Format(time.RFC3339Nano), externalID, now.Format(time.RFC3339Nano), id)
+	`, domain.PostStatusPublished, now.Format(time.RFC3339Nano), strings.TrimSpace(externalID), now.Format(time.RFC3339Nano), strings.TrimSpace(id))
 	return err
 }
 
@@ -524,7 +609,7 @@ func (s *Store) RecordPublishFailure(ctx context.Context, id string, postErr err
 	defer tx.Rollback()
 
 	var attempts, maxAttempts int
-	err = tx.QueryRowContext(ctx, `SELECT attempts, max_attempts FROM posts WHERE id = ?`, id).Scan(&attempts, &maxAttempts)
+	err = tx.QueryRowContext(ctx, `SELECT attempts, max_attempts FROM posts WHERE id = ?`, strings.TrimSpace(id)).Scan(&attempts, &maxAttempts)
 	if err != nil {
 		return err
 	}
@@ -536,7 +621,7 @@ func (s *Store) RecordPublishFailure(ctx context.Context, id string, postErr err
 			UPDATE posts
 			SET status = ?, attempts = ?, error = ?, next_retry_at = NULL, updated_at = ?
 			WHERE id = ?
-		`, domain.PostStatusFailed, attempts, postErr.Error(), now.Format(time.RFC3339Nano), id); err != nil {
+		`, domain.PostStatusFailed, attempts, postErr.Error(), now.Format(time.RFC3339Nano), strings.TrimSpace(id)); err != nil {
 			return err
 		}
 		dlqID, err := NewID("dlq")
@@ -546,7 +631,7 @@ func (s *Store) RecordPublishFailure(ctx context.Context, id string, postErr err
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO dead_letters (id, post_id, reason, last_error, attempted_at)
 			VALUES (?, ?, ?, ?, ?)
-		`, dlqID, id, "max_attempts_exceeded", postErr.Error(), now.Format(time.RFC3339Nano)); err != nil {
+		`, dlqID, strings.TrimSpace(id), "max_attempts_exceeded", postErr.Error(), now.Format(time.RFC3339Nano)); err != nil {
 			return err
 		}
 		return tx.Commit()
@@ -557,7 +642,7 @@ func (s *Store) RecordPublishFailure(ctx context.Context, id string, postErr err
 		UPDATE posts
 		SET status = ?, attempts = ?, error = ?, next_retry_at = ?, updated_at = ?
 		WHERE id = ?
-	`, domain.PostStatusScheduled, attempts, postErr.Error(), nextRetry.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano), id); err != nil {
+	`, domain.PostStatusScheduled, attempts, postErr.Error(), nextRetry.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano), strings.TrimSpace(id)); err != nil {
 		return err
 	}
 	return tx.Commit()

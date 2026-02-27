@@ -28,7 +28,6 @@ func (s *Store) ListMedia(ctx context.Context, limit int) ([]MediaWithUsage, err
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT
 			m.id,
-			m.platform,
 			m.kind,
 			m.original_name,
 			m.storage_path,
@@ -40,7 +39,6 @@ func (s *Store) ListMedia(ctx context.Context, limit int) ([]MediaWithUsage, err
 		LEFT JOIN post_media pm ON pm.media_id = m.id
 		GROUP BY
 			m.id,
-			m.platform,
 			m.kind,
 			m.original_name,
 			m.storage_path,
@@ -61,7 +59,6 @@ func (s *Store) ListMedia(ctx context.Context, limit int) ([]MediaWithUsage, err
 		var item MediaWithUsage
 		if err := rows.Scan(
 			&item.Media.ID,
-			&item.Media.Platform,
 			&item.Media.Kind,
 			&item.Media.OriginalName,
 			&item.Media.StoragePath,
@@ -94,7 +91,6 @@ func (s *Store) DeleteMediaIfUnused(ctx context.Context, mediaID string) (domain
 	err = tx.QueryRowContext(ctx, `
 		SELECT
 			m.id,
-			m.platform,
 			m.kind,
 			m.original_name,
 			m.storage_path,
@@ -107,7 +103,6 @@ func (s *Store) DeleteMediaIfUnused(ctx context.Context, mediaID string) (domain
 		WHERE m.id = ?
 		GROUP BY
 			m.id,
-			m.platform,
 			m.kind,
 			m.original_name,
 			m.storage_path,
@@ -116,7 +111,6 @@ func (s *Store) DeleteMediaIfUnused(ctx context.Context, mediaID string) (domain
 			m.created_at
 	`, mediaID).Scan(
 		&media.ID,
-		&media.Platform,
 		&media.Kind,
 		&media.OriginalName,
 		&media.StoragePath,

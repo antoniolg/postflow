@@ -18,11 +18,12 @@ func TestCreatePostWithIdempotencyKeyReturnsExisting(t *testing.T) {
 	defer store.Close()
 
 	ctx := context.Background()
+	account := createTestAccount(t, store, domain.PlatformX)
 	scheduled := time.Now().UTC().Add(10 * time.Minute)
 
 	first, err := store.CreatePost(ctx, CreatePostParams{
 		Post: domain.Post{
-			Platform:    domain.PlatformX,
+			AccountID:   account.ID,
 			Text:        "hola",
 			Status:      domain.PostStatusScheduled,
 			ScheduledAt: scheduled,
@@ -39,7 +40,7 @@ func TestCreatePostWithIdempotencyKeyReturnsExisting(t *testing.T) {
 
 	second, err := store.CreatePost(ctx, CreatePostParams{
 		Post: domain.Post{
-			Platform:    domain.PlatformX,
+			AccountID:   account.ID,
 			Text:        "hola",
 			Status:      domain.PostStatusScheduled,
 			ScheduledAt: scheduled,
@@ -66,9 +67,10 @@ func TestRecordPublishFailureRetriesThenMovesToDLQ(t *testing.T) {
 	defer store.Close()
 
 	ctx := context.Background()
+	account := createTestAccount(t, store, domain.PlatformX)
 	created, err := store.CreatePost(ctx, CreatePostParams{
 		Post: domain.Post{
-			Platform:    domain.PlatformX,
+			AccountID:   account.ID,
 			Text:        "retry me",
 			Status:      domain.PostStatusScheduled,
 			ScheduledAt: time.Now().UTC().Add(-1 * time.Minute),
@@ -150,7 +152,7 @@ func TestCreateDraftDefaultsToDraftStatus(t *testing.T) {
 
 	created, err := store.CreatePost(context.Background(), CreatePostParams{
 		Post: domain.Post{
-			Platform:    domain.PlatformX,
+			AccountID:   createTestAccount(t, store, domain.PlatformX).ID,
 			Text:        "draft",
 			MaxAttempts: 3,
 		},
