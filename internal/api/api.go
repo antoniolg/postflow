@@ -1316,6 +1316,48 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       --border: #2a2a2a;
       --radius: 12px;
     }
+    @view-transition {
+      navigation: auto;
+    }
+    ::view-transition-old(root),
+    ::view-transition-new(root) {
+      animation-duration: 180ms;
+      animation-timing-function: ease;
+    }
+    ::view-transition-old(root) {
+      animation-name: vt-fade-out;
+    }
+    ::view-transition-new(root) {
+      animation-name: vt-fade-in;
+    }
+    @keyframes vt-fade-in {
+      from {
+        opacity: 0;
+        transform: translateY(6px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    @keyframes vt-fade-out {
+      from {
+        opacity: 1;
+      }
+      to {
+        opacity: 0.98;
+      }
+    }
+    @keyframes page-enter {
+      from {
+        opacity: 0;
+        transform: translateY(6px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
     * { box-sizing: border-box; }
     body {
       margin: 0;
@@ -1434,6 +1476,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       padding: 34px 44px 22px;
       width: 100%;
       max-width: 1180px;
+      animation: page-enter 180ms ease-out;
     }
     body[data-view="calendar"] .main,
     body[data-view="create"] .main {
@@ -3429,6 +3472,15 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       .stats { grid-template-columns: 1fr; }
       .content .text { font-size: 12px; }
       .meta { font-size: 11px; gap: 8px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .main {
+        animation: none;
+      }
+      ::view-transition-old(root),
+      ::view-transition-new(root) {
+        animation: none;
+      }
     }
   </style>
 </head>
