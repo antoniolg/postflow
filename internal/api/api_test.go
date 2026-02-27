@@ -1001,8 +1001,11 @@ func TestDefaultViewIsCalendar(t *testing.T) {
 	if !strings.Contains(body, ".day-event {\n      flex: 0 0 auto;") {
 		t.Fatalf("expected calendar event rows to keep fixed height without shrinking")
 	}
-	if !strings.Contains(body, "<div class=\"calendar-toolbar\">") {
-		t.Fatalf("expected dedicated calendar toolbar for month controls")
+	if strings.Contains(body, "<div class=\"calendar-toolbar\">") {
+		t.Fatalf("expected month controls to stay in header row")
+	}
+	if !strings.Contains(body, "<div class=\"calendar-controls\">") {
+		t.Fatalf("expected calendar month controls in calendar header")
 	}
 	if strings.Contains(body, "class=\"calendar-legend\"") {
 		t.Fatalf("expected calendar header legend to be removed")

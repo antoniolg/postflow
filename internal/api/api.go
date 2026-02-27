@@ -1180,6 +1180,25 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       align-items: center;
       gap: 12px;
     }
+    body[data-view="calendar"] .header {
+      width: min(100%, 1540px);
+      margin-left: auto;
+      margin-right: auto;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) clamp(300px, 28vw, 390px);
+      gap: 12px;
+      align-items: center;
+    }
+    body[data-view="calendar"] .title-row {
+      width: 100%;
+      display: flex;
+    }
+    body[data-view="calendar"] .calendar-controls {
+      margin-left: auto;
+    }
+    body[data-view="calendar"] .header-right {
+      justify-content: flex-end;
+    }
     .title-copy {
       display: inline-flex;
       flex-direction: column;
@@ -1532,13 +1551,6 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       display: flex;
       align-items: center;
       gap: 16px;
-    }
-    .calendar-toolbar {
-      width: min(100%, 1540px);
-      margin: 0 auto;
-      padding-top: 6px;
-      display: flex;
-      justify-content: flex-end;
     }
     .calendar-controls {
       display: flex;
@@ -2788,8 +2800,18 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         align-items: flex-start;
         gap: 10px;
       }
+      body[data-view="calendar"] .header {
+        display: flex;
+        flex-direction: row;
+        align-items: flex-start;
+        gap: 10px;
+      }
       .title-row {
         align-items: flex-start;
+      }
+      body[data-view="calendar"] .title-row {
+        align-items: flex-start;
+        flex-wrap: wrap;
       }
       .title-copy {
         gap: 2px;
@@ -2828,13 +2850,16 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         flex-wrap: nowrap;
         gap: 8px;
       }
-      .calendar-toolbar {
-        width: 100%;
+      body[data-view="calendar"] .header-right {
+        margin-left: auto;
       }
       .calendar-controls {
         gap: 4px;
+      }
+      body[data-view="calendar"] .calendar-controls {
+        margin-left: 0;
         flex-wrap: wrap;
-        justify-content: flex-end;
+        justify-content: flex-start;
       }
       .month-label {
         font-size: 16px;
@@ -2984,6 +3009,14 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
             {{if eq .View "calendar"}}<div class="title-sub">// scheduled content overview</div>{{end}}
             {{if eq .View "create"}}<div class="title-sub">// compose and schedule your content</div>{{end}}
           </div>
+          {{if eq .View "calendar"}}
+          <div class="calendar-controls">
+            <a class="month-link" href="/?view=calendar&month={{.PrevMonthParam}}&day={{.SelectedDayKey}}" aria-label="Previous month"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 12L6 8l4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+            <span class="month-label">{{.CalendarMonthLabel}}</span>
+            <a class="month-link" href="/?view=calendar&month={{.NextMonthParam}}&day={{.SelectedDayKey}}" aria-label="Next month"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+            <a class="month-go" href="/?view=calendar&month={{.TodayMonthParam}}&day={{.TodayDayKey}}">today</a>
+          </div>
+          {{end}}
         </div>
         {{if eq .View "calendar"}}
         <div class="header-right">
@@ -3000,14 +3033,6 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         {{end}}
       </header>
       {{if eq .View "calendar"}}
-      <div class="calendar-toolbar">
-        <div class="calendar-controls">
-          <a class="month-link" href="/?view=calendar&month={{.PrevMonthParam}}&day={{.SelectedDayKey}}" aria-label="Previous month"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 12L6 8l4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-          <span class="month-label">{{.CalendarMonthLabel}}</span>
-          <a class="month-link" href="/?view=calendar&month={{.NextMonthParam}}&day={{.SelectedDayKey}}" aria-label="Next month"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-          <a class="month-go" href="/?view=calendar&month={{.TodayMonthParam}}&day={{.TodayDayKey}}">today</a>
-        </div>
-      </div>
       <div class="calendar-layout">
       <div class="calendar-wrap">
         <div class="calendar-grid-scroll">
