@@ -116,7 +116,7 @@ func buildProviderRegistry(cfg config.Config, cipher *secure.Cipher) (*publisher
 			publisher.NewMockProvider(domain.PlatformFacebook),
 			publisher.NewMockProvider(domain.PlatformInstagram),
 		), nil
-	case "x":
+	case "live", "real", "x":
 		xProvider := publisher.NewXProvider(publisher.XConfig{
 			APIBaseURL:        cfg.X.APIBaseURL,
 			UploadBaseURL:     cfg.X.UploadBaseURL,
@@ -138,7 +138,7 @@ func buildProviderRegistry(cfg config.Config, cipher *secure.Cipher) (*publisher
 		instagramProvider := publisher.NewInstagramProvider(metaCfg)
 		return publisher.NewProviderRegistry(xProvider, linkedinProvider, facebookProvider, instagramProvider), nil
 	default:
-		return nil, fmt.Errorf("unsupported PUBLISHER_DRIVER=%q (valid: mock, x)", cfg.PublisherDriver)
+		return nil, fmt.Errorf("unsupported PUBLISHER_DRIVER=%q (valid: mock, live)", cfg.PublisherDriver)
 	}
 }
 

@@ -56,7 +56,7 @@ Variables principales:
 - `UI_BASIC_USER`
 - `UI_BASIC_PASS`
 - `LOG_LEVEL` (`debug|info|warn|error`, default: `info`)
-- `PUBLISHER_DRIVER` (`mock` por defecto, `x` para publicación real)
+- `PUBLISHER_DRIVER` (`mock` por defecto, `live` para publicación real; `x` se acepta como alias legacy)
 
 Seguridad/OAuth (v2):
 - `PUBLISHER_MASTER_KEY` (obligatoria, base64 32 bytes)
