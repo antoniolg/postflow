@@ -37,6 +37,7 @@ func (s Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mcpHandler := s.newMCPHandler()
 	mux.HandleFunc("GET /healthz", s.handleHealthz)
+	mux.Handle("GET /assets/", http.StripPrefix("/assets/", uiAssetsHandler()))
 	mux.Handle("GET /mcp", mcpHandler)
 	mux.Handle("POST /mcp", mcpHandler)
 	mux.Handle("DELETE /mcp", mcpHandler)
@@ -1298,7 +1299,13 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>publisher · schedule</title>
+  <title>PostFlow · schedule</title>
+  <meta name="theme-color" content="#1a1a1a" />
+  <link rel="icon" type="image/x-icon" href="/assets/icons/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png" />
+  <link rel="manifest" href="/assets/icons/site.webmanifest" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet">
@@ -1395,12 +1402,11 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       margin-bottom: 28px;
       padding: 0 6px;
     }
-    .logo-dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 999px;
-      background: var(--accent-orange);
-      box-shadow: 0 0 18px rgba(255,122,48,0.6);
+    .logo-mark {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      display: block;
     }
     .logo span {
       font-family: "Oswald", sans-serif;
@@ -3488,8 +3494,8 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
   <div class="app">
     <aside class="sidebar" aria-label="Primary navigation">
       <div class="logo">
-        <span class="logo-dot"></span>
-        <span>post_flow</span>
+        <img class="logo-mark" src="/assets/icons/postflow-logo-header-transparent-64.png" alt="" aria-hidden="true" />
+        <span>PostFlow</span>
       </div>
       <nav class="nav">
         <a class="nav-item {{if eq .ActiveNavView "calendar"}}active{{end}}" href="/?view=calendar&month={{.CurrentMonthParam}}&day={{.SelectedDayKey}}">
@@ -3880,7 +3886,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
               <div class="preview-author">
                 <div class="preview-avatar">pf</div>
                 <div>
-                  <div class="preview-name">post_flow</div>
+                  <div class="preview-name">PostFlow</div>
                   <div class="preview-handle">@postflow_app</div>
                 </div>
               </div>

@@ -47,6 +47,32 @@ func TestCreatePostValidation(t *testing.T) {
 	}
 }
 
+func TestServesEmbeddedBrandingAssets(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	req := httptest.NewRequest(http.MethodGet, "/assets/icons/favicon-32x32.png", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 serving embedded icon, got %d", w.Code)
+	}
+	if ct := w.Header().Get("Content-Type"); !strings.HasPrefix(ct, "image/png") {
+		t.Fatalf("expected image/png content type, got %q", ct)
+	}
+	if w.Body.Len() == 0 {
+		t.Fatalf("expected non-empty icon payload")
+	}
+}
+
 func TestCreatePostFromFormRedirects(t *testing.T) {
 	tempDir := t.TempDir()
 	store, err := db.Open(filepath.Join(tempDir, "test.db"))
@@ -1370,6 +1396,12 @@ func TestAccessibilityMarkupAddsLabelsAndLandmarks(t *testing.T) {
 	calendarBody := calendarW.Body.String()
 	if !strings.Contains(calendarBody, "<aside class=\"sidebar\" aria-label=\"Primary navigation\">") {
 		t.Fatalf("expected labeled primary navigation landmark")
+	}
+	if !strings.Contains(calendarBody, "href=\"/assets/icons/favicon.ico\"") {
+		t.Fatalf("expected favicon link in html head")
+	}
+	if !strings.Contains(calendarBody, "src=\"/assets/icons/postflow-logo-header-transparent-64.png\"") {
+		t.Fatalf("expected sidebar logo image")
 	}
 	if !strings.Contains(calendarBody, "<aside class=\"day-panel\" aria-label=\"Day detail\">") {
 		t.Fatalf("expected labeled day detail landmark")
