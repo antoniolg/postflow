@@ -2815,7 +2815,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     .composer-format-btns {
       display: flex;
       gap: 8px;
-      font-size: 16px;
+      font-size: 12px;
       color: var(--text-secondary);
     }
     .media-upload-dropzone {
@@ -3331,9 +3331,13 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       padding: 0;
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 0;
     }
     .preview-head {
+      position: absolute;
+      left: 0;
+      bottom: 100%;
+      margin-bottom: 10px;
       padding: 0;
       border-bottom: 0;
       background: transparent;
@@ -3350,6 +3354,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       padding: 0;
       flex: 1;
       min-height: 0;
+      position: relative;
     }
     .preview-card {
       border: 0;
@@ -3686,7 +3691,6 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
           {{if and (eq .View "create") .BackURL}}<a class="title-back" href="{{.BackURL}}" aria-label="{{t "common.back"}}">←</a>{{end}}
           <div class="title-copy">
             <h1>{{if eq .View "calendar"}}{{t "header.calendar"}}{{else if eq .View "drafts"}}{{t "header.drafts"}}{{else if eq .View "failed"}}{{t "header.failed"}}{{else if eq .View "create"}}{{t "header.new_post"}}{{else if eq .View "settings"}}{{t "header.settings"}}{{else}}{{t "header.scheduled"}}{{end}}</h1>
-            {{if eq .View "create"}}<div class="title-sub">// {{t "create.subtitle"}}</div>{{end}}
           </div>
           {{if eq .View "calendar"}}
           <div class="calendar-controls">
@@ -4018,12 +4022,12 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         </section>
 
 	        <aside class="preview-panel" aria-label="{{t "aria.live_preview"}}">
-	          <div class="preview-head">
-	            <div class="preview-title">// {{t "create.live_preview"}}</div>
-	          </div>
-          <div class="preview-body">
-            <article class="preview-card">
-              <div class="preview-author">
+	          <div class="preview-body">
+	            <div class="preview-head">
+	              <div class="preview-title">// {{t "create.live_preview"}}</div>
+	            </div>
+	            <article class="preview-card">
+	              <div class="preview-author">
                 <div class="preview-avatar">pf</div>
                 <div>
                   <div class="preview-name">PostFlow</div>

@@ -1596,8 +1596,8 @@ func TestCreateViewIncludesComposerPreviewUploadAndNetworks(t *testing.T) {
 	if !strings.Contains(body, "class=\"create-header-actions\"") || !strings.Contains(body, "form=\"create-post-form\"") {
 		t.Fatalf("expected create actions in header and connected to composer form")
 	}
-	if !strings.Contains(body, "NEW POST</h1>") || !strings.Contains(body, "// compose and schedule your content") {
-		t.Fatalf("expected create title and subtitle to match designed hierarchy")
+	if !strings.Contains(body, "NEW POST</h1>") {
+		t.Fatalf("expected create title in header")
 	}
 	if !strings.Contains(body, "id=\"create-media-input\"") || !strings.Contains(body, "id=\"create-media-list\"") {
 		t.Fatalf("expected media upload controls in create view")
