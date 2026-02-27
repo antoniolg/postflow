@@ -15,12 +15,14 @@ var (
 	ErrAccountNotFound      = errors.New("account not found")
 	ErrAccountHasPosts      = errors.New("account has pending posts")
 	ErrAccountNotDisconnect = errors.New("account must be disconnected before delete")
+	ErrAccountNotXPlatform  = errors.New("x premium setting is only available for x accounts")
 )
 
 type UpsertAccountParams struct {
 	Platform          domain.Platform
 	DisplayName       string
 	ExternalAccountID string
+	XPremium          *bool
 	AuthMethod        domain.AuthMethod
 	Status            domain.AccountStatus
 	LastError         *string
@@ -47,6 +49,10 @@ func (s *Store) UpsertAccount(ctx context.Context, params UpsertAccountParams) (
 	if strings.TrimSpace(string(status)) == "" {
 		status = domain.AccountStatusConnected
 	}
+	xPremium := false
+	if platform == domain.PlatformX && params.XPremium != nil {
+		xPremium = *params.XPremium
+	}
 	now := time.Now().UTC()
 
 	existing, err := s.GetAccountByPlatformExternalID(ctx, platform, externalID)
@@ -54,11 +60,18 @@ func (s *Store) UpsertAccount(ctx context.Context, params UpsertAccountParams) (
 		return domain.SocialAccount{}, err
 	}
 	if err == nil {
+		nextXPremium := existing.XPremium
+		if platform != domain.PlatformX {
+			nextXPremium = false
+		}
+		if platform == domain.PlatformX && params.XPremium != nil {
+			nextXPremium = *params.XPremium
+		}
 		_, updateErr := s.db.ExecContext(ctx, `
 			UPDATE accounts
-			SET display_name = ?, auth_method = ?, status = ?, last_error = ?, updated_at = ?
+			SET display_name = ?, x_premium = ?, auth_method = ?, status = ?, last_error = ?, updated_at = ?
 			WHERE id = ?
-		`, displayName, authMethod, status, sqlNullString(params.LastError), now.Format(time.RFC3339Nano), existing.ID)
+		`, displayName, boolToSQLiteInt(nextXPremium), authMethod, status, sqlNullString(params.LastError), now.Format(time.RFC3339Nano), existing.ID)
 		if updateErr != nil {
 			return domain.SocialAccount{}, updateErr
 		}
@@ -70,9 +83,9 @@ func (s *Store) UpsertAccount(ctx context.Context, params UpsertAccountParams) (
 		return domain.SocialAccount{}, err
 	}
 	_, err = s.db.ExecContext(ctx, `
-		INSERT INTO accounts (id, platform, display_name, external_account_id, auth_method, status, last_error, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, id, platform, displayName, externalID, authMethod, status, sqlNullString(params.LastError), now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano))
+		INSERT INTO accounts (id, platform, display_name, external_account_id, x_premium, auth_method, status, last_error, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, id, platform, displayName, externalID, boolToSQLiteInt(xPremium), authMethod, status, sqlNullString(params.LastError), now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano))
 	if err != nil {
 		return domain.SocialAccount{}, err
 	}
@@ -121,12 +134,13 @@ func (s *Store) GetAccountCredentials(ctx context.Context, accountID string) (En
 func (s *Store) GetAccount(ctx context.Context, id string) (domain.SocialAccount, error) {
 	var out domain.SocialAccount
 	var lastError sql.NullString
+	var xPremium int
 	var created, updated string
 	err := s.db.QueryRowContext(ctx, `
-		SELECT id, platform, display_name, external_account_id, auth_method, status, last_error, created_at, updated_at
+		SELECT id, platform, display_name, external_account_id, x_premium, auth_method, status, last_error, created_at, updated_at
 		FROM accounts
 		WHERE id = ?
-	`, strings.TrimSpace(id)).Scan(&out.ID, &out.Platform, &out.DisplayName, &out.ExternalAccountID, &out.AuthMethod, &out.Status, &lastError, &created, &updated)
+	`, strings.TrimSpace(id)).Scan(&out.ID, &out.Platform, &out.DisplayName, &out.ExternalAccountID, &xPremium, &out.AuthMethod, &out.Status, &lastError, &created, &updated)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return domain.SocialAccount{}, ErrAccountNotFound
@@ -139,6 +153,7 @@ func (s *Store) GetAccount(ctx context.Context, id string) (domain.SocialAccount
 			out.LastError = &value
 		}
 	}
+	out.XPremium = xPremium != 0
 	out.CreatedAt, _ = time.Parse(time.RFC3339Nano, created)
 	out.UpdatedAt, _ = time.Parse(time.RFC3339Nano, updated)
 	return out, nil
@@ -155,7 +170,7 @@ func (s *Store) GetAccountByPlatformExternalID(ctx context.Context, platform dom
 
 func (s *Store) ListAccounts(ctx context.Context) ([]domain.SocialAccount, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, platform, display_name, external_account_id, auth_method, status, last_error, created_at, updated_at
+		SELECT id, platform, display_name, external_account_id, x_premium, auth_method, status, last_error, created_at, updated_at
 		FROM accounts
 		ORDER BY platform ASC, display_name ASC
 	`)
@@ -167,8 +182,9 @@ func (s *Store) ListAccounts(ctx context.Context) ([]domain.SocialAccount, error
 	for rows.Next() {
 		var item domain.SocialAccount
 		var lastError sql.NullString
+		var xPremium int
 		var created, updated string
-		if err := rows.Scan(&item.ID, &item.Platform, &item.DisplayName, &item.ExternalAccountID, &item.AuthMethod, &item.Status, &lastError, &created, &updated); err != nil {
+		if err := rows.Scan(&item.ID, &item.Platform, &item.DisplayName, &item.ExternalAccountID, &xPremium, &item.AuthMethod, &item.Status, &lastError, &created, &updated); err != nil {
 			return nil, err
 		}
 		if lastError.Valid {
@@ -177,11 +193,46 @@ func (s *Store) ListAccounts(ctx context.Context) ([]domain.SocialAccount, error
 				item.LastError = &value
 			}
 		}
+		item.XPremium = xPremium != 0
 		item.CreatedAt, _ = time.Parse(time.RFC3339Nano, created)
 		item.UpdatedAt, _ = time.Parse(time.RFC3339Nano, updated)
 		out = append(out, item)
 	}
 	return out, rows.Err()
+}
+
+func (s *Store) UpdateAccountXPremium(ctx context.Context, id string, premium bool) error {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return ErrAccountNotFound
+	}
+	account, err := s.GetAccount(ctx, id)
+	if err != nil {
+		return err
+	}
+	if account.Platform != domain.PlatformX {
+		return ErrAccountNotXPlatform
+	}
+	result, err := s.db.ExecContext(ctx, `
+		UPDATE accounts
+		SET x_premium = ?, updated_at = ?
+		WHERE id = ?
+	`, boolToSQLiteInt(premium), time.Now().UTC().Format(time.RFC3339Nano), id)
+	if err != nil {
+		return err
+	}
+	affected, _ := result.RowsAffected()
+	if affected == 0 {
+		return ErrAccountNotFound
+	}
+	return nil
+}
+
+func boolToSQLiteInt(value bool) int {
+	if value {
+		return 1
+	}
+	return 0
 }
 
 func (s *Store) DisconnectAccount(ctx context.Context, id string) error {

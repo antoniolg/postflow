@@ -132,15 +132,16 @@ func (s *Store) createSchema(ctx context.Context) error {
 			created_at TEXT NOT NULL
 		);`,
 		`CREATE TABLE IF NOT EXISTS accounts (
-			id TEXT PRIMARY KEY,
-			platform TEXT NOT NULL,
-			display_name TEXT NOT NULL,
-			external_account_id TEXT NOT NULL,
-			auth_method TEXT NOT NULL,
-			status TEXT NOT NULL,
-			last_error TEXT,
-			created_at TEXT NOT NULL,
-			updated_at TEXT NOT NULL,
+				id TEXT PRIMARY KEY,
+				platform TEXT NOT NULL,
+				display_name TEXT NOT NULL,
+				external_account_id TEXT NOT NULL,
+				x_premium INTEGER NOT NULL DEFAULT 0,
+				auth_method TEXT NOT NULL,
+				status TEXT NOT NULL,
+				last_error TEXT,
+				created_at TEXT NOT NULL,
+				updated_at TEXT NOT NULL,
 			UNIQUE(platform, external_account_id)
 		);`,
 		`CREATE TABLE IF NOT EXISTS account_credentials (
@@ -206,7 +207,21 @@ func (s *Store) createSchema(ctx context.Context) error {
 			return err
 		}
 	}
+	if err := s.ensureAccountsColumns(ctx); err != nil {
+		return err
+	}
 	return nil
+}
+
+func (s *Store) ensureAccountsColumns(ctx context.Context) error {
+	_, err := s.db.ExecContext(ctx, `ALTER TABLE accounts ADD COLUMN x_premium INTEGER NOT NULL DEFAULT 0;`)
+	if err == nil {
+		return nil
+	}
+	if strings.Contains(strings.ToLower(err.Error()), "duplicate column name") {
+		return nil
+	}
+	return err
 }
 
 func NewID(prefix string) (string, error) {

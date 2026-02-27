@@ -76,3 +76,48 @@ func TestDeleteAccountRemovesHistoricalPostsAndAccount(t *testing.T) {
 		t.Fatalf("expected post to be deleted, got %v", err)
 	}
 }
+
+func TestUpdateAccountXPremium(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	xAccount := createTestAccount(t, store, domain.PlatformX)
+	if err := store.UpdateAccountXPremium(context.Background(), xAccount.ID, true); err != nil {
+		t.Fatalf("update x premium true: %v", err)
+	}
+	updated, err := store.GetAccount(context.Background(), xAccount.ID)
+	if err != nil {
+		t.Fatalf("get x account: %v", err)
+	}
+	if !updated.XPremium {
+		t.Fatalf("expected x premium to be true")
+	}
+
+	if err := store.UpdateAccountXPremium(context.Background(), xAccount.ID, false); err != nil {
+		t.Fatalf("update x premium false: %v", err)
+	}
+	updated, err = store.GetAccount(context.Background(), xAccount.ID)
+	if err != nil {
+		t.Fatalf("get x account after disable: %v", err)
+	}
+	if updated.XPremium {
+		t.Fatalf("expected x premium to be false")
+	}
+}
+
+func TestUpdateAccountXPremiumRejectsNonX(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	liAccount := createTestAccount(t, store, domain.PlatformLinkedIn)
+	err = store.UpdateAccountXPremium(context.Background(), liAccount.ID, true)
+	if !errors.Is(err, ErrAccountNotXPlatform) {
+		t.Fatalf("expected ErrAccountNotXPlatform, got %v", err)
+	}
+}

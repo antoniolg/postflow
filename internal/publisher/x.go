@@ -62,6 +62,7 @@ func NewXClient(cfg XConfig) (*XClient, error) {
 }
 
 func (c *XClient) Publish(ctx context.Context, post domain.Post) (string, error) {
+	postText := formatPostTextForPublish(post.Text)
 	mediaIDs := make([]string, 0, len(post.Media))
 	for _, m := range post.Media {
 		mediaID, err := c.uploadChunked(ctx, m)
@@ -70,7 +71,7 @@ func (c *XClient) Publish(ctx context.Context, post domain.Post) (string, error)
 		}
 		mediaIDs = append(mediaIDs, mediaID)
 	}
-	id, err := c.createStatus(ctx, post.Text, mediaIDs)
+	id, err := c.createStatus(ctx, postText, mediaIDs)
 	if err != nil {
 		return "", fmt.Errorf("create post: %w", err)
 	}

@@ -1576,6 +1576,35 @@ func TestCreatePostFromFormSupportsMediaIDs(t *testing.T) {
 	}
 }
 
+func TestCreateViewPreviewRendersMarkdownFormatting(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+	_ = testAccountID(t, store)
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	previewText := url.QueryEscape("Hola **mundo** y *equipo*")
+	req := httptest.NewRequest(http.MethodGet, "/?view=create&text="+previewText, nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for create view, got %d", w.Code)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "id=\"preview-text\">Hola <strong>mundo</strong> y <em>equipo</em></div>") {
+		t.Fatalf("expected markdown formatting in preview html")
+	}
+	if !strings.Contains(body, "const markdownToPreviewHTML = (raw) => {") {
+		t.Fatalf("expected markdown preview renderer in create script")
+	}
+}
+
 func TestCalendarCellsRenderAllEventsForDynamicOverflow(t *testing.T) {
 	tempDir := t.TempDir()
 	store, err := db.Open(filepath.Join(tempDir, "test.db"))
@@ -1713,6 +1742,12 @@ func TestSettingsViewRendersAccountsBlockWithActions(t *testing.T) {
 	if !strings.Contains(body, "action=\"/accounts/"+connectedID+"/disconnect\"") {
 		t.Fatalf("expected disconnect action for connected account")
 	}
+	if !strings.Contains(body, "action=\"/accounts/"+connectedID+"/x-premium\"") {
+		t.Fatalf("expected x premium toggle action for x account")
+	}
+	if strings.Contains(body, "action=\"/accounts/"+liAccount.ID+"/x-premium\"") {
+		t.Fatalf("did not expect x premium toggle for non-x account")
+	}
 	if !strings.Contains(body, "action=\"/accounts/"+liAccount.ID+"/connect\"") {
 		t.Fatalf("expected connect action for disconnected account")
 	}
@@ -1810,5 +1845,96 @@ func TestConnectAccountFormRedirectsBackToSettings(t *testing.T) {
 	}
 	if account.Status != domain.AccountStatusConnected {
 		t.Fatalf("expected account to be connected after connect action, got %s", account.Status)
+	}
+}
+
+func TestSetXPremiumFormRedirectsBackToSettings(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	accountID := testAccountID(t, store)
+	form := url.Values{}
+	form.Set("return_to", "/?view=settings")
+	form.Add("x_premium", "0")
+	form.Add("x_premium", "1")
+
+	req := httptest.NewRequest(http.MethodPost, "/accounts/"+accountID+"/x-premium", bytes.NewBufferString(form.Encode()))
+	req.Header.Set("content-type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "text/html")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303 redirect for html x premium update, got %d", w.Code)
+	}
+	loc := w.Header().Get("Location")
+	parsed, err := url.Parse(loc)
+	if err != nil {
+		t.Fatalf("parse redirect location: %v", err)
+	}
+	if got := parsed.Query().Get("view"); got != "settings" {
+		t.Fatalf("expected view=settings in redirect, got %q", got)
+	}
+	if got := parsed.Query().Get("accounts_success"); got != "x premium updated" {
+		t.Fatalf("expected x premium success message, got %q", got)
+	}
+
+	account, err := store.GetAccount(t.Context(), accountID)
+	if err != nil {
+		t.Fatalf("get account after x premium update: %v", err)
+	}
+	if !account.XPremium {
+		t.Fatalf("expected x premium to be enabled")
+	}
+}
+
+func TestSetXPremiumRejectsNonXAccount(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	liAccount, err := store.UpsertAccount(t.Context(), db.UpsertAccountParams{
+		Platform:          domain.PlatformLinkedIn,
+		DisplayName:       "LinkedIn Premium Toggle",
+		ExternalAccountID: "li-premium-toggle",
+		AuthMethod:        domain.AuthMethodOAuth,
+		Status:            domain.AccountStatusConnected,
+	})
+	if err != nil {
+		t.Fatalf("create linkedin account: %v", err)
+	}
+
+	form := url.Values{}
+	form.Set("return_to", "/?view=settings")
+	form.Add("x_premium", "1")
+	req := httptest.NewRequest(http.MethodPost, "/accounts/"+liAccount.ID+"/x-premium", bytes.NewBufferString(form.Encode()))
+	req.Header.Set("content-type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "text/html")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303 redirect for html non-x premium update, got %d", w.Code)
+	}
+	loc := w.Header().Get("Location")
+	parsed, err := url.Parse(loc)
+	if err != nil {
+		t.Fatalf("parse redirect location: %v", err)
+	}
+	if got := parsed.Query().Get("accounts_error"); got == "" {
+		t.Fatalf("expected accounts_error in redirect when updating non-x premium")
 	}
 }

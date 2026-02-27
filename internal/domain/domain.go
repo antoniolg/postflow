@@ -52,6 +52,7 @@ type SocialAccount struct {
 	Platform          Platform      `json:"platform"`
 	DisplayName       string        `json:"display_name"`
 	ExternalAccountID string        `json:"external_account_id"`
+	XPremium          bool          `json:"x_premium"`
 	AuthMethod        AuthMethod    `json:"auth_method"`
 	Status            AccountStatus `json:"status"`
 	LastError         *string       `json:"last_error,omitempty"`

@@ -94,6 +94,7 @@ func (p *InstagramProvider) ValidateDraft(_ context.Context, _ domain.SocialAcco
 }
 
 func (p *FacebookProvider) Publish(ctx context.Context, account domain.SocialAccount, credentials Credentials, post domain.Post) (string, error) {
+	postText := formatPostTextForPublish(post.Text)
 	pageID := strings.TrimSpace(account.ExternalAccountID)
 	if pageID == "" {
 		pageID = strings.TrimSpace(credentials.Extra["page_id"])
@@ -119,7 +120,7 @@ func (p *FacebookProvider) Publish(ctx context.Context, account domain.SocialAcc
 		attachmentIDs = append(attachmentIDs, photoID)
 	}
 	values := url.Values{}
-	values.Set("message", strings.TrimSpace(post.Text))
+	values.Set("message", strings.TrimSpace(postText))
 	values.Set("access_token", strings.TrimSpace(credentials.AccessToken))
 	for i, photoID := range attachmentIDs {
 		values.Set(fmt.Sprintf("attached_media[%d]", i), fmt.Sprintf(`{"media_fbid":"%s"}`, strings.TrimSpace(photoID)))
@@ -152,6 +153,7 @@ func (p *FacebookProvider) Publish(ctx context.Context, account domain.SocialAcc
 }
 
 func (p *InstagramProvider) Publish(ctx context.Context, account domain.SocialAccount, credentials Credentials, post domain.Post) (string, error) {
+	postText := formatPostTextForPublish(post.Text)
 	igUserID := strings.TrimSpace(account.ExternalAccountID)
 	if igUserID == "" {
 		igUserID = strings.TrimSpace(credentials.Extra["ig_user_id"])
@@ -190,7 +192,7 @@ func (p *InstagramProvider) Publish(ctx context.Context, account domain.SocialAc
 	}
 	createValues := url.Values{}
 	createValues.Set("image_url", imageURL)
-	createValues.Set("caption", strings.TrimSpace(post.Text))
+	createValues.Set("caption", strings.TrimSpace(postText))
 	createValues.Set("access_token", strings.TrimSpace(credentials.AccessToken))
 	createURL := fmt.Sprintf("%s/%s/%s/media", strings.TrimRight(p.cfg.GraphURL, "/"), p.cfg.APIVersion, igUserID)
 	createReq, err := http.NewRequestWithContext(ctx, http.MethodPost, createURL, strings.NewReader(createValues.Encode()))

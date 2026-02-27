@@ -183,6 +183,44 @@ func (s Server) handleAccountActions(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"id": accountID, "status": domain.AccountStatusDisconnected})
+	case "x-premium":
+		premium, err := parseAccountXPremiumValue(r)
+		if err != nil {
+			if isHTML {
+				http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", err.Error()), http.StatusSeeOther)
+				return
+			}
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+		if err := s.Store.UpdateAccountXPremium(r.Context(), accountID, premium); err != nil {
+			switch {
+			case errors.Is(err, db.ErrAccountNotFound):
+				if isHTML {
+					http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", "account not found"), http.StatusSeeOther)
+					return
+				}
+				writeError(w, http.StatusNotFound, errors.New("account not found"))
+			case errors.Is(err, db.ErrAccountNotXPlatform):
+				if isHTML {
+					http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", "x premium setting is only available for x accounts"), http.StatusSeeOther)
+					return
+				}
+				writeError(w, http.StatusBadRequest, errors.New("x premium setting is only available for x accounts"))
+			default:
+				if isHTML {
+					http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", "failed to update x premium"), http.StatusSeeOther)
+					return
+				}
+				writeError(w, http.StatusInternalServerError, err)
+			}
+			return
+		}
+		if isHTML {
+			http.Redirect(w, r, withQueryValue(returnTo, "accounts_success", "x premium updated"), http.StatusSeeOther)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"id": accountID, "x_premium": premium})
 	case "delete":
 		if err := s.Store.DeleteAccount(r.Context(), accountID); err != nil {
 			switch {
@@ -225,6 +263,36 @@ func (s Server) handleAccountActions(w http.ResponseWriter, r *http.Request) {
 		}
 		writeError(w, http.StatusNotFound, errors.New("not found"))
 	}
+}
+
+func parseAccountXPremiumValue(r *http.Request) (bool, error) {
+	contentType := strings.ToLower(strings.TrimSpace(r.Header.Get("content-type")))
+	if strings.Contains(contentType, "application/json") {
+		var body struct {
+			XPremium *bool `json:"x_premium"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			return false, fmt.Errorf("invalid json body: %w", err)
+		}
+		if body.XPremium == nil {
+			return false, errors.New("x_premium is required")
+		}
+		return *body.XPremium, nil
+	}
+	if err := r.ParseForm(); err != nil {
+		return false, fmt.Errorf("invalid form: %w", err)
+	}
+	return truthyValues(r.Form["x_premium"]), nil
+}
+
+func truthyValues(values []string) bool {
+	for _, raw := range values {
+		switch strings.ToLower(strings.TrimSpace(raw)) {
+		case "1", "true", "yes", "on":
+			return true
+		}
+	}
+	return false
 }
 
 func (s Server) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {

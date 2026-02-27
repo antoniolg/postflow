@@ -20,10 +20,14 @@ func (p *XProvider) Platform() domain.Platform {
 	return domain.PlatformX
 }
 
-func (p *XProvider) ValidateDraft(_ context.Context, _ domain.SocialAccount, draft Draft) ([]string, error) {
+func (p *XProvider) ValidateDraft(_ context.Context, account domain.SocialAccount, draft Draft) ([]string, error) {
 	warnings := make([]string, 0)
-	if len([]rune(strings.TrimSpace(draft.Text))) > 280 {
-		warnings = append(warnings, "text exceeds 280 chars; publish may fail")
+	maxChars := 280
+	if account.XPremium {
+		maxChars = 25000
+	}
+	if len([]rune(strings.TrimSpace(draft.Text))) > maxChars {
+		warnings = append(warnings, fmt.Sprintf("text exceeds %d chars for this x account; publish may fail", maxChars))
 	}
 	if len(draft.Media) > 4 {
 		warnings = append(warnings, "x supports up to 4 media items per post")

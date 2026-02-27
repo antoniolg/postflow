@@ -59,6 +59,7 @@ func (p *LinkedInProvider) ValidateDraft(_ context.Context, _ domain.SocialAccou
 }
 
 func (p *LinkedInProvider) Publish(ctx context.Context, account domain.SocialAccount, credentials Credentials, post domain.Post) (string, error) {
+	postText := formatPostTextForPublish(post.Text)
 	token := strings.TrimSpace(credentials.AccessToken)
 	if token == "" {
 		return "", fmt.Errorf("linkedin access token missing")
@@ -86,7 +87,7 @@ func (p *LinkedInProvider) Publish(ctx context.Context, account domain.SocialAcc
 			mediaPayload = append(mediaPayload, map[string]any{
 				"status": "READY",
 				"media":  urn,
-				"title":  map[string]any{"text": firstNonEmpty(strings.TrimSpace(post.Text), "LinkedIn media post")},
+				"title":  map[string]any{"text": firstNonEmpty(strings.TrimSpace(postText), "LinkedIn media post")},
 			})
 		}
 	}
@@ -95,7 +96,7 @@ func (p *LinkedInProvider) Publish(ctx context.Context, account domain.SocialAcc
 		"lifecycleState": "PUBLISHED",
 		"specificContent": map[string]any{
 			"com.linkedin.ugc.ShareContent": map[string]any{
-				"shareCommentary":    map[string]any{"text": post.Text},
+				"shareCommentary":    map[string]any{"text": postText},
 				"shareMediaCategory": shareCategory,
 				"media":              mediaPayload,
 			},

@@ -18,6 +18,7 @@ import (
 	"github.com/antoniolg/publisher/internal/domain"
 	"github.com/antoniolg/publisher/internal/publisher"
 	"github.com/antoniolg/publisher/internal/secure"
+	"github.com/antoniolg/publisher/internal/textfmt"
 )
 
 type Server struct {
@@ -984,6 +985,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		ID          string
 		DisplayName string
 		Platform    domain.Platform
+		XPremium    bool
 		AuthMethod  domain.AuthMethod
 		Status      domain.AccountStatus
 		StatusClass string
@@ -1071,6 +1073,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 			ID:          account.ID,
 			DisplayName: account.DisplayName,
 			Platform:    account.Platform,
+			XPremium:    account.XPremium,
 			AuthMethod:  account.AuthMethod,
 			Status:      account.Status,
 			StatusClass: statusClass,
@@ -2776,6 +2779,11 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       color: #ffffff;
       padding: 0;
     }
+    .composer-text-wrap textarea:focus,
+    .composer-text-wrap textarea:focus-visible {
+      outline: none;
+      box-shadow: none;
+    }
     .composer-text-meta {
       border-top: 1px solid #2f2f2f;
       padding: 10px 0 0;
@@ -2795,11 +2803,37 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       font-size: 16px;
       color: var(--text-secondary);
     }
-    .media-upload-actions {
+    .media-upload-dropzone {
+      border: 1px dashed #3a3a3a;
+      border-radius: 12px;
+      background: #262626;
+      min-height: 92px;
+      padding: 14px 12px;
       display: flex;
+      flex-direction: column;
       align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
+      justify-content: center;
+      gap: 6px;
+      cursor: pointer;
+      text-align: center;
+      transition: border-color .12s ease, background .12s ease, color .12s ease;
+    }
+    .media-upload-dropzone:hover {
+      border-color: #4a4a4a;
+      background: #2b2b2b;
+    }
+    .media-upload-dropzone:focus-visible {
+      outline: 2px solid var(--accent-orange);
+      outline-offset: 2px;
+    }
+    .media-upload-dropzone.is-dragover {
+      border-color: var(--accent-orange);
+      background: rgba(255, 122, 0, 0.12);
+    }
+    .media-upload-title {
+      font-size: 12px;
+      color: #d7d7d7;
+      letter-spacing: 0.02em;
     }
     .media-block {
       display: flex;
@@ -2892,6 +2926,71 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       max-height: 260px;
       overflow: auto;
       padding-right: 2px;
+    }
+    .create-media-library-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+      gap: 10px;
+      max-height: 320px;
+    }
+    .create-media-card {
+      position: relative;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #252525;
+      border: 1px solid #323232;
+      aspect-ratio: 1 / 1;
+      padding: 0;
+      display: block;
+      cursor: pointer;
+    }
+    .create-media-card .media-library-thumb {
+      width: 100%;
+      height: 100%;
+      border-radius: 0;
+      background: #1f1f1f;
+      position: relative;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+    }
+    .create-media-card .media-library-thumb img,
+    .create-media-card .media-library-thumb video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .create-media-overlay-actions {
+      position: absolute;
+      right: 8px;
+      top: 8px;
+      z-index: 1;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .create-media-icon-btn {
+      width: 28px;
+      height: 28px;
+      min-height: 28px;
+      background: rgba(31, 31, 31, 0.88);
+      border: 1px solid rgba(120, 120, 120, 0.35);
+      color: #d0d0d0;
+    }
+    .create-media-icon-btn.attached {
+      background: rgba(0, 212, 170, 0.22);
+      border-color: rgba(0, 212, 170, 0.35);
+      color: #8be7d7;
+    }
+    .create-media-overlay-actions .btn-danger.create-media-icon-btn {
+      color: #ffb7bf;
+      border-color: rgba(255, 68, 68, 0.35);
+    }
+    .create-media-overlay-actions .create-media-icon-btn svg {
+      width: 14px;
+      height: 14px;
+      display: block;
     }
     .settings-media-library {
       display: grid;
@@ -3059,6 +3158,28 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       gap: 8px;
       flex-wrap: wrap;
       justify-content: flex-end;
+    }
+    .settings-account-premium-form {
+      margin: 8px 0 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .settings-account-premium-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      color: #a8a8a8;
+      text-transform: lowercase;
+      letter-spacing: 0.02em;
+      user-select: none;
+      cursor: pointer;
+    }
+    .settings-account-premium-toggle .failed-checkbox {
+      margin-top: 0;
     }
     .settings-account-actions form {
       margin: 0;
@@ -3539,7 +3660,6 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
           {{if and (eq .View "create") .BackURL}}<a class="title-back" href="{{.BackURL}}" aria-label="back">←</a>{{end}}
           <div class="title-copy">
             <h1>{{if eq .View "calendar"}}CALENDAR{{else if eq .View "drafts"}}DRAFTS{{else if eq .View "failed"}}FAILED{{else if eq .View "create"}}NEW POST{{else if eq .View "settings"}}SETTINGS{{else}}SCHEDULED{{end}}</h1>
-            {{if eq .View "calendar"}}<div class="title-sub">// scheduled content overview</div>{{end}}
             {{if eq .View "create"}}<div class="title-sub">// compose and schedule your content</div>{{end}}
           </div>
           {{if eq .View "calendar"}}
@@ -3658,7 +3778,6 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       {{end}}
 
       {{if eq .View "publications"}}
-      <div class="line">upcoming queue</div>
       <section class="list">
         {{range .Publications}}
         <article class="card scheduled card-editable" data-edit-url="/?view=create&edit_id={{.ID}}&return_to={{urlquery $.CurrentViewURL}}">
@@ -3679,11 +3798,10 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       </section>
       {{end}}
 
-      {{if eq .View "drafts"}}
-      <div class="line">draft queue</div>
-      <section class="list">
-        {{range .Drafts}}
-        <article class="card draft card-editable" data-status="draft" data-edit-url="/?view=create&edit_id={{.ID}}&return_to={{urlquery $.CurrentViewURL}}">
+	      {{if eq .View "drafts"}}
+	      <section class="list">
+	        {{range .Drafts}}
+	        <article class="card draft card-editable" data-status="draft" data-edit-url="/?view=create&edit_id={{.ID}}&return_to={{urlquery $.CurrentViewURL}}">
           <div class="card-left">
             <div class="content">
               <div class="text">{{.Text}}</div>
@@ -3707,11 +3825,10 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       </section>
       {{end}}
 
-      {{if eq .View "failed"}}
-      <div class="line">failed queue</div>
-      <section class="list">
-        {{if .FailedError}}<div class="alert error">{{.FailedError}}</div>{{end}}
-        {{if .FailedSuccess}}<div class="alert success">{{.FailedSuccess}}</div>{{end}}
+	      {{if eq .View "failed"}}
+	      <section class="list">
+	        {{if .FailedError}}<div class="alert error">{{.FailedError}}</div>{{end}}
+	        {{if .FailedSuccess}}<div class="alert success">{{.FailedSuccess}}</div>{{end}}
         <div class="bulk-actions">
           <button type="button" class="pill" id="failed-select-all">mark all</button>
           <button type="button" class="pill" id="failed-clear-all">clear all</button>
@@ -3778,6 +3895,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	                    data-network-chip
 	                    data-account-id="{{.ID}}"
 	                    data-platform="{{.Platform}}"
+	                    data-x-premium="{{if and (eq .Platform "x") .XPremium}}1{{else}}0{{end}}"
 	                    role="radio"
 	                    aria-checked="{{if eq .ID $.CreateAccountID}}true{{else}}false{{end}}"
 	                    aria-pressed="{{if eq .ID $.CreateAccountID}}true{{else}}false{{end}}">
@@ -3807,7 +3925,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	                </div>
 	                <select id="create-account-select" name="account_id" required data-account-select class="is-hidden" aria-hidden="true" tabindex="-1">
 	                  {{range .Accounts}}
-	                  <option value="{{.ID}}" data-platform="{{.Platform}}" {{if eq .ID $.CreateAccountID}}selected{{end}}>{{.DisplayName}} · {{.Platform}}</option>
+	                  <option value="{{.ID}}" data-platform="{{.Platform}}" data-x-premium="{{if and (eq .Platform "x") .XPremium}}1{{else}}0{{end}}" {{if eq .ID $.CreateAccountID}}selected{{end}}>{{.DisplayName}} · {{.Platform}}</option>
 	                  {{end}}
 	                </select>
 	              </div>
@@ -3817,8 +3935,8 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
                   <div class="composer-label">// post content</div>
                   <textarea id="create-text" name="text" required placeholder="Write your post...">{{.CreateText}}</textarea>
                   <div class="composer-text-meta">
-                    <span id="create-char-count">// 0/280 chars (X limit)</span>
-                    <span class="composer-format-btns">☺ # @</span>
+                    <span id="create-char-count">// 0 chars</span>
+                    <span class="composer-format-btns">**bold** *italic*</span>
                   </div>
                 </div>
               </div>
@@ -3833,30 +3951,30 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
               <div class="field create-field create-field-media">
                 <div class="composer-label">// media attachment (4 max)</div>
                 <div class="media-block">
-                  <div class="media-upload-actions">
+                  <div class="media-upload-dropzone" id="create-media-dropzone" role="button" tabindex="0" aria-label="add media">
                     <input id="create-media-input" type="file" accept="image/*,video/*" multiple hidden />
-                    <button type="button" class="pill" id="create-media-trigger">upload files</button>
+                    <span class="media-upload-title">drop media here or click to upload</span>
                     <span class="upload-notice" id="create-upload-notice">no media uploaded</span>
                   </div>
                   <div class="media-list" id="create-media-list"></div>
                   <div class="media-library-wrap">
                     <div class="composer-label">// recent library</div>
-                    <div class="media-library" id="create-media-library">
+                    <div class="media-library create-media-library-grid" id="create-media-library">
                       {{range .CreateRecentMedia}}
-                      <article class="media-library-item {{if .InUse}}in-use{{end}}" data-media-library-item data-media-id="{{.ID}}" data-media-name="{{.OriginalName}}" data-media-size="{{.SizeBytes}}" data-media-mime="{{.MimeType}}" data-media-preview="{{.PreviewURL}}">
+                      <article class="media-library-item create-media-card {{if .InUse}}in-use{{end}}" data-media-library-item data-media-id="{{.ID}}" data-media-name="{{.OriginalName}}" data-media-size="{{.SizeBytes}}" data-media-mime="{{.MimeType}}" data-media-preview="{{.PreviewURL}}">
                         <div class="media-library-thumb">
-                          {{if .IsImage}}<img src="{{.PreviewURL}}" alt="{{.OriginalName}}" loading="lazy" />{{else if .IsVideo}}<span>video</span>{{else}}<span>file</span>{{end}}
+                          {{if .IsImage}}<img src="{{.PreviewURL}}" alt="{{.OriginalName}}" loading="lazy" />{{else if .IsVideo}}<video src="{{.PreviewURL}}" muted preload="metadata" playsinline></video><span class="settings-media-video-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="8 6 19 12 8 18"/></svg></span>{{else}}<span class="settings-media-file-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg></span>{{end}}
                         </div>
-                        <div class="media-library-info">
-                          <div class="media-library-name">{{.OriginalName}}</div>
-                          <div class="media-library-meta">{{.SizeLabel}} · {{.CreatedLabel}}{{if .InUse}} · used {{.UsageCount}}{{end}}</div>
-                        </div>
-                        <div class="media-library-actions">
-                          <button type="button" class="btn-secondary" data-media-attach="{{.ID}}">attach</button>
+                        <div class="create-media-overlay-actions">
+                          <button type="button" class="btn-secondary settings-account-icon-btn create-media-icon-btn" data-media-attach="{{.ID}}" aria-label="attach media to post" title="attach to post">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+                          </button>
                           {{if .InUse}}
-                          <span class="pill media-pill-used">in_use</span>
+                          <span class="pill media-pill-used">used {{.UsageCount}}</span>
                           {{else}}
-                          <button type="button" class="btn-danger" data-media-delete="{{.ID}}">delete</button>
+                          <button type="button" class="btn-danger settings-account-icon-btn create-media-icon-btn" data-media-delete="{{.ID}}" aria-label="delete media" title="delete media">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                          </button>
                           {{end}}
                         </div>
                       </article>
@@ -3890,7 +4008,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
                   <div class="preview-handle">@postflow_app</div>
                 </div>
               </div>
-              <div class="preview-text" id="preview-text">{{if .CreateText}}{{.CreateText}}{{else}}Start typing to preview your post...{{end}}</div>
+              <div class="preview-text" id="preview-text">{{if .CreateText}}{{previewMarkdown .CreateText}}{{else}}Start typing to preview your post...{{end}}</div>
               <div class="preview-media" id="preview-media" hidden>
                 <img id="preview-media-image" alt="media preview" hidden />
                 <div class="preview-media-empty" id="preview-media-empty">No media selected yet.</div>
@@ -3949,10 +4067,21 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
                 </div>
                 <span class="settings-account-status {{.StatusClass}}">{{.StatusLabel}}</span>
               </div>
-              {{if .LastError}}
-              <div class="alert error settings-account-error">{{.LastError}}</div>
-              {{end}}
-              <div class="settings-account-actions">
+	              {{if .LastError}}
+	              <div class="alert error settings-account-error">{{.LastError}}</div>
+	              {{end}}
+	              {{if eq .Platform "x"}}
+	              <form method="post" action="/accounts/{{.ID}}/x-premium" class="settings-account-premium-form">
+		                <input type="hidden" name="return_to" value="/?view=settings" />
+		                <input type="hidden" name="x_premium" value="0" />
+		                <label class="settings-account-premium-toggle">
+		                  <input class="failed-checkbox" type="checkbox" name="x_premium" value="1" {{if .XPremium}}checked{{end}} onchange="if (this.form.requestSubmit) { this.form.requestSubmit(); } else { this.form.submit(); }" />
+		                  <span>x premium (long posts)</span>
+		                </label>
+	                <noscript><button type="submit" class="btn-secondary">save</button></noscript>
+	              </form>
+	              {{end}}
+	              <div class="settings-account-actions">
                 {{if eq .Status "connected"}}
                 <form method="post" action="/accounts/{{.ID}}/disconnect">
                   <input type="hidden" name="return_to" value="/?view=settings" />
@@ -4830,7 +4959,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
   const previewText = document.getElementById("preview-text");
   const scheduleInput = document.getElementById("create-scheduled-at");
   const mediaInput = document.getElementById("create-media-input");
-  const mediaTrigger = document.getElementById("create-media-trigger");
+  const mediaDropzone = document.getElementById("create-media-dropzone");
   const mediaList = document.getElementById("create-media-list");
   const mediaLibrary = document.getElementById("create-media-library");
   const mediaHidden = document.getElementById("create-media-hidden");
@@ -4845,7 +4974,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
   if (!(textInput instanceof HTMLTextAreaElement) ||
       !(scheduleInput instanceof HTMLInputElement) ||
       !(mediaInput instanceof HTMLInputElement) ||
-      !(mediaTrigger instanceof HTMLButtonElement) ||
+      !(mediaDropzone instanceof HTMLElement) ||
       !(mediaList instanceof HTMLElement) ||
       !(mediaHidden instanceof HTMLElement) ||
       !(uploadNotice instanceof HTMLElement) ||
@@ -4855,7 +4984,12 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     return;
   }
 
-  const limit = 280;
+  const platformCharLimits = {
+    x: { max: 280, premiumMax: 25000, label: "X", premiumLabel: "X premium" },
+    linkedin: { max: 3000, label: "LinkedIn" },
+    instagram: { max: 2200, label: "Instagram" },
+    facebook: { max: 63206, label: "Facebook" }
+  };
   const maxMedia = 4;
   let uploadInFlight = 0;
   let replaceIndex = -1;
@@ -4893,15 +5027,164 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     uploadNotice.removeAttribute("data-state");
   };
 
+  const selectedPlatformRule = () => {
+    if (!(accountSelect instanceof HTMLSelectElement)) {
+      return null;
+    }
+    const selected = accountSelect.selectedOptions[0];
+    if (!(selected instanceof HTMLOptionElement)) {
+      return null;
+    }
+    const platform = (selected.dataset.platform || "").trim().toLowerCase();
+    if (!platform) {
+      return null;
+    }
+    const baseRule = platformCharLimits[platform] || null;
+    if (!baseRule) {
+      return null;
+    }
+    if (platform === "x") {
+      const premiumRaw = (selected.dataset.xPremium || "").trim().toLowerCase();
+      const premium = premiumRaw === "1" || premiumRaw === "true" || premiumRaw === "yes" || premiumRaw === "on";
+      if (premium && Number.isFinite(baseRule.premiumMax) && baseRule.premiumMax > 0) {
+        return { max: baseRule.premiumMax, label: baseRule.premiumLabel || baseRule.label };
+      }
+    }
+    return { max: baseRule.max, label: baseRule.label };
+  };
+
+  const escapeHTML = (value) => String(value || "").replace(/[&<>"']/g, (char) => {
+    switch (char) {
+      case "&":
+        return "&amp;";
+      case "<":
+        return "&lt;";
+      case ">":
+        return "&gt;";
+      case "\"":
+        return "&quot;";
+      case "'":
+        return "&#39;";
+      default:
+        return char;
+    }
+  });
+
+  const hasClosingDoubleAsterisk = (source, fromIndex) => {
+    for (let i = fromIndex; i < source.length - 1; i += 1) {
+      if (source[i] === "\\") {
+        i += 1;
+        continue;
+      }
+      if (source[i] === "*" && source[i + 1] === "*") {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const hasClosingSingleAsterisk = (source, fromIndex) => {
+    for (let i = fromIndex; i < source.length; i += 1) {
+      if (source[i] === "\\") {
+        i += 1;
+        continue;
+      }
+      if (source[i] === "*") {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const markdownToPreviewHTML = (raw) => {
+    const source = String(raw || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+    let out = "";
+    let plain = "";
+    let i = 0;
+    let boldOpen = false;
+    let italicOpen = false;
+
+    const flushPlain = () => {
+      if (plain === "") {
+        return;
+      }
+      out += escapeHTML(plain);
+      plain = "";
+    };
+
+    while (i < source.length) {
+      if (source[i] === "\\" && i + 1 < source.length && source[i + 1] === "*") {
+        plain += "*";
+        i += 2;
+        continue;
+      }
+      if (source[i] === "\n") {
+        flushPlain();
+        out += "<br>";
+        i += 1;
+        continue;
+      }
+      if (source[i] === "*" && italicOpen) {
+        flushPlain();
+        out += "</em>";
+        italicOpen = false;
+        i += 1;
+        continue;
+      }
+      if (source[i] === "*" && i + 1 < source.length && source[i + 1] === "*" && boldOpen) {
+        flushPlain();
+        out += "</strong>";
+        boldOpen = false;
+        i += 2;
+        continue;
+      }
+      if (source[i] === "*" && i + 1 < source.length && source[i + 1] === "*" && hasClosingDoubleAsterisk(source, i + 2)) {
+        flushPlain();
+        out += "<strong>";
+        boldOpen = true;
+        i += 2;
+        continue;
+      }
+      if (source[i] === "*" && hasClosingSingleAsterisk(source, i + 1)) {
+        flushPlain();
+        out += "<em>";
+        italicOpen = true;
+        i += 1;
+        continue;
+      }
+      plain += source[i];
+      i += 1;
+    }
+
+    flushPlain();
+    if (italicOpen) {
+      out += "</em>";
+    }
+    if (boldOpen) {
+      out += "</strong>";
+    }
+    return out;
+  };
+
   const updateCharCount = () => {
     const count = textInput.value.length;
-    charCount.textContent = "// " + count + "/" + limit + " chars (X limit)";
-    charCount.classList.toggle("char-over", count > limit);
+    const rule = selectedPlatformRule();
+    if (rule && Number.isFinite(rule.max) && rule.max > 0) {
+      charCount.textContent = "// " + count + "/" + rule.max + " chars (" + rule.label + " limit)";
+      charCount.classList.toggle("char-over", count > rule.max);
+      return;
+    }
+    charCount.textContent = "// " + count + " chars (network limit unknown)";
+    charCount.classList.remove("char-over");
   };
 
   const updatePreviewText = () => {
-    const content = textInput.value.trim();
-    previewText.textContent = content === "" ? "Start typing to preview your post..." : content;
+    const raw = textInput.value;
+    if (raw.trim() === "") {
+      previewText.textContent = "Start typing to preview your post...";
+      return;
+    }
+    previewText.innerHTML = markdownToPreviewHTML(raw);
   };
 
   const updatePreviewMedia = () => {
@@ -4958,6 +5241,21 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
   };
 
   const isAttachedMedia = (id) => attachments.some((item) => item.id === id);
+  const attachIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>';
+  const detachIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 17H7a5 5 0 010-10h2"/><path d="M15 7h2a5 5 0 010 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/></svg>';
+  const deleteIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
+  const playIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="8 6 19 12 8 18"/></svg>';
+  const fileIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>';
+
+  const setAttachButtonState = (button, attached) => {
+    if (!(button instanceof HTMLButtonElement)) {
+      return;
+    }
+    button.classList.toggle("attached", attached);
+    button.innerHTML = attached ? detachIcon : attachIcon;
+    button.setAttribute("aria-label", attached ? "remove media from post" : "attach media to post");
+    button.setAttribute("title", attached ? "remove from post" : "attach to post");
+  };
 
   const syncLibraryAttachButtons = () => {
     if (!(mediaLibrary instanceof HTMLElement)) {
@@ -4971,10 +5269,57 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       if (!id) {
         return;
       }
-      const attached = isAttachedMedia(id);
-      node.classList.toggle("attached", attached);
-      node.textContent = attached ? "attached" : "attach";
+      setAttachButtonState(node, isAttachedMedia(id));
     });
+  };
+
+  const renderLibraryThumb = (thumb, item) => {
+    if (!(thumb instanceof HTMLElement)) {
+      return;
+    }
+    thumb.innerHTML = "";
+    const mime = String(item.mime || "").toLowerCase();
+    const previewURL = (item.previewUrl || "").trim();
+    const isVideo = mime.startsWith("video/");
+
+    if (previewURL && isVideo) {
+      const video = document.createElement("video");
+      video.src = previewURL;
+      video.muted = true;
+      video.preload = "metadata";
+      video.playsInline = true;
+      thumb.appendChild(video);
+
+      const icon = document.createElement("span");
+      icon.className = "settings-media-video-icon";
+      icon.setAttribute("aria-hidden", "true");
+      icon.innerHTML = playIcon;
+      thumb.appendChild(icon);
+      return;
+    }
+
+    if (previewURL) {
+      const img = document.createElement("img");
+      img.src = previewURL;
+      img.alt = item.name || "media";
+      img.loading = "lazy";
+      thumb.appendChild(img);
+      return;
+    }
+
+    const fallback = document.createElement("span");
+    fallback.className = "settings-media-file-icon";
+    fallback.setAttribute("aria-hidden", "true");
+    fallback.innerHTML = fileIcon;
+    thumb.appendChild(fallback);
+
+    if (isVideo) {
+      const icon = document.createElement("span");
+      icon.className = "settings-media-video-icon";
+      icon.setAttribute("aria-hidden", "true");
+      icon.innerHTML = playIcon;
+      thumb.appendChild(icon);
+    }
   };
 
   const parseLibraryNode = (node) => {
@@ -5012,26 +5357,16 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       return;
     }
 
-    let row = mediaLibrary.querySelector('[data-media-library-item][data-media-id="' + item.id + '"]');
-    if (row instanceof HTMLElement) {
-      row.dataset.mediaName = item.name || "file";
-      row.dataset.mediaSize = String(Number(item.size || 0));
-      row.dataset.mediaMime = item.mime || "";
-      row.dataset.mediaPreview = item.previewUrl || "";
-      const nameNode = row.querySelector(".media-library-name");
-      if (nameNode) {
-        nameNode.textContent = item.name || "file";
-      }
-      const metaNode = row.querySelector(".media-library-meta");
-      if (metaNode) {
-        metaNode.textContent = formatBytes(Number(item.size || 0)) + " · just now";
-      }
-      syncLibraryAttachButtons();
-      return;
+    const existing = mediaLibrary.querySelector('[data-media-library-item][data-media-id="' + item.id + '"]');
+    if (existing instanceof HTMLElement) {
+      existing.remove();
     }
 
-    row = document.createElement("article");
-    row.className = "media-library-item";
+    const row = document.createElement("article");
+    row.className = "media-library-item create-media-card";
+    if (inUse) {
+      row.classList.add("in-use");
+    }
     row.setAttribute("data-media-library-item", "");
     row.dataset.mediaId = item.id;
     row.dataset.mediaName = item.name || "file";
@@ -5041,54 +5376,34 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 
     const thumb = document.createElement("div");
     thumb.className = "media-library-thumb";
-    if (item.previewUrl) {
-      const img = document.createElement("img");
-      img.src = item.previewUrl;
-      img.alt = item.name || "media";
-      img.loading = "lazy";
-      thumb.appendChild(img);
-    } else if (String(item.mime || "").startsWith("video/")) {
-      thumb.textContent = "video";
-    } else {
-      thumb.textContent = "file";
-    }
-
-    const info = document.createElement("div");
-    info.className = "media-library-info";
-    const name = document.createElement("div");
-    name.className = "media-library-name";
-    name.textContent = item.name || "file";
-    const meta = document.createElement("div");
-    meta.className = "media-library-meta";
-    meta.textContent = formatBytes(Number(item.size || 0)) + " · just now";
-    info.appendChild(name);
-    info.appendChild(meta);
+    renderLibraryThumb(thumb, item);
 
     const actions = document.createElement("div");
-    actions.className = "media-library-actions";
+    actions.className = "create-media-overlay-actions";
     const attach = document.createElement("button");
     attach.type = "button";
-    attach.className = "btn-secondary";
+    attach.className = "btn-secondary settings-account-icon-btn create-media-icon-btn";
     attach.setAttribute("data-media-attach", item.id);
-    attach.textContent = "attach";
+    setAttachButtonState(attach, isAttachedMedia(item.id));
     actions.appendChild(attach);
 
     if (inUse) {
       const used = document.createElement("span");
       used.className = "pill media-pill-used";
-      used.textContent = "in_use";
+      used.textContent = "used";
       actions.appendChild(used);
     } else {
       const del = document.createElement("button");
       del.type = "button";
-      del.className = "btn-danger";
+      del.className = "btn-danger settings-account-icon-btn create-media-icon-btn";
       del.setAttribute("data-media-delete", item.id);
-      del.textContent = "delete";
+      del.innerHTML = deleteIcon;
+      del.setAttribute("aria-label", "delete media");
+      del.setAttribute("title", "delete media");
       actions.appendChild(del);
     }
 
     row.appendChild(thumb);
-    row.appendChild(info);
     row.appendChild(actions);
     mediaLibrary.prepend(row);
     syncLibraryAttachButtons();
@@ -5161,6 +5476,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     syncLibraryAttachButtons();
   };
 
+  const isSupportedMediaFile = (file) => file instanceof File && (file.type.startsWith("image/") || file.type.startsWith("video/"));
   const detectKind = (file) => file.type.startsWith("video/") ? "video" : "image";
 
   const uploadMediaFile = async (file) => {
@@ -5228,14 +5544,10 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     }
   };
 
-  mediaTrigger.addEventListener("click", () => {
-    mediaInput.click();
-  });
-
-  mediaInput.addEventListener("change", async () => {
-    const files = Array.from(mediaInput.files || []);
-    mediaInput.value = "";
+  const processSelectedFiles = async (rawFiles) => {
+    const files = rawFiles.filter((file) => isSupportedMediaFile(file));
     if (files.length === 0) {
+      setNotice("only image/video files are supported", "error");
       return;
     }
 
@@ -5254,6 +5566,90 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       // eslint-disable-next-line no-await-in-loop
       await addOrReplaceFile(file, -1);
     }
+  };
+
+  mediaInput.addEventListener("change", async () => {
+    const files = Array.from(mediaInput.files || []);
+    mediaInput.value = "";
+    if (files.length === 0) {
+      return;
+    }
+    await processSelectedFiles(files);
+  });
+
+  mediaDropzone.addEventListener("click", (event) => {
+    if (!(event.target instanceof Element)) {
+      mediaInput.click();
+      return;
+    }
+    if (event.target.closest("button, a, input, textarea, select")) {
+      return;
+    }
+    mediaInput.click();
+  });
+
+  mediaDropzone.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+    event.preventDefault();
+    mediaInput.click();
+  });
+
+  let dragDepth = 0;
+  const updateDropzoneState = (isActive) => {
+    mediaDropzone.classList.toggle("is-dragover", isActive);
+  };
+  const eventHasFiles = (event) => {
+    const types = event.dataTransfer?.types;
+    return Array.isArray(types) || (types && typeof types.contains === "function")
+      ? Array.from(types).includes("Files")
+      : false;
+  };
+
+  mediaDropzone.addEventListener("dragenter", (event) => {
+    if (!eventHasFiles(event)) {
+      return;
+    }
+    event.preventDefault();
+    dragDepth += 1;
+    updateDropzoneState(true);
+  });
+
+  mediaDropzone.addEventListener("dragover", (event) => {
+    if (!eventHasFiles(event)) {
+      return;
+    }
+    event.preventDefault();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = "copy";
+    }
+    updateDropzoneState(true);
+  });
+
+  mediaDropzone.addEventListener("dragleave", (event) => {
+    if (!eventHasFiles(event)) {
+      return;
+    }
+    event.preventDefault();
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (dragDepth === 0) {
+      updateDropzoneState(false);
+    }
+  });
+
+  mediaDropzone.addEventListener("drop", async (event) => {
+    if (!eventHasFiles(event)) {
+      return;
+    }
+    event.preventDefault();
+    dragDepth = 0;
+    updateDropzoneState(false);
+    const files = Array.from(event.dataTransfer?.files || []);
+    if (files.length === 0) {
+      return;
+    }
+    await processSelectedFiles(files);
   });
 
   mediaList.addEventListener("click", (event) => {
@@ -5285,11 +5681,12 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 
   mediaLibrary?.addEventListener("click", async (event) => {
     const target = event.target;
-    if (!(target instanceof HTMLElement)) {
+    if (!(target instanceof Element)) {
       return;
     }
 
-    const attachID = (target.getAttribute("data-media-attach") || "").trim();
+    const attachButton = target.closest("[data-media-attach]");
+    const attachID = attachButton instanceof HTMLButtonElement ? (attachButton.getAttribute("data-media-attach") || "").trim() : "";
     if (attachID) {
       if (isAttachedMedia(attachID)) {
         removeAttachmentByID(attachID);
@@ -5312,40 +5709,53 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       return;
     }
 
-    const deleteID = (target.getAttribute("data-media-delete") || "").trim();
-    if (!deleteID) {
+    const deleteButton = target.closest("[data-media-delete]");
+    const deleteID = deleteButton instanceof HTMLButtonElement ? (deleteButton.getAttribute("data-media-delete") || "").trim() : "";
+    if (deleteID) {
+      deleteButton.setAttribute("disabled", "true");
+      try {
+        const res = await fetch("/media/" + encodeURIComponent(deleteID), { method: "DELETE" });
+        if (!res.ok) {
+          let message = "delete failed (" + res.status + ")";
+          try {
+            const payload = await res.json();
+            if (payload && typeof payload.error === "string" && payload.error.trim() !== "") {
+              message = payload.error.trim();
+            }
+          } catch (_) {}
+          throw new Error(message);
+        }
+        const node = deleteButton.closest("[data-media-library-item]");
+        if (node instanceof HTMLElement) {
+          node.remove();
+        }
+        if (removeAttachmentByID(deleteID)) {
+          syncHiddenMediaInputs();
+          renderMediaList();
+        } else {
+          syncLibraryAttachButtons();
+        }
+        setNotice("media deleted", "success");
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "delete failed";
+        setNotice(message, "error");
+      } finally {
+        deleteButton.removeAttribute("disabled");
+      }
       return;
     }
-    target.setAttribute("disabled", "true");
-    try {
-      const res = await fetch("/media/" + encodeURIComponent(deleteID), { method: "DELETE" });
-      if (!res.ok) {
-        let message = "delete failed (" + res.status + ")";
-        try {
-          const payload = await res.json();
-          if (payload && typeof payload.error === "string" && payload.error.trim() !== "") {
-            message = payload.error.trim();
-          }
-        } catch (_) {}
-        throw new Error(message);
-      }
-      const node = target.closest("[data-media-library-item]");
-      if (node instanceof HTMLElement) {
-        node.remove();
-      }
-      if (removeAttachmentByID(deleteID)) {
-        syncHiddenMediaInputs();
-        renderMediaList();
-      } else {
-        syncLibraryAttachButtons();
-      }
-      setNotice("media deleted", "success");
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "delete failed";
-      setNotice(message, "error");
-    } finally {
-      target.removeAttribute("disabled");
+
+    const itemNode = target.closest("[data-media-library-item]");
+    if (!(itemNode instanceof HTMLElement)) {
+      return;
     }
+    const previewURL = (itemNode.dataset.mediaPreview || "").trim();
+    if (!previewURL) {
+      return;
+    }
+    try {
+      window.open(previewURL, "_blank", "noopener,noreferrer");
+    } catch (_) {}
   });
 
   if (accountSelect instanceof HTMLSelectElement && accountSelect.value.trim() === "" && accountSelect.options.length > 0) {
@@ -5391,6 +5801,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
   if (accountSelect instanceof HTMLSelectElement) {
     accountSelect.addEventListener("change", () => {
       syncNetworkSelection();
+      updateCharCount();
     });
   }
 
@@ -5486,7 +5897,11 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 </script>
 </body>
 </html>`
-	t, err := template.New("schedule").Parse(tpl)
+	t, err := template.New("schedule").Funcs(template.FuncMap{
+		"previewMarkdown": func(raw string) template.HTML {
+			return template.HTML(textfmt.MarkdownToPreviewHTML(raw))
+		},
+	}).Parse(tpl)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
