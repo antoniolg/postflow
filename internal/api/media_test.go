@@ -28,7 +28,6 @@ func TestMediaAPIListAndDeleteLifecycle(t *testing.T) {
 		t.Fatalf("seed media file: %v", err)
 	}
 	created, err := store.CreateMedia(t.Context(), domain.Media{
-		Platform:     domain.PlatformX,
 		Kind:         "image",
 		OriginalName: "sample.txt",
 		StoragePath:  mediaPath,
@@ -113,7 +112,6 @@ func TestMediaAPIDeleteRejectsInUseMedia(t *testing.T) {
 		t.Fatalf("seed media file: %v", err)
 	}
 	createdMedia, err := store.CreateMedia(t.Context(), domain.Media{
-		Platform:     domain.PlatformX,
 		Kind:         "image",
 		OriginalName: "in-use.png",
 		StoragePath:  mediaPath,
@@ -125,7 +123,7 @@ func TestMediaAPIDeleteRejectsInUseMedia(t *testing.T) {
 	}
 	if _, err := store.CreatePost(t.Context(), db.CreatePostParams{
 		Post: domain.Post{
-			Platform:    domain.PlatformX,
+			AccountID:   createTestAccount(t, store).ID,
 			Text:        "post with in-use media",
 			Status:      domain.PostStatusDraft,
 			MaxAttempts: 3,
@@ -162,7 +160,6 @@ func TestCreateAndSettingsViewsRenderMediaManagementSections(t *testing.T) {
 		t.Fatalf("seed media file: %v", err)
 	}
 	createdMedia, err := store.CreateMedia(t.Context(), domain.Media{
-		Platform:     domain.PlatformX,
 		Kind:         "image",
 		OriginalName: "preview.png",
 		StoragePath:  mediaPath,
@@ -321,7 +318,7 @@ func TestUploadMediaMissingFileReturnsBadRequest(t *testing.T) {
 	}
 }
 
-func TestUploadMediaInvalidPlatformRemovesUploadedFile(t *testing.T) {
+func TestUploadMediaIgnoresLegacyPlatformField(t *testing.T) {
 	tempDir := t.TempDir()
 	store, err := db.Open(filepath.Join(tempDir, "test.db"))
 	if err != nil {
@@ -352,8 +349,8 @@ func TestUploadMediaInvalidPlatformRemovesUploadedFile(t *testing.T) {
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, req)
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
 	}
 
 	mediaDir := filepath.Join(tempDir, "media")
@@ -361,7 +358,7 @@ func TestUploadMediaInvalidPlatformRemovesUploadedFile(t *testing.T) {
 	if err != nil && !os.IsNotExist(err) {
 		t.Fatalf("read media dir: %v", err)
 	}
-	if len(entries) > 0 {
-		t.Fatalf("expected no persisted media files on invalid platform, found %d", len(entries))
+	if len(entries) == 0 {
+		t.Fatalf("expected uploaded media file to be persisted")
 	}
 }

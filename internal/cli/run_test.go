@@ -62,6 +62,9 @@ func TestRunPostsCreateIncludesAuthAndIdempotencyHeaders(t *testing.T) {
 		if payload["text"] != "hello world" {
 			t.Fatalf("unexpected text payload %v", payload["text"])
 		}
+		if payload["account_id"] != "acc_1" {
+			t.Fatalf("unexpected account_id payload %v", payload["account_id"])
+		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"id": "pst_1"})
 	}))
 	defer server.Close()
@@ -72,6 +75,7 @@ func TestRunPostsCreateIncludesAuthAndIdempotencyHeaders(t *testing.T) {
 		"--base-url", server.URL,
 		"--api-token", "tok_123",
 		"posts", "create",
+		"--account-id", "acc_1",
 		"--text", "hello world",
 		"--idempotency-key", "idem_001",
 	}, &stdout, &stderr)

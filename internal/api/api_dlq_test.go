@@ -21,10 +21,11 @@ func TestDLQListAndRequeueFlow(t *testing.T) {
 		t.Fatalf("open db: %v", err)
 	}
 	defer store.Close()
+	account := createTestAccount(t, store)
 
 	created, err := store.CreatePost(t.Context(), db.CreatePostParams{
 		Post: domain.Post{
-			Platform:    domain.PlatformX,
+			AccountID:   account.ID,
 			Text:        "goes to dlq",
 			Status:      domain.PostStatusScheduled,
 			ScheduledAt: time.Now().UTC().Add(-1 * time.Minute),

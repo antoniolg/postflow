@@ -24,7 +24,7 @@ func TestValidatePostEndpoint(t *testing.T) {
 	h := srv.Handler()
 
 	payload, _ := json.Marshal(map[string]any{
-		"platform":     "x",
+		"account_id":   testAccountID(t, store),
 		"text":         "validar",
 		"scheduled_at": time.Now().UTC().Add(10 * time.Minute).Format(time.RFC3339),
 	})
@@ -57,8 +57,8 @@ func TestValidatePostEndpointDraftMode(t *testing.T) {
 	h := srv.Handler()
 
 	payload, _ := json.Marshal(map[string]any{
-		"platform": "x",
-		"text":     "idea",
+		"account_id": testAccountID(t, store),
+		"text":       "idea",
 	})
 	req := httptest.NewRequest(http.MethodPost, "/posts/validate", bytes.NewReader(payload))
 	w := httptest.NewRecorder()

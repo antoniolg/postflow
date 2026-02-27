@@ -31,7 +31,7 @@ func TestCreatePostValidation(t *testing.T) {
 	h := srv.Handler()
 
 	body := map[string]any{
-		"platform":     "x",
+		"account_id":   testAccountID(t, store),
 		"text":         "hola",
 		"scheduled_at": "not-a-date",
 	}
@@ -57,7 +57,7 @@ func TestCreatePostFromFormRedirects(t *testing.T) {
 	h := srv.Handler()
 
 	form := url.Values{}
-	form.Set("platform", "x")
+	form.Set("account_id", testAccountID(t, store))
 	form.Set("text", "draft from form")
 	req := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewBufferString(form.Encode()))
 	req.Header.Set("content-type", "application/x-www-form-urlencoded")
@@ -88,7 +88,7 @@ func TestEditPostFromForm(t *testing.T) {
 	h := srv.Handler()
 
 	createPayload, _ := json.Marshal(map[string]any{
-		"platform":     "x",
+		"account_id":   testAccountID(t, store),
 		"text":         "initial scheduled",
 		"scheduled_at": time.Now().UTC().Add(2 * time.Hour).Format(time.RFC3339),
 	})
@@ -141,8 +141,8 @@ func TestCreateDraftWithoutScheduledAt(t *testing.T) {
 	h := srv.Handler()
 
 	body := map[string]any{
-		"platform": "x",
-		"text":     "idea de borrador",
+		"account_id": testAccountID(t, store),
+		"text":       "idea de borrador",
 	}
 	payload, _ := json.Marshal(body)
 	req := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(payload))
@@ -172,8 +172,8 @@ func TestScheduleDraftPost(t *testing.T) {
 	h := srv.Handler()
 
 	createPayload, _ := json.Marshal(map[string]any{
-		"platform": "x",
-		"text":     "draft to schedule",
+		"account_id": testAccountID(t, store),
+		"text":       "draft to schedule",
 	})
 	createReq := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(createPayload))
 	createW := httptest.NewRecorder()
@@ -222,7 +222,7 @@ func TestScheduleEndpointReturnsCreatedPost(t *testing.T) {
 
 	scheduled := time.Now().UTC().Add(2 * time.Hour).Format(time.RFC3339)
 	body := map[string]any{
-		"platform":     "x",
+		"account_id":   testAccountID(t, store),
 		"text":         "post de prueba",
 		"scheduled_at": scheduled,
 	}
@@ -260,7 +260,7 @@ func TestCreatePostWithIdempotencyKeyIsReplayed(t *testing.T) {
 
 	scheduled := time.Now().UTC().Add(2 * time.Hour).Format(time.RFC3339)
 	body := map[string]any{
-		"platform":     "x",
+		"account_id":   testAccountID(t, store),
 		"text":         "idempotent post",
 		"scheduled_at": scheduled,
 	}
@@ -311,7 +311,7 @@ func TestRequeueDeadLetterFromFormRedirectsToFailedView(t *testing.T) {
 	h := srv.Handler()
 
 	payload, _ := json.Marshal(map[string]any{
-		"platform":     "x",
+		"account_id":   testAccountID(t, store),
 		"text":         "will fail once",
 		"scheduled_at": time.Now().UTC().Add(1 * time.Minute).Format(time.RFC3339),
 		"max_attempts": 1,
@@ -377,7 +377,7 @@ func TestBulkRequeueDeadLettersFromForm(t *testing.T) {
 
 	makeFailed := func(text string) string {
 		payload, _ := json.Marshal(map[string]any{
-			"platform":     "x",
+			"account_id":   testAccountID(t, store),
 			"text":         text,
 			"scheduled_at": time.Now().UTC().Add(1 * time.Minute).Format(time.RFC3339),
 			"max_attempts": 1,
@@ -449,7 +449,7 @@ func TestFailedViewUsesStyledCheckboxes(t *testing.T) {
 	h := srv.Handler()
 
 	payload, _ := json.Marshal(map[string]any{
-		"platform":     "x",
+		"account_id":   testAccountID(t, store),
 		"text":         "failed checkbox style",
 		"scheduled_at": time.Now().UTC().Add(2 * time.Minute).Format(time.RFC3339),
 		"max_attempts": 1,
@@ -509,7 +509,7 @@ func TestCreatePostFromFormUsesConfiguredTimezone(t *testing.T) {
 	}
 
 	form := url.Values{}
-	form.Set("platform", "x")
+	form.Set("account_id", testAccountID(t, store))
 	form.Set("text", "scheduled with timezone")
 	form.Set("scheduled_at_local", "2026-02-26T10:00")
 	req := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewBufferString(form.Encode()))
@@ -554,8 +554,8 @@ func TestPublicationsViewShowsOnlyScheduledInNext14Days(t *testing.T) {
 	h := srv.Handler()
 
 	createDraftBody, _ := json.Marshal(map[string]any{
-		"platform": "x",
-		"text":     "this draft must stay out of publications",
+		"account_id": testAccountID(t, store),
+		"text":       "this draft must stay out of publications",
 	})
 	createDraftReq := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(createDraftBody))
 	createDraftW := httptest.NewRecorder()
@@ -565,7 +565,7 @@ func TestPublicationsViewShowsOnlyScheduledInNext14Days(t *testing.T) {
 	}
 
 	createScheduledBody, _ := json.Marshal(map[string]any{
-		"platform":     "x",
+		"account_id":   testAccountID(t, store),
 		"text":         "scheduled in next 14 days",
 		"scheduled_at": time.Now().UTC().Add(2 * time.Hour).Format(time.RFC3339),
 	})
@@ -585,7 +585,7 @@ func TestPublicationsViewShowsOnlyScheduledInNext14Days(t *testing.T) {
 	}
 
 	createFutureBody, _ := json.Marshal(map[string]any{
-		"platform":     "x",
+		"account_id":   testAccountID(t, store),
 		"text":         "scheduled after 14 days",
 		"scheduled_at": time.Now().UTC().Add(20 * 24 * time.Hour).Format(time.RFC3339),
 	})
@@ -597,7 +597,7 @@ func TestPublicationsViewShowsOnlyScheduledInNext14Days(t *testing.T) {
 	}
 
 	createToPublishBody, _ := json.Marshal(map[string]any{
-		"platform":     "x",
+		"account_id":   testAccountID(t, store),
 		"text":         "this published post should not appear in publications",
 		"scheduled_at": time.Now().UTC().Add(4 * time.Hour).Format(time.RFC3339),
 	})
@@ -671,8 +671,8 @@ func TestNavBadgesUseNeutralForScheduledAndDraftsAndRedForFailed(t *testing.T) {
 	h := srv.Handler()
 
 	createDraftBody, _ := json.Marshal(map[string]any{
-		"platform": "x",
-		"text":     "draft badge",
+		"account_id": testAccountID(t, store),
+		"text":       "draft badge",
 	})
 	createDraftReq := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(createDraftBody))
 	createDraftW := httptest.NewRecorder()
@@ -682,7 +682,7 @@ func TestNavBadgesUseNeutralForScheduledAndDraftsAndRedForFailed(t *testing.T) {
 	}
 
 	createScheduledBody, _ := json.Marshal(map[string]any{
-		"platform":     "x",
+		"account_id":   testAccountID(t, store),
 		"text":         "scheduled badge",
 		"scheduled_at": time.Now().UTC().Add(2 * time.Hour).Format(time.RFC3339),
 	})
@@ -694,7 +694,7 @@ func TestNavBadgesUseNeutralForScheduledAndDraftsAndRedForFailed(t *testing.T) {
 	}
 
 	createFailedBody, _ := json.Marshal(map[string]any{
-		"platform":     "x",
+		"account_id":   testAccountID(t, store),
 		"text":         "failed badge",
 		"scheduled_at": time.Now().UTC().Add(20 * 24 * time.Hour).Format(time.RFC3339),
 		"max_attempts": 1,
@@ -760,7 +760,7 @@ func TestQueueCardsHideRedundantStatusFlags(t *testing.T) {
 	h := srv.Handler()
 
 	createScheduledBody, _ := json.Marshal(map[string]any{
-		"platform":     "x",
+		"account_id":   testAccountID(t, store),
 		"text":         "scheduled without badge",
 		"scheduled_at": time.Now().UTC().Add(2 * time.Hour).Format(time.RFC3339),
 	})
@@ -772,8 +772,8 @@ func TestQueueCardsHideRedundantStatusFlags(t *testing.T) {
 	}
 
 	createDraftBody, _ := json.Marshal(map[string]any{
-		"platform": "x",
-		"text":     "draft without badge",
+		"account_id": testAccountID(t, store),
+		"text":       "draft without badge",
 	})
 	createDraftReq := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(createDraftBody))
 	createDraftW := httptest.NewRecorder()
@@ -783,7 +783,7 @@ func TestQueueCardsHideRedundantStatusFlags(t *testing.T) {
 	}
 
 	createFailedBody, _ := json.Marshal(map[string]any{
-		"platform":     "x",
+		"account_id":   testAccountID(t, store),
 		"text":         "failed without badge",
 		"scheduled_at": time.Now().UTC().Add(3 * time.Hour).Format(time.RFC3339),
 		"max_attempts": 1,
@@ -869,7 +869,7 @@ func TestCalendarDayDetailShowsPendingBeforePublished(t *testing.T) {
 	pendingAt := selectedDay.Add(10 * time.Hour)
 
 	createPublishedBody, _ := json.Marshal(map[string]any{
-		"platform":     "x",
+		"account_id":   testAccountID(t, store),
 		"text":         "published item should be below",
 		"scheduled_at": publishedAt.Format(time.RFC3339),
 	})
@@ -892,7 +892,7 @@ func TestCalendarDayDetailShowsPendingBeforePublished(t *testing.T) {
 	}
 
 	createPendingBody, _ := json.Marshal(map[string]any{
-		"platform":     "x",
+		"account_id":   testAccountID(t, store),
 		"text":         "pending item should be first",
 		"scheduled_at": pendingAt.Format(time.RFC3339),
 	})
@@ -1036,8 +1036,8 @@ func TestAccessibilityMarkupAddsLabelsAndLandmarks(t *testing.T) {
 	h := srv.Handler()
 
 	createDraftBody, _ := json.Marshal(map[string]any{
-		"platform": "x",
-		"text":     "draft for accessibility labels",
+		"account_id": testAccountID(t, store),
+		"text":       "draft for accessibility labels",
 	})
 	createDraftReq := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(createDraftBody))
 	createDraftW := httptest.NewRecorder()
@@ -1047,7 +1047,7 @@ func TestAccessibilityMarkupAddsLabelsAndLandmarks(t *testing.T) {
 	}
 
 	createFailedBody, _ := json.Marshal(map[string]any{
-		"platform":     "x",
+		"account_id":   testAccountID(t, store),
 		"text":         "failed for accessibility labels",
 		"scheduled_at": time.Now().UTC().Add(1 * time.Minute).Format(time.RFC3339),
 		"max_attempts": 1,
@@ -1207,7 +1207,6 @@ func TestCreatePostFromFormSupportsMediaIDs(t *testing.T) {
 	}
 	createdMedia, err := store.CreateMedia(t.Context(), domain.Media{
 		ID:           mediaID,
-		Platform:     domain.PlatformX,
 		Kind:         "image",
 		OriginalName: "preview.png",
 		StoragePath:  filepath.Join(tempDir, "preview.png"),
@@ -1219,7 +1218,7 @@ func TestCreatePostFromFormSupportsMediaIDs(t *testing.T) {
 	}
 
 	form := url.Values{}
-	form.Set("platform", "x")
+	form.Set("account_id", testAccountID(t, store))
 	form.Set("text", "form post with media ids")
 	form.Set("intent", "draft")
 	form.Add("media_ids", createdMedia.ID)
@@ -1268,7 +1267,7 @@ func TestCalendarCellsRenderAllEventsForDynamicOverflow(t *testing.T) {
 	selectedDay := time.Date(2026, time.February, 26, 0, 0, 0, 0, time.UTC)
 	for i := 0; i < 6; i++ {
 		createBody, _ := json.Marshal(map[string]any{
-			"platform":     "x",
+			"account_id":   testAccountID(t, store),
 			"text":         "dyn-overflow-" + strconv.Itoa(i+1),
 			"scheduled_at": selectedDay.Add(time.Duration(9+i) * time.Hour).Format(time.RFC3339),
 		})
