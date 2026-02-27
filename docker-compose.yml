@@ -5,8 +5,8 @@ services:
       dockerfile: Dockerfile
     image: antoniolg/publisher:latest
     restart: unless-stopped
-    ports:
-      - "8080:8080"
+    expose:
+      - "8080"
     environment:
       PORT: "8080"
       DATABASE_PATH: /srv/data/publisher.db

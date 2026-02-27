@@ -5,7 +5,7 @@
 1. In Coolify, create a new service from Git repository `antoniolg/publisher`.
 2. Use branch `main` and enable auto-deploy on new commits.
 3. Build using project `Dockerfile`.
-4. Expose port `8080`.
+4. Set application internal port to `8080` in Coolify (do not publish host port `8080` via Docker `ports`).
 5. Attach a persistent volume mounted at `/srv/data`.
 
 ## 2) Required environment variables
