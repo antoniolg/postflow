@@ -74,6 +74,10 @@ func (s Server) authMiddleware(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
+		if isOAuthCallbackPath(r.URL.Path) {
+			next.ServeHTTP(w, r)
+			return
+		}
 		if mediaID, ok := parseMediaContentPath(r.URL.Path); ok && s.signedMediaAccessAllowed(r, mediaID) {
 			next.ServeHTTP(w, r)
 			return
@@ -186,6 +190,14 @@ func parseMediaContentPath(path string) (mediaID string, ok bool) {
 		return "", false
 	}
 	return mediaID, true
+}
+
+func isOAuthCallbackPath(path string) bool {
+	trimmed := strings.TrimSpace(path)
+	if !strings.HasPrefix(trimmed, "/oauth/") {
+		return false
+	}
+	return strings.HasSuffix(trimmed, "/callback")
 }
 
 func (s Server) signedMediaAccessAllowed(r *http.Request, mediaID string) bool {

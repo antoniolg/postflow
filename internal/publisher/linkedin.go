@@ -301,7 +301,8 @@ func (p *LinkedInProvider) StartOAuth(_ context.Context, in OAuthStartInput) (OA
 	values.Set("client_id", p.cfg.ClientID)
 	values.Set("redirect_uri", in.RedirectURL)
 	values.Set("state", in.State)
-	values.Set("scope", "w_member_social offline_access")
+	values.Set("scope", "w_member_social openid profile")
+	values.Set("prompt", "consent")
 	return OAuthStartOutput{AuthURL: strings.TrimRight(p.cfg.AuthBaseURL, "/") + "/oauth/v2/authorization?" + values.Encode()}, nil
 }
 
@@ -364,7 +365,21 @@ func (p *LinkedInProvider) HandleOAuthCallback(ctx context.Context, in OAuthCall
 }
 
 func (p *LinkedInProvider) fetchMemberProfile(ctx context.Context, accessToken string) (memberID, displayName string, err error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(p.cfg.APIBaseURL, "/")+"/v2/me", nil)
+	memberID, displayName, err = p.fetchMemberProfileFromUserInfo(ctx, accessToken)
+	if err == nil {
+		return memberID, displayName, nil
+	}
+
+	legacyID, legacyName, legacyErr := p.fetchMemberProfileFromMe(ctx, accessToken)
+	if legacyErr == nil {
+		return legacyID, legacyName, nil
+	}
+
+	return "", "", fmt.Errorf("linkedin profile fetch failed (userinfo and me): userinfo_error=%v me_error=%v", err, legacyErr)
+}
+
+func (p *LinkedInProvider) fetchMemberProfileFromUserInfo(ctx context.Context, accessToken string) (memberID, displayName string, err error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(p.cfg.APIBaseURL, "/")+"/v2/userinfo", nil)
 	if err != nil {
 		return "", "", err
 	}
@@ -376,7 +391,46 @@ func (p *LinkedInProvider) fetchMemberProfile(ctx context.Context, accessToken s
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 	if resp.StatusCode >= 300 {
-		return "", "", fmt.Errorf("linkedin profile fetch failed: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return "", "", fmt.Errorf("userinfo status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	var userinfo struct {
+		Sub       string `json:"sub"`
+		Name      string `json:"name"`
+		GivenName string `json:"given_name"`
+		Family    string `json:"family_name"`
+	}
+	if err := json.Unmarshal(body, &userinfo); err != nil {
+		return "", "", err
+	}
+	memberID = strings.TrimSpace(userinfo.Sub)
+	if memberID == "" {
+		return "", "", fmt.Errorf("userinfo response missing sub")
+	}
+	displayName = strings.TrimSpace(userinfo.Name)
+	if displayName == "" {
+		displayName = strings.TrimSpace(strings.TrimSpace(userinfo.GivenName) + " " + strings.TrimSpace(userinfo.Family))
+	}
+	if displayName == "" {
+		displayName = "LinkedIn " + memberID
+	}
+	return memberID, displayName, nil
+}
+
+func (p *LinkedInProvider) fetchMemberProfileFromMe(ctx context.Context, accessToken string) (memberID, displayName string, err error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(p.cfg.APIBaseURL, "/")+"/v2/me", nil)
+	if err != nil {
+		return "", "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(accessToken))
+	req.Header.Set("X-Restli-Protocol-Version", "2.0.0")
+	resp, err := p.client.Do(req)
+	if err != nil {
+		return "", "", err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+	if resp.StatusCode >= 300 {
+		return "", "", fmt.Errorf("me status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 	var me struct {
 		ID                 string `json:"id"`
