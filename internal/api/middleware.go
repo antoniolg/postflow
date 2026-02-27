@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -70,6 +71,10 @@ func (s Server) authMiddleware(next http.Handler) http.Handler {
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/healthz" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if mediaID, ok := parseMediaContentPath(r.URL.Path); ok && s.signedMediaAccessAllowed(r, mediaID) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -168,6 +173,41 @@ func tokenMatches(r *http.Request, expected string) bool {
 		return token == expected
 	}
 	return false
+}
+
+func parseMediaContentPath(path string) (mediaID string, ok bool) {
+	trimmed := strings.TrimSpace(path)
+	if !strings.HasPrefix(trimmed, "/media/") || !strings.HasSuffix(trimmed, "/content") {
+		return "", false
+	}
+	mediaID = strings.TrimSuffix(strings.TrimPrefix(trimmed, "/media/"), "/content")
+	mediaID = strings.TrimSpace(mediaID)
+	if mediaID == "" || strings.Contains(mediaID, "/") {
+		return "", false
+	}
+	return mediaID, true
+}
+
+func (s Server) signedMediaAccessAllowed(r *http.Request, mediaID string) bool {
+	expRaw := strings.TrimSpace(r.URL.Query().Get("exp"))
+	sig := strings.TrimSpace(r.URL.Query().Get("sig"))
+	if expRaw == "" || sig == "" {
+		return false
+	}
+	expUnix, err := strconv.ParseInt(expRaw, 10, 64)
+	if err != nil || expUnix <= 0 {
+		return false
+	}
+	nowUnix := time.Now().UTC().Unix()
+	if expUnix < nowUnix {
+		return false
+	}
+	// Prevent overly long-lived URLs.
+	if expUnix > nowUnix+int64(60*60) {
+		return false
+	}
+	payload := fmt.Sprintf("%s:%d", strings.TrimSpace(mediaID), expUnix)
+	return s.credentialsCipher().VerifyString(payload, sig)
 }
 
 func basicMatches(r *http.Request, user, pass string) bool {

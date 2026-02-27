@@ -3,8 +3,12 @@ package secure
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,6 +18,7 @@ import (
 type Cipher struct {
 	aead       cipher.AEAD
 	keyVersion int
+	macKey     []byte
 }
 
 func NewCipherFromBase64(raw string, keyVersion int) (*Cipher, error) {
@@ -42,7 +47,9 @@ func NewCipher(key []byte, keyVersion int) (*Cipher, error) {
 	if keyVersion <= 0 {
 		keyVersion = 1
 	}
-	return &Cipher{aead: aead, keyVersion: keyVersion}, nil
+	macKey := make([]byte, len(key))
+	copy(macKey, key)
+	return &Cipher{aead: aead, keyVersion: keyVersion, macKey: macKey}, nil
 }
 
 func (c *Cipher) KeyVersion() int {
@@ -77,4 +84,28 @@ func (c *Cipher) DecryptJSON(ciphertext, nonce []byte, out any) error {
 		return err
 	}
 	return json.Unmarshal(plain, out)
+}
+
+func (c *Cipher) SignString(message string) string {
+	if c == nil {
+		return ""
+	}
+	mac := hmac.New(sha256.New, c.macKey)
+	_, _ = io.WriteString(mac, strings.TrimSpace(message))
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+func (c *Cipher) VerifyString(message, signature string) bool {
+	if c == nil {
+		return false
+	}
+	expected := c.SignString(message)
+	sig := strings.TrimSpace(signature)
+	if expected == "" || sig == "" {
+		return false
+	}
+	if len(expected) != len(sig) {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(expected), []byte(sig)) == 1
 }

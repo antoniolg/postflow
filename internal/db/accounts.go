@@ -13,7 +13,7 @@ import (
 
 var (
 	ErrAccountNotFound      = errors.New("account not found")
-	ErrAccountHasPosts      = errors.New("account has existing posts")
+	ErrAccountHasPosts      = errors.New("account has pending posts")
 	ErrAccountNotDisconnect = errors.New("account must be disconnected before delete")
 )
 
@@ -230,15 +230,45 @@ func (s *Store) DeleteAccount(ctx context.Context, id string) error {
 	if account.Status != domain.AccountStatusDisconnected {
 		return ErrAccountNotDisconnect
 	}
-	var total int
-	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM posts WHERE account_id = ?`, id).Scan(&total); err != nil {
+	var pending int
+	if err := s.db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM posts
+		WHERE account_id = ?
+		  AND status IN (?, ?, ?)
+	`, id, domain.PostStatusDraft, domain.PostStatusScheduled, domain.PostStatusPublishing).Scan(&pending); err != nil {
 		return err
 	}
-	if total > 0 {
+	if pending > 0 {
 		return ErrAccountHasPosts
 	}
-	_, err = s.db.ExecContext(ctx, `DELETE FROM accounts WHERE id = ?`, id)
-	return err
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.ExecContext(ctx, `DELETE FROM dead_letters WHERE post_id IN (SELECT id FROM posts WHERE account_id = ?)`, id); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM post_media WHERE post_id IN (SELECT id FROM posts WHERE account_id = ?)`, id); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM posts WHERE account_id = ?`, id); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM account_credentials WHERE account_id = ?`, id); err != nil {
+		return err
+	}
+	result, err := tx.ExecContext(ctx, `DELETE FROM accounts WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	affected, _ := result.RowsAffected()
+	if affected == 0 {
+		return ErrAccountNotFound
+	}
+	return tx.Commit()
 }
 
 func (s *Store) CreateOAuthState(ctx context.Context, state domain.OauthState) (domain.OauthState, error) {

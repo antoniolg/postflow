@@ -168,7 +168,7 @@ func (s Server) handleAccountActions(w http.ResponseWriter, r *http.Request) {
 			case errors.Is(err, db.ErrAccountNotDisconnect):
 				writeError(w, http.StatusConflict, errors.New("account must be disconnected first"))
 			case errors.Is(err, db.ErrAccountHasPosts):
-				writeError(w, http.StatusConflict, errors.New("account has existing posts"))
+				writeError(w, http.StatusConflict, errors.New("account has pending posts"))
 			default:
 				writeError(w, http.StatusInternalServerError, err)
 			}
@@ -206,7 +206,7 @@ func (s Server) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, db.ErrAccountNotDisconnect):
 			writeError(w, http.StatusConflict, errors.New("account must be disconnected first"))
 		case errors.Is(err, db.ErrAccountHasPosts):
-			writeError(w, http.StatusConflict, errors.New("account has existing posts"))
+			writeError(w, http.StatusConflict, errors.New("account has pending posts"))
 		default:
 			writeError(w, http.StatusInternalServerError, err)
 		}
