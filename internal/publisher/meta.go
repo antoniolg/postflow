@@ -6,8 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime"
+	"mime/multipart"
 	"net/http"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -16,11 +19,12 @@ import (
 )
 
 type MetaProviderConfig struct {
-	AppID      string
-	AppSecret  string
-	GraphURL   string
-	DialogURL  string
-	APIVersion string
+	AppID           string
+	AppSecret       string
+	GraphURL        string
+	DialogURL       string
+	APIVersion      string
+	MediaURLBuilder func(media domain.Media) (string, error)
 }
 
 type FacebookProvider struct {
@@ -65,19 +69,28 @@ func (p *InstagramProvider) Platform() domain.Platform {
 }
 
 func (p *FacebookProvider) ValidateDraft(_ context.Context, _ domain.SocialAccount, draft Draft) ([]string, error) {
-	warnings := make([]string, 0)
-	if len(draft.Media) > 0 {
-		warnings = append(warnings, "facebook provider currently sends text-only posts")
+	if len(draft.Media) > 10 {
+		return nil, fmt.Errorf("facebook supports up to 10 image attachments per post")
 	}
-	return warnings, nil
+	for _, item := range draft.Media {
+		if !isImageMedia(item) {
+			return nil, fmt.Errorf("facebook only supports image media in this release")
+		}
+	}
+	return nil, nil
 }
 
 func (p *InstagramProvider) ValidateDraft(_ context.Context, _ domain.SocialAccount, draft Draft) ([]string, error) {
-	warnings := make([]string, 0)
 	if len(draft.Media) == 0 {
-		warnings = append(warnings, "instagram publish requires at least one image")
+		return nil, fmt.Errorf("instagram publish requires one image")
 	}
-	return warnings, nil
+	if len(draft.Media) > 1 {
+		return nil, fmt.Errorf("instagram supports a single image per post in this release")
+	}
+	if !isImageMedia(draft.Media[0]) {
+		return nil, fmt.Errorf("instagram requires image media")
+	}
+	return nil, nil
 }
 
 func (p *FacebookProvider) Publish(ctx context.Context, account domain.SocialAccount, credentials Credentials, post domain.Post) (string, error) {
@@ -91,9 +104,26 @@ func (p *FacebookProvider) Publish(ctx context.Context, account domain.SocialAcc
 	if strings.TrimSpace(credentials.AccessToken) == "" {
 		return "", fmt.Errorf("facebook access token missing")
 	}
+	if len(post.Media) > 10 {
+		return "", fmt.Errorf("facebook supports up to 10 image attachments per post")
+	}
+	attachmentIDs := make([]string, 0, len(post.Media))
+	for _, media := range post.Media {
+		if !isImageMedia(media) {
+			return "", fmt.Errorf("facebook only supports image media in this release")
+		}
+		photoID, err := p.uploadFacebookPhoto(ctx, pageID, strings.TrimSpace(credentials.AccessToken), media)
+		if err != nil {
+			return "", err
+		}
+		attachmentIDs = append(attachmentIDs, photoID)
+	}
 	values := url.Values{}
 	values.Set("message", strings.TrimSpace(post.Text))
 	values.Set("access_token", strings.TrimSpace(credentials.AccessToken))
+	for i, photoID := range attachmentIDs {
+		values.Set(fmt.Sprintf("attached_media[%d]", i), fmt.Sprintf(`{"media_fbid":"%s"}`, strings.TrimSpace(photoID)))
+	}
 	reqURL := fmt.Sprintf("%s/%s/%s/feed", strings.TrimRight(p.cfg.GraphURL, "/"), p.cfg.APIVersion, pageID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, strings.NewReader(values.Encode()))
 	if err != nil {
@@ -135,11 +165,24 @@ func (p *InstagramProvider) Publish(ctx context.Context, account domain.SocialAc
 	if len(post.Media) == 0 {
 		return "", fmt.Errorf("instagram requires at least one media item")
 	}
+	if len(post.Media) > 1 {
+		return "", fmt.Errorf("instagram supports a single image per post in this release")
+	}
+	if !isImageMedia(post.Media[0]) {
+		return "", fmt.Errorf("instagram requires image media")
+	}
 	imageURL := strings.TrimSpace(credentials.Extra["image_url"])
 	if imageURL == "" {
 		candidate := strings.TrimSpace(post.Media[0].StoragePath)
 		if strings.HasPrefix(strings.ToLower(candidate), "http://") || strings.HasPrefix(strings.ToLower(candidate), "https://") {
 			imageURL = candidate
+		}
+	}
+	if imageURL == "" && p.cfg.MediaURLBuilder != nil {
+		var err error
+		imageURL, err = p.cfg.MediaURLBuilder(post.Media[0])
+		if err != nil {
+			return "", err
 		}
 	}
 	if imageURL == "" {
@@ -204,12 +247,39 @@ func (p *InstagramProvider) Publish(ctx context.Context, account domain.SocialAc
 	return strings.TrimSpace(publishOut.ID), nil
 }
 
-func (p *FacebookProvider) RefreshIfNeeded(_ context.Context, _ domain.SocialAccount, credentials Credentials) (Credentials, bool, error) {
-	return credentials, false, nil
+func (p *FacebookProvider) RefreshIfNeeded(ctx context.Context, _ domain.SocialAccount, credentials Credentials) (Credentials, bool, error) {
+	if credentials.ExpiresAt == nil {
+		return credentials, false, nil
+	}
+	if credentials.ExpiresAt.After(time.Now().UTC().Add(5 * time.Minute)) {
+		return credentials, false, nil
+	}
+	token := strings.TrimSpace(credentials.AccessToken)
+	if token == "" {
+		return credentials, false, fmt.Errorf("meta refresh requires access token")
+	}
+	if strings.TrimSpace(p.cfg.AppID) == "" || strings.TrimSpace(p.cfg.AppSecret) == "" {
+		return credentials, false, fmt.Errorf("meta refresh requires app credentials")
+	}
+	refreshed, err := p.exchangeLongLivedToken(ctx, token)
+	if err != nil {
+		return credentials, false, err
+	}
+	updated := credentials
+	updated.AccessToken = strings.TrimSpace(refreshed.AccessToken)
+	if strings.TrimSpace(refreshed.TokenType) != "" {
+		updated.TokenType = strings.TrimSpace(refreshed.TokenType)
+	}
+	if refreshed.ExpiresIn > 0 {
+		expiresAt := time.Now().UTC().Add(time.Duration(refreshed.ExpiresIn) * time.Second)
+		updated.ExpiresAt = &expiresAt
+	}
+	return updated, true, nil
 }
 
-func (p *InstagramProvider) RefreshIfNeeded(_ context.Context, _ domain.SocialAccount, credentials Credentials) (Credentials, bool, error) {
-	return credentials, false, nil
+func (p *InstagramProvider) RefreshIfNeeded(ctx context.Context, account domain.SocialAccount, credentials Credentials) (Credentials, bool, error) {
+	fb := FacebookProvider{cfg: p.cfg, client: p.client}
+	return fb.RefreshIfNeeded(ctx, account, credentials)
 }
 
 func (p *FacebookProvider) StartOAuth(_ context.Context, in OAuthStartInput) (OAuthStartOutput, error) {
@@ -253,17 +323,22 @@ func (p *FacebookProvider) HandleOAuthCallback(ctx context.Context, in OAuthCall
 		if externalID == "" || strings.TrimSpace(page.AccessToken) == "" {
 			continue
 		}
+		creds := Credentials{
+			AccessToken: strings.TrimSpace(page.AccessToken),
+			TokenType:   "Bearer",
+			Extra: map[string]string{
+				"page_id": externalID,
+			},
+		}
+		if token.ExpiresIn > 0 {
+			expiresAt := time.Now().UTC().Add(time.Duration(token.ExpiresIn) * time.Second)
+			creds.ExpiresAt = &expiresAt
+		}
 		accounts = append(accounts, ConnectedAccount{
 			Platform:          domain.PlatformFacebook,
 			DisplayName:       firstNonEmpty(strings.TrimSpace(page.Name), "Facebook Page "+externalID),
 			ExternalAccountID: externalID,
-			Credentials: Credentials{
-				AccessToken: strings.TrimSpace(page.AccessToken),
-				TokenType:   "Bearer",
-				Extra: map[string]string{
-					"page_id": externalID,
-				},
-			},
+			Credentials:       creds,
 		})
 	}
 	if len(accounts) == 0 {
@@ -295,18 +370,23 @@ func (p *InstagramProvider) HandleOAuthCallback(ctx context.Context, in OAuthCal
 		if display == "" {
 			display = "Instagram " + igID
 		}
+		creds := Credentials{
+			AccessToken: strings.TrimSpace(page.AccessToken),
+			TokenType:   "Bearer",
+			Extra: map[string]string{
+				"ig_user_id": igID,
+				"page_id":    strings.TrimSpace(page.ID),
+			},
+		}
+		if token.ExpiresIn > 0 {
+			expiresAt := time.Now().UTC().Add(time.Duration(token.ExpiresIn) * time.Second)
+			creds.ExpiresAt = &expiresAt
+		}
 		accounts = append(accounts, ConnectedAccount{
 			Platform:          domain.PlatformInstagram,
 			DisplayName:       display,
 			ExternalAccountID: igID,
-			Credentials: Credentials{
-				AccessToken: strings.TrimSpace(page.AccessToken),
-				TokenType:   "Bearer",
-				Extra: map[string]string{
-					"ig_user_id": igID,
-					"page_id":    strings.TrimSpace(page.ID),
-				},
-			},
+			Credentials:       creds,
 		})
 	}
 	if len(accounts) == 0 {
@@ -322,9 +402,9 @@ type metaTokenResponse struct {
 }
 
 type metaPage struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	AccessToken string `json:"access_token"`
+	ID                       string `json:"id"`
+	Name                     string `json:"name"`
+	AccessToken              string `json:"access_token"`
 	InstagramBusinessAccount *struct {
 		ID       string `json:"id"`
 		Username string `json:"username"`
@@ -396,6 +476,121 @@ func (p *FacebookProvider) fetchPages(ctx context.Context, token metaTokenRespon
 func (p *InstagramProvider) fetchPages(ctx context.Context, token metaTokenResponse) ([]metaPage, error) {
 	fb := FacebookProvider{cfg: p.cfg, client: p.client}
 	return fb.fetchPages(ctx, token)
+}
+
+func (p *FacebookProvider) exchangeLongLivedToken(ctx context.Context, accessToken string) (metaTokenResponse, error) {
+	values := url.Values{}
+	values.Set("grant_type", "fb_exchange_token")
+	values.Set("client_id", strings.TrimSpace(p.cfg.AppID))
+	values.Set("client_secret", strings.TrimSpace(p.cfg.AppSecret))
+	values.Set("fb_exchange_token", strings.TrimSpace(accessToken))
+	reqURL := fmt.Sprintf("%s/%s/oauth/access_token?%s", strings.TrimRight(p.cfg.GraphURL, "/"), p.cfg.APIVersion, values.Encode())
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	if err != nil {
+		return metaTokenResponse{}, err
+	}
+	resp, err := p.client.Do(req)
+	if err != nil {
+		return metaTokenResponse{}, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+	if resp.StatusCode >= 300 {
+		return metaTokenResponse{}, fmt.Errorf("meta token refresh failed: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	var out metaTokenResponse
+	if err := json.Unmarshal(body, &out); err != nil {
+		return metaTokenResponse{}, err
+	}
+	if strings.TrimSpace(out.AccessToken) == "" {
+		return metaTokenResponse{}, fmt.Errorf("meta token refresh returned empty access_token")
+	}
+	return out, nil
+}
+
+func (p *FacebookProvider) uploadFacebookPhoto(ctx context.Context, pageID, accessToken string, media domain.Media) (string, error) {
+	storage := strings.TrimSpace(media.StoragePath)
+	if storage == "" {
+		return "", fmt.Errorf("facebook media %s has empty storage path", strings.TrimSpace(media.ID))
+	}
+	lowerStorage := strings.ToLower(storage)
+	var req *http.Request
+	var err error
+	endpoint := fmt.Sprintf("%s/%s/%s/photos", strings.TrimRight(p.cfg.GraphURL, "/"), p.cfg.APIVersion, strings.TrimSpace(pageID))
+	if strings.HasPrefix(lowerStorage, "http://") || strings.HasPrefix(lowerStorage, "https://") {
+		values := url.Values{}
+		values.Set("url", storage)
+		values.Set("published", "false")
+		values.Set("access_token", strings.TrimSpace(accessToken))
+		req, err = http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(values.Encode()))
+		if err != nil {
+			return "", err
+		}
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	} else {
+		file, openErr := os.Open(storage)
+		if openErr != nil {
+			return "", openErr
+		}
+		defer file.Close()
+		var body bytes.Buffer
+		writer := multipart.NewWriter(&body)
+		_ = writer.WriteField("published", "false")
+		_ = writer.WriteField("access_token", strings.TrimSpace(accessToken))
+		part, createErr := writer.CreateFormFile("source", firstNonEmpty(strings.TrimSpace(media.OriginalName), filepath.Base(storage)))
+		if createErr != nil {
+			return "", createErr
+		}
+		if _, copyErr := io.Copy(part, file); copyErr != nil {
+			return "", copyErr
+		}
+		if closeErr := writer.Close(); closeErr != nil {
+			return "", closeErr
+		}
+		req, err = http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body.Bytes()))
+		if err != nil {
+			return "", err
+		}
+		req.Header.Set("Content-Type", writer.FormDataContentType())
+		if mimeType := strings.TrimSpace(media.MimeType); mimeType != "" {
+			req.Header.Set("Accept", mimeType)
+		}
+	}
+	resp, err := p.client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+	if resp.StatusCode >= 300 {
+		return "", fmt.Errorf("facebook photo upload failed: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(raw)))
+	}
+	var out struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(out.ID) == "" {
+		return "", fmt.Errorf("facebook photo upload response missing id")
+	}
+	return strings.TrimSpace(out.ID), nil
+}
+
+func isImageMedia(media domain.Media) bool {
+	mimeType := strings.ToLower(strings.TrimSpace(media.MimeType))
+	if strings.HasPrefix(mimeType, "image/") {
+		return true
+	}
+	ext := strings.ToLower(strings.TrimSpace(filepath.Ext(media.OriginalName)))
+	if ext == "" {
+		ext = strings.ToLower(strings.TrimSpace(filepath.Ext(media.StoragePath)))
+	}
+	if ext == "" {
+		return false
+	}
+	detected := mime.TypeByExtension(ext)
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(detected)), "image/")
 }
 
 func firstNonEmpty(values ...string) string {

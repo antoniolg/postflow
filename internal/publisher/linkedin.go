@@ -6,8 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -44,17 +47,18 @@ func (p *LinkedInProvider) Platform() domain.Platform {
 }
 
 func (p *LinkedInProvider) ValidateDraft(_ context.Context, _ domain.SocialAccount, draft Draft) ([]string, error) {
-	warnings := make([]string, 0)
-	if len(draft.Media) > 0 {
-		warnings = append(warnings, "linkedin provider currently supports text-only publish in this release")
+	if len(draft.Media) > 9 {
+		return nil, fmt.Errorf("linkedin supports up to 9 images per post")
 	}
-	return warnings, nil
+	for _, media := range draft.Media {
+		if !isImageMedia(media) {
+			return nil, fmt.Errorf("linkedin only supports image media in this release")
+		}
+	}
+	return nil, nil
 }
 
 func (p *LinkedInProvider) Publish(ctx context.Context, account domain.SocialAccount, credentials Credentials, post domain.Post) (string, error) {
-	if len(post.Media) > 0 {
-		return "", fmt.Errorf("linkedin media publishing is not enabled yet")
-	}
 	token := strings.TrimSpace(credentials.AccessToken)
 	if token == "" {
 		return "", fmt.Errorf("linkedin access token missing")
@@ -63,13 +67,37 @@ func (p *LinkedInProvider) Publish(ctx context.Context, account domain.SocialAcc
 	if memberID == "" {
 		return "", fmt.Errorf("linkedin external account id is required")
 	}
+	assetURNs := make([]string, 0, len(post.Media))
+	for _, media := range post.Media {
+		if !isImageMedia(media) {
+			return "", fmt.Errorf("linkedin only supports image media in this release")
+		}
+		assetURN, err := p.uploadImageAsset(ctx, memberID, token, media)
+		if err != nil {
+			return "", err
+		}
+		assetURNs = append(assetURNs, assetURN)
+	}
+	shareCategory := "NONE"
+	mediaPayload := make([]map[string]any, 0, len(assetURNs))
+	if len(assetURNs) > 0 {
+		shareCategory = "IMAGE"
+		for _, urn := range assetURNs {
+			mediaPayload = append(mediaPayload, map[string]any{
+				"status": "READY",
+				"media":  urn,
+				"title":  map[string]any{"text": firstNonEmpty(strings.TrimSpace(post.Text), "LinkedIn media post")},
+			})
+		}
+	}
 	payload := map[string]any{
 		"author":         "urn:li:person:" + memberID,
 		"lifecycleState": "PUBLISHED",
 		"specificContent": map[string]any{
 			"com.linkedin.ugc.ShareContent": map[string]any{
-				"shareCommentary": map[string]any{"text": post.Text},
-				"shareMediaCategory": "NONE",
+				"shareCommentary":    map[string]any{"text": post.Text},
+				"shareMediaCategory": shareCategory,
+				"media":              mediaPayload,
 			},
 		},
 		"visibility": map[string]any{"com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC"},
@@ -106,6 +134,106 @@ func (p *LinkedInProvider) Publish(ctx context.Context, account domain.SocialAcc
 		return fmt.Sprintf("linkedin_%d", time.Now().Unix()), nil
 	}
 	return strings.TrimSpace(out.ID), nil
+}
+
+func (p *LinkedInProvider) uploadImageAsset(ctx context.Context, memberID, accessToken string, media domain.Media) (string, error) {
+	ownerURN := "urn:li:person:" + strings.TrimSpace(memberID)
+	registerPayload := map[string]any{
+		"registerUploadRequest": map[string]any{
+			"owner":   ownerURN,
+			"recipes": []string{"urn:li:digitalmediaRecipe:feedshare-image"},
+			"serviceRelationships": []map[string]string{{
+				"relationshipType": "OWNER",
+				"identifier":       "urn:li:userGeneratedContent",
+			}},
+		},
+	}
+	raw, _ := json.Marshal(registerPayload)
+	registerReq, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(p.cfg.APIBaseURL, "/")+"/v2/assets?action=registerUpload", bytes.NewReader(raw))
+	if err != nil {
+		return "", err
+	}
+	registerReq.Header.Set("Authorization", "Bearer "+strings.TrimSpace(accessToken))
+	registerReq.Header.Set("Content-Type", "application/json")
+	registerReq.Header.Set("X-Restli-Protocol-Version", "2.0.0")
+	registerResp, err := p.client.Do(registerReq)
+	if err != nil {
+		return "", err
+	}
+	defer registerResp.Body.Close()
+	registerBody, _ := io.ReadAll(io.LimitReader(registerResp.Body, 2<<20))
+	if registerResp.StatusCode >= 300 {
+		return "", fmt.Errorf("linkedin register upload failed: status=%d body=%s", registerResp.StatusCode, strings.TrimSpace(string(registerBody)))
+	}
+	var registerOut struct {
+		Value struct {
+			Asset           string `json:"asset"`
+			UploadMechanism map[string]struct {
+				UploadURL string `json:"uploadUrl"`
+			} `json:"uploadMechanism"`
+		} `json:"value"`
+	}
+	if err := json.Unmarshal(registerBody, &registerOut); err != nil {
+		return "", err
+	}
+	assetURN := strings.TrimSpace(registerOut.Value.Asset)
+	if assetURN == "" {
+		return "", fmt.Errorf("linkedin register upload missing asset urn")
+	}
+	uploadURL := ""
+	for _, mechanism := range registerOut.Value.UploadMechanism {
+		uploadURL = strings.TrimSpace(mechanism.UploadURL)
+		if uploadURL != "" {
+			break
+		}
+	}
+	if uploadURL == "" {
+		return "", fmt.Errorf("linkedin register upload missing upload url")
+	}
+
+	content, contentType, err := readLinkedInMedia(media)
+	if err != nil {
+		return "", err
+	}
+	uploadReq, err := http.NewRequestWithContext(ctx, http.MethodPut, uploadURL, bytes.NewReader(content))
+	if err != nil {
+		return "", err
+	}
+	if contentType != "" {
+		uploadReq.Header.Set("Content-Type", contentType)
+	}
+	uploadResp, err := p.client.Do(uploadReq)
+	if err != nil {
+		return "", err
+	}
+	defer uploadResp.Body.Close()
+	uploadBody, _ := io.ReadAll(io.LimitReader(uploadResp.Body, 2<<20))
+	if uploadResp.StatusCode >= 300 {
+		return "", fmt.Errorf("linkedin media upload failed: status=%d body=%s", uploadResp.StatusCode, strings.TrimSpace(string(uploadBody)))
+	}
+	return assetURN, nil
+}
+
+func readLinkedInMedia(media domain.Media) ([]byte, string, error) {
+	path := strings.TrimSpace(media.StoragePath)
+	if path == "" {
+		return nil, "", fmt.Errorf("linkedin media %s has empty storage path", strings.TrimSpace(media.ID))
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return nil, "", err
+	}
+	contentType := strings.TrimSpace(media.MimeType)
+	if contentType == "" {
+		ext := strings.ToLower(strings.TrimSpace(filepath.Ext(firstNonEmpty(strings.TrimSpace(media.OriginalName), filepath.Base(path)))))
+		if ext != "" {
+			contentType = strings.TrimSpace(mime.TypeByExtension(ext))
+		}
+	}
+	if contentType == "" {
+		contentType = http.DetectContentType(content)
+	}
+	return content, contentType, nil
 }
 
 func (p *LinkedInProvider) RefreshIfNeeded(ctx context.Context, _ domain.SocialAccount, credentials Credentials) (Credentials, bool, error) {

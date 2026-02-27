@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -46,7 +48,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	registry, err := buildProviderRegistry(cfg)
+	registry, err := buildProviderRegistry(cfg, cipher)
 	if err != nil {
 		slog.Error("build provider registry", "error", err)
 		os.Exit(1)
@@ -104,7 +106,7 @@ func main() {
 	}
 }
 
-func buildProviderRegistry(cfg config.Config) (*publisher.ProviderRegistry, error) {
+func buildProviderRegistry(cfg config.Config, cipher *secure.Cipher) (*publisher.ProviderRegistry, error) {
 	driver := strings.ToLower(strings.TrimSpace(cfg.PublisherDriver))
 	switch driver {
 	case "", "mock":
@@ -128,14 +130,41 @@ func buildProviderRegistry(cfg config.Config) (*publisher.ProviderRegistry, erro
 			ClientSecret: cfg.LinkedIn.ClientSecret,
 		})
 		metaCfg := publisher.MetaProviderConfig{
-			AppID:     cfg.Meta.AppID,
-			AppSecret: cfg.Meta.AppSecret,
+			AppID:           cfg.Meta.AppID,
+			AppSecret:       cfg.Meta.AppSecret,
+			MediaURLBuilder: buildSignedMediaURLBuilder(cfg.PublicBaseURL, cipher),
 		}
 		facebookProvider := publisher.NewFacebookProvider(metaCfg)
 		instagramProvider := publisher.NewInstagramProvider(metaCfg)
 		return publisher.NewProviderRegistry(xProvider, linkedinProvider, facebookProvider, instagramProvider), nil
 	default:
 		return nil, fmt.Errorf("unsupported PUBLISHER_DRIVER=%q (valid: mock, x)", cfg.PublisherDriver)
+	}
+}
+
+func buildSignedMediaURLBuilder(baseURL string, cipher *secure.Cipher) func(media domain.Media) (string, error) {
+	if cipher == nil {
+		return nil
+	}
+	base := strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	if base == "" {
+		return nil
+	}
+	return func(media domain.Media) (string, error) {
+		mediaID := strings.TrimSpace(media.ID)
+		if mediaID == "" {
+			return "", fmt.Errorf("media id is required")
+		}
+		expiration := time.Now().UTC().Add(20 * time.Minute).Unix()
+		payload := fmt.Sprintf("%s:%d", mediaID, expiration)
+		signature := cipher.SignString(payload)
+		if signature == "" {
+			return "", fmt.Errorf("unable to sign media url")
+		}
+		query := url.Values{}
+		query.Set("exp", strconv.FormatInt(expiration, 10))
+		query.Set("sig", signature)
+		return fmt.Sprintf("%s/media/%s/content?%s", base, url.PathEscape(mediaID), query.Encode()), nil
 	}
 }
 
