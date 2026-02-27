@@ -3962,7 +3962,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	                  <textarea id="create-text" name="text" required placeholder="{{t "create.placeholder"}}">{{.CreateText}}</textarea>
 	                  <div class="composer-text-meta">
 	                    <span id="create-char-count">{{t "create.char_count_initial"}}</span>
-	                    <span class="composer-format-btns">**bold** _italic_</span>
+	                    <span class="composer-format-btns">**bold** *italic*</span>
 	                  </div>
 	                </div>
               </div>
@@ -6126,11 +6126,11 @@ var uiMessages = map[string]map[string]string{
 		"header.new_post":                     "NEW POST",
 		"common.back":                         "back",
 		"common.today":                        "today",
-		"common.create_post":                  "create_post",
-		"common.save_draft":                   "save_draft",
+		"common.create_post":                  "create post",
+		"common.save_draft":                   "save draft",
 		"common.schedule":                     "schedule",
-		"common.update_schedule":              "update_schedule",
-		"common.publish_now":                  "publish_now",
+		"common.update_schedule":              "update schedule",
+		"common.publish_now":                  "publish now",
 		"common.delete":                       "delete",
 		"common.save":                         "save",
 		"common.no_date":                      "no date",
@@ -6252,11 +6252,11 @@ var uiMessages = map[string]map[string]string{
 		"header.new_post":                     "NUEVA PUBLICACION",
 		"common.back":                         "volver",
 		"common.today":                        "hoy",
-		"common.create_post":                  "crear_post",
-		"common.save_draft":                   "guardar_borrador",
+		"common.create_post":                  "crear publicacion",
+		"common.save_draft":                   "guardar borrador",
 		"common.schedule":                     "programar",
-		"common.update_schedule":              "actualizar_programacion",
-		"common.publish_now":                  "publicar_ahora",
+		"common.update_schedule":              "actualizar programacion",
+		"common.publish_now":                  "publicar ahora",
 		"common.delete":                       "eliminar",
 		"common.save":                         "guardar",
 		"common.no_date":                      "sin fecha",
