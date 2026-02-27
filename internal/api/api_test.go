@@ -1506,6 +1506,9 @@ func TestCreateViewIncludesComposerPreviewUploadAndNetworks(t *testing.T) {
 	if !strings.Contains(body, ".composer-text-wrap textarea {") || !strings.Contains(body, "width: 100%;") {
 		t.Fatalf("expected create textarea to span full composer width")
 	}
+	if !strings.Contains(body, ".composer-text-wrap textarea {") || !strings.Contains(body, "border-radius: 0;") {
+		t.Fatalf("expected create textarea to disable inherited rounded corners to avoid glyph clipping")
+	}
 	if !strings.Contains(body, "input[type=\"date\"], input[type=\"datetime-local\"], input[data-date-picker]") {
 		t.Fatalf("expected reusable date picker script to target all date/datetime inputs")
 	}

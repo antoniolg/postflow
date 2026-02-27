@@ -2772,6 +2772,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     }
     .composer-text-wrap textarea {
       border: 0;
+      border-radius: 0;
       background: transparent;
       width: 100%;
       min-height: clamp(250px, 34vh, 420px);
@@ -5006,20 +5007,6 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
   let uploadInFlight = 0;
   const attachments = [];
 
-  const formatBytes = (size) => {
-    if (!Number.isFinite(size) || size <= 0) {
-      return "0 B";
-    }
-    const units = ["B", "KB", "MB", "GB"];
-    let value = size;
-    let unitIndex = 0;
-    while (value >= 1024 && unitIndex < units.length - 1) {
-      value /= 1024;
-      unitIndex += 1;
-    }
-    return (value >= 10 || unitIndex === 0 ? value.toFixed(0) : value.toFixed(1)) + " " + units[unitIndex];
-  };
-
   const toDatetimeLocal = (d) => {
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, "0");
@@ -5485,13 +5472,15 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 
   const renderMediaList = () => {
     if (attachments.length === 0) {
-      mediaList.innerHTML = '<div class="empty">No media yet. Upload up to ' + maxMedia + " files.</div>";
+      mediaList.innerHTML = "";
+      mediaList.hidden = true;
       setNotice("");
       updatePreviewMedia();
       syncLibraryAttachButtons();
       return;
     }
 
+    mediaList.hidden = false;
     mediaList.innerHTML = "";
     attachments.forEach((item, index) => {
       const row = document.createElement("article");
@@ -5541,11 +5530,11 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     return res.json();
   };
 
-  const addOrReplaceFile = async (file, index) => {
+  const addFile = async (file) => {
     if (!(file instanceof File)) {
       return;
     }
-    if (index < 0 && attachments.length >= maxMedia) {
+    if (attachments.length >= maxMedia) {
       setNotice("max " + maxMedia + " files", "error");
       return;
     }
@@ -5569,12 +5558,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         throw new Error("upload failed: missing media id");
       }
 
-      if (index >= 0 && index < attachments.length) {
-        destroyPreviewURL(attachments[index]);
-        attachments[index] = item;
-      } else {
-        attachments.push(item);
-      }
+      attachments.push(item);
 
       syncHiddenMediaInputs();
       renderMediaList();
@@ -5595,20 +5579,13 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       return;
     }
 
-    if (replaceIndex >= 0) {
-      const target = replaceIndex;
-      replaceIndex = -1;
-      await addOrReplaceFile(files[0], target);
-      return;
-    }
-
     for (const file of files) {
       if (attachments.length >= maxMedia) {
         break;
       }
       // Keep uploads sequential so UI state stays stable and predictable.
       // eslint-disable-next-line no-await-in-loop
-      await addOrReplaceFile(file, -1);
+      await addFile(file);
     }
   };
 
@@ -5698,27 +5675,18 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 
   mediaList.addEventListener("click", (event) => {
     const target = event.target;
-    if (!(target instanceof HTMLElement)) {
+    if (!(target instanceof Element)) {
       return;
     }
-    const removeValue = target.getAttribute("data-media-remove");
-    if (removeValue !== null) {
+    const removeButton = target.closest("[data-media-remove]");
+    if (removeButton instanceof HTMLButtonElement) {
+      const removeValue = removeButton.getAttribute("data-media-remove");
       const index = Number(removeValue);
       if (Number.isInteger(index) && index >= 0 && index < attachments.length) {
         destroyPreviewURL(attachments[index]);
         attachments.splice(index, 1);
         syncHiddenMediaInputs();
         renderMediaList();
-      }
-      return;
-    }
-
-    const replaceValue = target.getAttribute("data-media-replace");
-    if (replaceValue !== null) {
-      const index = Number(replaceValue);
-      if (Number.isInteger(index) && index >= 0 && index < attachments.length) {
-        replaceIndex = index;
-        mediaInput.click();
       }
     }
   });
