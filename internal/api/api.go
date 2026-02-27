@@ -3138,9 +3138,6 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       flex-direction: column;
       gap: 16px;
     }
-    body[data-view="create"] .preview-panel {
-      margin-top: 44px;
-    }
     .preview-head {
       padding: 0;
       border-bottom: 0;
@@ -3411,7 +3408,6 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       }
       .preview-panel {
         padding: 0;
-        margin-top: 0;
       }
       .composer-submit-actions {
         display: flex;
@@ -4784,6 +4780,9 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
   const previewMedia = document.getElementById("preview-media");
   const previewImage = document.getElementById("preview-media-image");
   const previewEmpty = document.getElementById("preview-media-empty");
+  const createContentBox = form.querySelector(".create-field-content .composer-text-wrap");
+  const previewBodyWrap = document.querySelector(".preview-body");
+  const createMobileQuery = window.matchMedia("(max-width: 980px)");
 
   if (!(textInput instanceof HTMLTextAreaElement) ||
       !(scheduleInput instanceof HTMLInputElement) ||
@@ -4860,6 +4859,25 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     previewImage.hidden = true;
     previewEmpty.hidden = true;
     previewMedia.hidden = true;
+  };
+
+  const syncPreviewCardTop = () => {
+    if (!(createContentBox instanceof HTMLElement) || !(previewBodyWrap instanceof HTMLElement)) {
+      return;
+    }
+    if (createMobileQuery.matches) {
+      previewBodyWrap.style.marginTop = "0px";
+      return;
+    }
+    previewBodyWrap.style.marginTop = "0px";
+    const previewCardNode = previewBodyWrap.querySelector(".preview-card");
+    if (!(previewCardNode instanceof HTMLElement)) {
+      return;
+    }
+    const contentTop = createContentBox.getBoundingClientRect().top;
+    const previewCardTop = previewCardNode.getBoundingClientRect().top;
+    const offset = Math.max(0, Math.round(contentTop - previewCardTop));
+    previewBodyWrap.style.marginTop = offset + "px";
   };
 
   const syncHiddenMediaInputs = () => {
@@ -5341,6 +5359,17 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
   updatePreviewText();
   renderMediaList();
   syncNetworkSelection();
+  syncPreviewCardTop();
+  window.addEventListener("resize", syncPreviewCardTop);
+  if (typeof createMobileQuery.addEventListener === "function") {
+    createMobileQuery.addEventListener("change", syncPreviewCardTop);
+  } else if (typeof createMobileQuery.addListener === "function") {
+    createMobileQuery.addListener(syncPreviewCardTop);
+  }
+  requestAnimationFrame(syncPreviewCardTop);
+  if (document.fonts && document.fonts.ready && typeof document.fonts.ready.then === "function") {
+    document.fonts.ready.then(syncPreviewCardTop).catch(() => {});
+  }
 })();
 
 (() => {
