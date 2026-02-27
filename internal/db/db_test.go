@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"path/filepath"
 	"testing"
@@ -205,5 +206,81 @@ func TestSetAndGetUITimezone(t *testing.T) {
 	}
 	if updated != "America/New_York" {
 		t.Fatalf("expected America/New_York, got %q", updated)
+	}
+}
+
+func TestDeletePostEditableDeletesPendingPost(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+	account := createTestAccount(t, store, domain.PlatformX)
+	media, err := store.CreateMedia(ctx, domain.Media{
+		Kind:         "image",
+		OriginalName: "img.png",
+		StoragePath:  "/tmp/img.png",
+		MimeType:     "image/png",
+		SizeBytes:    10,
+	})
+	if err != nil {
+		t.Fatalf("create media: %v", err)
+	}
+	created, err := store.CreatePost(ctx, CreatePostParams{
+		Post: domain.Post{
+			AccountID:   account.ID,
+			Text:        "delete me",
+			Status:      domain.PostStatusScheduled,
+			ScheduledAt: time.Now().UTC().Add(5 * time.Minute),
+			MaxAttempts: 3,
+		},
+		MediaIDs: []string{media.ID},
+	})
+	if err != nil {
+		t.Fatalf("create post: %v", err)
+	}
+
+	if err := store.DeletePostEditable(ctx, created.Post.ID); err != nil {
+		t.Fatalf("delete post: %v", err)
+	}
+	if _, err := store.GetPost(ctx, created.Post.ID); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("expected sql.ErrNoRows after delete, got %v", err)
+	}
+	var links int
+	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM post_media WHERE post_id = ?`, created.Post.ID).Scan(&links); err != nil {
+		t.Fatalf("count post_media: %v", err)
+	}
+	if links != 0 {
+		t.Fatalf("expected 0 post_media links after delete, got %d", links)
+	}
+}
+
+func TestDeletePostEditableRejectsPublishedPost(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+	account := createTestAccount(t, store, domain.PlatformX)
+	created, err := store.CreatePost(ctx, CreatePostParams{
+		Post: domain.Post{
+			AccountID:   account.ID,
+			Text:        "already live",
+			Status:      domain.PostStatusPublished,
+			ScheduledAt: time.Now().UTC().Add(-2 * time.Minute),
+			MaxAttempts: 3,
+		},
+	})
+	if err != nil {
+		t.Fatalf("create post: %v", err)
+	}
+
+	err = store.DeletePostEditable(ctx, created.Post.ID)
+	if !errors.Is(err, ErrPostNotDeletable) {
+		t.Fatalf("expected ErrPostNotDeletable, got %v", err)
 	}
 }

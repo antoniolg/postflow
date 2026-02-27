@@ -404,6 +404,70 @@ paths:
                     items:
                       $ref: '#/components/schemas/DeadLetter'
 
+  /dlq/requeue:
+    post:
+      summary: Reencola múltiples elementos de DLQ
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Resultado de requeue en lote
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  selected:
+                    type: integer
+                  success:
+                    type: integer
+                  failed:
+                    type: integer
+        '400':
+          $ref: '#/components/responses/Error'
+
+  /dlq/delete:
+    post:
+      summary: Elimina múltiples elementos de DLQ y sus posts fallidos
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Resultado de borrado en lote
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  selected:
+                    type: integer
+                  success:
+                    type: integer
+                  failed:
+                    type: integer
+        '400':
+          $ref: '#/components/responses/Error'
+
   /dlq/{id}/requeue:
     post:
       summary: Reencola un post que estaba en DLQ
@@ -425,6 +489,32 @@ paths:
                     type: string
                   post:
                     $ref: '#/components/schemas/Post'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+
+  /dlq/{id}/delete:
+    post:
+      summary: Elimina una entrada de DLQ y su post fallido
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Elemento eliminado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dead_letter_id:
+                    type: string
+                  deleted:
+                    type: boolean
         '404':
           $ref: '#/components/responses/Error'
         '409':

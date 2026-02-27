@@ -17,6 +17,8 @@ import (
 
 const schemaVersion = "2"
 
+var ErrPostNotDeletable = errors.New("post not deletable")
+
 type Store struct {
 	db *sql.DB
 }
@@ -515,6 +517,49 @@ func (s *Store) CancelPost(ctx context.Context, id string) error {
 		return fmt.Errorf("post not cancelable")
 	}
 	return nil
+}
+
+func (s *Store) DeletePostEditable(ctx context.Context, id string) error {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return ErrPostNotDeletable
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	var status domain.PostStatus
+	err = tx.QueryRowContext(ctx, `SELECT status FROM posts WHERE id = ?`, id).Scan(&status)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrPostNotDeletable
+		}
+		return err
+	}
+	switch status {
+	case domain.PostStatusDraft, domain.PostStatusScheduled, domain.PostStatusFailed, domain.PostStatusCanceled:
+	default:
+		return ErrPostNotDeletable
+	}
+
+	if _, err := tx.ExecContext(ctx, `DELETE FROM post_media WHERE post_id = ?`, id); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM dead_letters WHERE post_id = ?`, id); err != nil {
+		return err
+	}
+	result, err := tx.ExecContext(ctx, `DELETE FROM posts WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	affected, _ := result.RowsAffected()
+	if affected == 0 {
+		return ErrPostNotDeletable
+	}
+	return tx.Commit()
 }
 
 func (s *Store) UpdatePostEditable(ctx context.Context, id, text string, scheduledAt time.Time) error {

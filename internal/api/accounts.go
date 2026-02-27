@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"html"
 	"net/http"
 	"net/url"
 	"strings"
@@ -25,58 +24,19 @@ type createStaticAccountRequest struct {
 }
 
 func (s Server) handleListAccounts(w http.ResponseWriter, r *http.Request) {
+	if wantsHTML(r) {
+		http.Redirect(w, r, settingsViewURL, http.StatusSeeOther)
+		return
+	}
 	accounts, err := s.Store.ListAccounts(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	accept := strings.ToLower(strings.TrimSpace(r.Header.Get("Accept")))
-	if strings.Contains(accept, "text/html") {
-		s.renderAccountsHTML(w, r, accounts)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"count": len(accounts),
 		"items": accounts,
 	})
-}
-
-func (s Server) renderAccountsHTML(w http.ResponseWriter, _ *http.Request, accounts []domain.SocialAccount) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	var b strings.Builder
-	b.WriteString("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">")
-	b.WriteString("<title>publisher · accounts</title><style>body{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#111;color:#eee;padding:24px}a{color:#f60}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{border-bottom:1px solid #333;padding:10px;text-align:left}code{background:#222;padding:2px 6px;border-radius:4px}.muted{color:#aaa}.actions form{display:inline-block;margin-right:8px}</style></head><body>")
-	b.WriteString("<h1>Connected accounts</h1><p class=\"muted\">Use POST /oauth/{platform}/start to connect OAuth accounts or POST /accounts/static to create static ones.</p>")
-	b.WriteString("<p><a href=\"/\">Back to scheduler</a></p>")
-	b.WriteString("<table><thead><tr><th>ID</th><th>Platform</th><th>Name</th><th>External ID</th><th>Auth</th><th>Status</th><th>Actions</th></tr></thead><tbody>")
-	if len(accounts) == 0 {
-		b.WriteString("<tr><td colspan=\"7\" class=\"muted\">No accounts connected yet.</td></tr>")
-	}
-	for _, account := range accounts {
-		b.WriteString("<tr>")
-		b.WriteString("<td><code>" + templateEscape(account.ID) + "</code></td>")
-		b.WriteString("<td>" + templateEscape(string(account.Platform)) + "</td>")
-		b.WriteString("<td>" + templateEscape(account.DisplayName) + "</td>")
-		b.WriteString("<td>" + templateEscape(account.ExternalAccountID) + "</td>")
-		b.WriteString("<td>" + templateEscape(string(account.AuthMethod)) + "</td>")
-		b.WriteString("<td>" + templateEscape(string(account.Status)) + "</td>")
-		b.WriteString("<td class=\"actions\">")
-		if account.Status == domain.AccountStatusConnected {
-			b.WriteString("<form method=\"post\" action=\"/accounts/" + templateEscape(account.ID) + "/disconnect\"><button type=\"submit\">Disconnect</button></form>")
-		}
-		if account.Status == domain.AccountStatusDisconnected {
-			b.WriteString("<form method=\"post\" action=\"/accounts/" + templateEscape(account.ID) + "/delete\" onsubmit=\"return confirm('Delete account?')\"><button type=\"submit\">Delete</button></form>")
-		}
-		b.WriteString("</td>")
-		b.WriteString("</tr>")
-	}
-	b.WriteString("</tbody></table>")
-	b.WriteString("<h2>Connect</h2><ul>")
-	b.WriteString("<li><form method=\"post\" action=\"/oauth/linkedin/start\"><button type=\"submit\">Connect LinkedIn</button></form></li>")
-	b.WriteString("<li><form method=\"post\" action=\"/oauth/facebook/start\"><button type=\"submit\">Connect Facebook</button></form></li>")
-	b.WriteString("<li><form method=\"post\" action=\"/oauth/instagram/start\"><button type=\"submit\">Connect Instagram</button></form></li>")
-	b.WriteString("</ul></body></html>")
-	_, _ = w.Write([]byte(b.String()))
 }
 
 func (s Server) handleCreateStaticAccount(w http.ResponseWriter, r *http.Request) {
@@ -129,34 +89,97 @@ func (s Server) handleCreateStaticAccount(w http.ResponseWriter, r *http.Request
 }
 
 func (s Server) handleAccountActions(w http.ResponseWriter, r *http.Request) {
+	isHTML := wantsHTML(r)
+	returnTo := settingsViewURL
+	if isHTML {
+		returnTo = accountReturnTo(r)
+	}
 	path := strings.TrimPrefix(strings.TrimSpace(r.URL.Path), "/accounts/")
 	if path == "" {
+		if isHTML {
+			http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", "invalid account action"), http.StatusSeeOther)
+			return
+		}
 		writeError(w, http.StatusNotFound, errors.New("not found"))
 		return
 	}
 	parts := strings.Split(path, "/")
 	if len(parts) != 2 {
+		if isHTML {
+			http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", "invalid account action"), http.StatusSeeOther)
+			return
+		}
 		writeError(w, http.StatusNotFound, errors.New("not found"))
 		return
 	}
 	accountID := strings.TrimSpace(parts[0])
 	action := strings.TrimSpace(parts[1])
 	if accountID == "" {
+		if isHTML {
+			http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", "account id is required"), http.StatusSeeOther)
+			return
+		}
 		writeError(w, http.StatusBadRequest, errors.New("account id is required"))
 		return
 	}
 	switch action {
-	case "disconnect":
-		if err := s.Store.DisconnectAccount(r.Context(), accountID); err != nil {
-			if errors.Is(err, db.ErrAccountNotFound) {
-				writeError(w, http.StatusNotFound, errors.New("account not found"))
+	case "connect":
+		if _, err := s.Store.GetAccountCredentials(r.Context(), accountID); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				if isHTML {
+					http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", "account has no saved credentials"), http.StatusSeeOther)
+					return
+				}
+				writeError(w, http.StatusConflict, errors.New("account has no saved credentials"))
+				return
+			}
+			if isHTML {
+				http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", "failed to load account credentials"), http.StatusSeeOther)
 				return
 			}
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
-		if wantsHTML(r) {
-			http.Redirect(w, r, "/accounts", http.StatusSeeOther)
+		if err := s.Store.UpdateAccountStatus(r.Context(), accountID, domain.AccountStatusConnected, nil); err != nil {
+			if errors.Is(err, db.ErrAccountNotFound) {
+				if isHTML {
+					http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", "account not found"), http.StatusSeeOther)
+					return
+				}
+				writeError(w, http.StatusNotFound, errors.New("account not found"))
+				return
+			}
+			if isHTML {
+				http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", "failed to connect account"), http.StatusSeeOther)
+				return
+			}
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+		if isHTML {
+			http.Redirect(w, r, withQueryValue(returnTo, "accounts_success", "account connected"), http.StatusSeeOther)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"id": accountID, "status": domain.AccountStatusConnected})
+	case "disconnect":
+		if err := s.Store.DisconnectAccount(r.Context(), accountID); err != nil {
+			if errors.Is(err, db.ErrAccountNotFound) {
+				if isHTML {
+					http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", "account not found"), http.StatusSeeOther)
+					return
+				}
+				writeError(w, http.StatusNotFound, errors.New("account not found"))
+				return
+			}
+			if isHTML {
+				http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", "failed to disconnect account"), http.StatusSeeOther)
+				return
+			}
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+		if isHTML {
+			http.Redirect(w, r, withQueryValue(returnTo, "accounts_success", "account disconnected"), http.StatusSeeOther)
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"id": accountID, "status": domain.AccountStatusDisconnected})
@@ -164,22 +187,42 @@ func (s Server) handleAccountActions(w http.ResponseWriter, r *http.Request) {
 		if err := s.Store.DeleteAccount(r.Context(), accountID); err != nil {
 			switch {
 			case errors.Is(err, db.ErrAccountNotFound):
+				if isHTML {
+					http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", "account not found"), http.StatusSeeOther)
+					return
+				}
 				writeError(w, http.StatusNotFound, errors.New("account not found"))
 			case errors.Is(err, db.ErrAccountNotDisconnect):
+				if isHTML {
+					http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", "account must be disconnected first"), http.StatusSeeOther)
+					return
+				}
 				writeError(w, http.StatusConflict, errors.New("account must be disconnected first"))
 			case errors.Is(err, db.ErrAccountHasPosts):
+				if isHTML {
+					http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", "account has pending posts"), http.StatusSeeOther)
+					return
+				}
 				writeError(w, http.StatusConflict, errors.New("account has pending posts"))
 			default:
+				if isHTML {
+					http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", "failed to delete account"), http.StatusSeeOther)
+					return
+				}
 				writeError(w, http.StatusInternalServerError, err)
 			}
 			return
 		}
-		if wantsHTML(r) {
-			http.Redirect(w, r, "/accounts", http.StatusSeeOther)
+		if isHTML {
+			http.Redirect(w, r, withQueryValue(returnTo, "accounts_success", "account deleted"), http.StatusSeeOther)
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"deleted": true, "id": accountID})
 	default:
+		if isHTML {
+			http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", "unsupported account action"), http.StatusSeeOther)
+			return
+		}
 		writeError(w, http.StatusNotFound, errors.New("not found"))
 	}
 }
@@ -216,13 +259,26 @@ func (s Server) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s Server) handleOAuthStart(w http.ResponseWriter, r *http.Request) {
+	isHTML := wantsHTML(r)
+	returnTo := settingsViewURL
+	if isHTML {
+		returnTo = accountReturnTo(r)
+	}
 	platform, suffix, ok := parseOAuthPath(strings.TrimSpace(r.URL.Path))
 	if !ok || suffix != "start" {
+		if isHTML {
+			http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", "invalid oauth route"), http.StatusSeeOther)
+			return
+		}
 		writeError(w, http.StatusNotFound, errors.New("not found"))
 		return
 	}
 	provider, ok := s.providerRegistry().GetOAuth(platform)
 	if !ok {
+		if isHTML {
+			http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", "oauth is not available for platform"), http.StatusSeeOther)
+			return
+		}
 		writeError(w, http.StatusBadRequest, errors.New("oauth is not available for platform"))
 		return
 	}
@@ -235,6 +291,10 @@ func (s Server) handleOAuthStart(w http.ResponseWriter, r *http.Request) {
 		ExpiresAt:    time.Now().UTC().Add(10 * time.Minute),
 	})
 	if err != nil {
+		if isHTML {
+			http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", "failed to initialize oauth state"), http.StatusSeeOther)
+			return
+		}
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
@@ -245,10 +305,14 @@ func (s Server) handleOAuthStart(w http.ResponseWriter, r *http.Request) {
 		RedirectURL:  redirectURL,
 	})
 	if err != nil {
+		if isHTML {
+			http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", err.Error()), http.StatusSeeOther)
+			return
+		}
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	if wantsHTML(r) {
+	if isHTML {
 		http.Redirect(w, r, out.AuthURL, http.StatusFound)
 		return
 	}
@@ -261,13 +325,23 @@ func (s Server) handleOAuthStart(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
+	isHTML := wantsHTML(r)
+	returnTo := settingsViewURL
 	platform, suffix, ok := parseOAuthPath(strings.TrimSpace(r.URL.Path))
 	if !ok || suffix != "callback" {
+		if isHTML {
+			http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", "invalid oauth callback"), http.StatusSeeOther)
+			return
+		}
 		writeError(w, http.StatusNotFound, errors.New("not found"))
 		return
 	}
 	provider, ok := s.providerRegistry().GetOAuth(platform)
 	if !ok {
+		if isHTML {
+			http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", "oauth is not available for platform"), http.StatusSeeOther)
+			return
+		}
 		writeError(w, http.StatusBadRequest, errors.New("oauth is not available for platform"))
 		return
 	}
@@ -275,7 +349,15 @@ func (s Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	code := strings.TrimSpace(r.URL.Query().Get("code"))
 	if code == "" {
 		if errDesc := strings.TrimSpace(r.URL.Query().Get("error_description")); errDesc != "" {
+			if isHTML {
+				http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", errDesc), http.StatusSeeOther)
+				return
+			}
 			writeError(w, http.StatusBadRequest, errors.New(errDesc))
+			return
+		}
+		if isHTML {
+			http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", "missing authorization code"), http.StatusSeeOther)
 			return
 		}
 		writeError(w, http.StatusBadRequest, errors.New("missing authorization code"))
@@ -284,7 +366,15 @@ func (s Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	recorded, err := s.Store.ConsumeOAuthState(r.Context(), stateRaw)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
+			if isHTML {
+				http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", "invalid oauth state"), http.StatusSeeOther)
+				return
+			}
 			writeError(w, http.StatusBadRequest, errors.New("invalid oauth state"))
+			return
+		}
+		if isHTML {
+			http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", "failed to consume oauth state"), http.StatusSeeOther)
 			return
 		}
 		writeError(w, http.StatusBadRequest, err)
@@ -297,6 +387,10 @@ func (s Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		RedirectURL:  s.oauthCallbackURL(r, platform),
 	})
 	if err != nil {
+		if isHTML {
+			http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", err.Error()), http.StatusSeeOther)
+			return
+		}
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
@@ -310,17 +404,29 @@ func (s Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 			Status:            domain.AccountStatusConnected,
 		})
 		if err != nil {
+			if isHTML {
+				http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", "failed to persist account"), http.StatusSeeOther)
+				return
+			}
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
 		if err := s.saveCredentials(r.Context(), account.ID, item.Credentials); err != nil {
+			if isHTML {
+				http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", "failed to save account credentials"), http.StatusSeeOther)
+				return
+			}
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
 		created = append(created, account)
 	}
-	if wantsHTML(r) {
-		http.Redirect(w, r, "/accounts", http.StatusSeeOther)
+	if isHTML {
+		msg := fmt.Sprintf("%d accounts connected", len(created))
+		if len(created) == 1 {
+			msg = "1 account connected"
+		}
+		http.Redirect(w, r, withQueryValue(returnTo, "accounts_success", msg), http.StatusSeeOther)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -404,8 +510,14 @@ func mustID(prefix string) string {
 	return id
 }
 
-func templateEscape(value string) string {
-	return html.EscapeString(strings.TrimSpace(value))
+const settingsViewURL = "/?view=settings"
+
+func accountReturnTo(r *http.Request) string {
+	returnTo := sanitizeReturnTo(strings.TrimSpace(r.FormValue("return_to")))
+	if returnTo == "" {
+		return settingsViewURL
+	}
+	return returnTo
 }
 
 func wantsHTML(r *http.Request) bool {

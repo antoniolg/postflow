@@ -57,7 +57,8 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("GET /schedule", s.handleScheduleJSON)
 	mux.HandleFunc("GET /dlq", s.handleListDLQ)
 	mux.HandleFunc("POST /dlq/requeue", s.handleBulkRequeueDLQ)
-	mux.HandleFunc("POST /dlq/", s.handleRequeueDLQ)
+	mux.HandleFunc("POST /dlq/delete", s.handleBulkDeleteDLQ)
+	mux.HandleFunc("POST /dlq/", s.handleDLQAction)
 	mux.HandleFunc("POST /settings/timezone", s.handleSetTimezone)
 	mux.HandleFunc("GET /", s.handleScheduleHTML)
 	return s.withMiddlewares(mux)
@@ -309,6 +310,8 @@ func (s Server) handlePostActions(w http.ResponseWriter, r *http.Request) {
 		s.handleScheduleDraftPost(w, r)
 	case strings.HasSuffix(r.URL.Path, "/edit"):
 		s.handleEditPost(w, r)
+	case strings.HasSuffix(r.URL.Path, "/delete"):
+		s.handleDeletePost(w, r)
 	default:
 		writeError(w, http.StatusNotFound, errors.New("not found"))
 	}
@@ -325,6 +328,38 @@ func (s Server) handleCancelPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"id": postID, "status": string(domain.PostStatusCanceled)})
+}
+
+func (s Server) handleDeletePost(w http.ResponseWriter, r *http.Request) {
+	postID, err := extractPostIDFromPath(r.URL.Path, "delete")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	fromForm := !strings.Contains(strings.ToLower(r.Header.Get("content-type")), "application/json")
+	returnTo := sanitizeReturnTo(strings.TrimSpace(r.FormValue("return_to")))
+	if returnTo == "" {
+		returnTo = "/?view=calendar"
+	}
+
+	if err := s.Store.DeletePostEditable(r.Context(), postID); err != nil {
+		if fromForm {
+			http.Redirect(w, r, withQueryValue(returnTo, "error", "post not deletable"), http.StatusSeeOther)
+			return
+		}
+		if errors.Is(err, db.ErrPostNotDeletable) {
+			writeError(w, http.StatusConflict, err)
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	if fromForm {
+		http.Redirect(w, r, withQueryValue(returnTo, "success", "post deleted"), http.StatusSeeOther)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"deleted": true, "id": postID})
 }
 
 func (s Server) handleScheduleDraftPost(w http.ResponseWriter, r *http.Request) {
@@ -496,6 +531,17 @@ func (s Server) handleListDLQ(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s Server) handleDLQAction(w http.ResponseWriter, r *http.Request) {
+	switch {
+	case strings.HasSuffix(r.URL.Path, "/requeue"):
+		s.handleRequeueDLQ(w, r)
+	case strings.HasSuffix(r.URL.Path, "/delete"):
+		s.handleDeleteDLQ(w, r)
+	default:
+		writeError(w, http.StatusNotFound, errors.New("not found"))
+	}
+}
+
 func (s Server) handleRequeueDLQ(w http.ResponseWriter, r *http.Request) {
 	if !strings.HasPrefix(r.URL.Path, "/dlq/") || !strings.HasSuffix(r.URL.Path, "/requeue") {
 		writeError(w, http.StatusNotFound, errors.New("not found"))
@@ -548,6 +594,60 @@ func (s Server) handleRequeueDLQ(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"dead_letter_id": id,
 		"post":           post,
+	})
+}
+
+func (s Server) handleDeleteDLQ(w http.ResponseWriter, r *http.Request) {
+	if !strings.HasPrefix(r.URL.Path, "/dlq/") || !strings.HasSuffix(r.URL.Path, "/delete") {
+		writeError(w, http.StatusNotFound, errors.New("not found"))
+		return
+	}
+	trimmed := strings.TrimPrefix(r.URL.Path, "/dlq/")
+	id := strings.TrimSuffix(trimmed, "/delete")
+	id = strings.TrimSuffix(id, "/")
+	contentType := strings.ToLower(r.Header.Get("content-type"))
+	fromForm := strings.Contains(contentType, "application/x-www-form-urlencoded") || strings.Contains(contentType, "multipart/form-data")
+	if id == "" {
+		if fromForm {
+			http.Redirect(w, r, "/?view=failed&failed_error=invalid+dead+letter+id", http.StatusSeeOther)
+			return
+		}
+		writeError(w, http.StatusBadRequest, errors.New("invalid dead letter id"))
+		return
+	}
+
+	if err := s.Store.DeleteDeadLetter(r.Context(), id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			if fromForm {
+				http.Redirect(w, r, "/?view=failed&failed_error=dead+letter+not+found", http.StatusSeeOther)
+				return
+			}
+			writeError(w, http.StatusNotFound, errors.New("dead letter not found"))
+			return
+		}
+		if strings.Contains(err.Error(), "not deletable") {
+			if fromForm {
+				http.Redirect(w, r, "/?view=failed&failed_error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+				return
+			}
+			writeError(w, http.StatusConflict, err)
+			return
+		}
+		if fromForm {
+			http.Redirect(w, r, "/?view=failed&failed_error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	if fromForm {
+		http.Redirect(w, r, "/?view=failed&failed_success=deleted", http.StatusSeeOther)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"dead_letter_id": id,
+		"deleted":        true,
 	})
 }
 
@@ -609,6 +709,77 @@ func (s Server) handleBulkRequeueDLQ(w http.ResponseWriter, r *http.Request) {
 		q := url.Values{}
 		q.Set("view", "failed")
 		q.Set("failed_success", fmt.Sprintf("requeued %d", success))
+		if failed > 0 {
+			q.Set("failed_error", fmt.Sprintf("failed %d", failed))
+		}
+		http.Redirect(w, r, "/?"+q.Encode(), http.StatusSeeOther)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"selected": len(cleaned),
+		"success":  success,
+		"failed":   failed,
+	})
+}
+
+func (s Server) handleBulkDeleteDLQ(w http.ResponseWriter, r *http.Request) {
+	contentType := strings.ToLower(r.Header.Get("content-type"))
+	fromForm := strings.Contains(contentType, "application/x-www-form-urlencoded") || strings.Contains(contentType, "multipart/form-data")
+
+	var ids []string
+	if fromForm {
+		if err := r.ParseForm(); err != nil {
+			http.Redirect(w, r, "/?view=failed&failed_error=invalid+form", http.StatusSeeOther)
+			return
+		}
+		ids = r.Form["ids"]
+	} else {
+		var body struct {
+			IDs []string `json:"ids"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeError(w, http.StatusBadRequest, fmt.Errorf("invalid json body: %w", err))
+			return
+		}
+		ids = body.IDs
+	}
+
+	cleaned := make([]string, 0, len(ids))
+	seen := map[string]struct{}{}
+	for _, id := range ids {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		cleaned = append(cleaned, id)
+	}
+	if len(cleaned) == 0 {
+		if fromForm {
+			http.Redirect(w, r, "/?view=failed&failed_error=no+items+selected", http.StatusSeeOther)
+			return
+		}
+		writeError(w, http.StatusBadRequest, errors.New("ids are required"))
+		return
+	}
+
+	success := 0
+	failed := 0
+	for _, id := range cleaned {
+		if err := s.Store.DeleteDeadLetter(r.Context(), id); err != nil {
+			failed++
+			continue
+		}
+		success++
+	}
+
+	if fromForm {
+		q := url.Values{}
+		q.Set("view", "failed")
+		q.Set("failed_success", fmt.Sprintf("deleted %d", success))
 		if failed > 0 {
 			q.Set("failed_error", fmt.Sprintf("failed %d", failed))
 		}
@@ -756,6 +927,8 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	failedSuccess := strings.TrimSpace(r.URL.Query().Get("failed_success"))
 	settingsError := strings.TrimSpace(r.URL.Query().Get("tz_error"))
 	settingsSuccess := strings.TrimSpace(r.URL.Query().Get("tz_success"))
+	accountsError := strings.TrimSpace(r.URL.Query().Get("accounts_error"))
+	accountsSuccess := strings.TrimSpace(r.URL.Query().Get("accounts_success"))
 	mediaError := strings.TrimSpace(r.URL.Query().Get("media_error"))
 	mediaSuccess := strings.TrimSpace(r.URL.Query().Get("media_success"))
 	displayMonth := time.Date(nowLocal.Year(), nowLocal.Month(), 1, 0, 0, 0, 0, uiLoc)
@@ -806,6 +979,16 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+	type settingsAccountItem struct {
+		ID          string
+		DisplayName string
+		Platform    domain.Platform
+		AuthMethod  domain.AuthMethod
+		Status      domain.AccountStatus
+		StatusClass string
+		StatusLabel string
+		LastError   string
+	}
 	connectedAccounts := make([]domain.SocialAccount, 0, len(accounts))
 	for _, account := range accounts {
 		if account.Status == domain.AccountStatusConnected {
@@ -841,6 +1024,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	type dayDetailItem struct {
 		PostID      string
 		Editable    bool
+		Deletable   bool
 		TimeLabel   string
 		StatusClass string
 		StatusLabel string
@@ -868,6 +1052,30 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		IsToday        bool
 		IsSelected     bool
 		Events         []calendarEvent
+	}
+	settingsAccounts := make([]settingsAccountItem, 0, len(accounts))
+	for _, account := range accounts {
+		lastError := ""
+		if account.LastError != nil {
+			lastError = strings.TrimSpace(*account.LastError)
+		}
+		statusClass := "status-disconnected"
+		switch account.Status {
+		case domain.AccountStatusConnected:
+			statusClass = "status-connected"
+		case domain.AccountStatusError:
+			statusClass = "status-error"
+		}
+		settingsAccounts = append(settingsAccounts, settingsAccountItem{
+			ID:          account.ID,
+			DisplayName: account.DisplayName,
+			Platform:    account.Platform,
+			AuthMethod:  account.AuthMethod,
+			Status:      account.Status,
+			StatusClass: statusClass,
+			StatusLabel: strings.ToUpper(strings.TrimSpace(string(account.Status))),
+			LastError:   lastError,
+		})
 	}
 
 	firstWeekday := int(monthStartLocal.Weekday())
@@ -914,7 +1122,8 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		})
 		detailsByDate[key] = append(detailsByDate[key], dayDetailItem{
 			PostID:      item.ID,
-			Editable:    item.Status != domain.PostStatusPublished,
+			Editable:    canEditPostStatus(item.Status),
+			Deletable:   canDeletePostStatus(item.Status),
 			TimeLabel:   localTime.Format("15:04"),
 			StatusClass: statusClass,
 			StatusLabel: statusLabel,
@@ -1075,7 +1284,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		createAccountID = connectedAccounts[0].ID
 	}
 	if view == "create" && len(connectedAccounts) == 0 && createError == "" {
-		createError = "no connected accounts. connect one via /accounts or oauth first"
+		createError = "no connected accounts. connect one in settings first"
 	}
 	if qText := strings.TrimSpace(r.URL.Query().Get("text")); qText != "" {
 		createText = qText
@@ -2010,6 +2219,12 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       color: #d0d0d0;
       box-shadow: none;
     }
+    .btn-danger {
+      border: 0;
+      background: rgba(255, 68, 68, 0.18);
+      color: #ffb7bf;
+      box-shadow: none;
+    }
     .alert {
       border-radius: 10px;
       padding: 8px 10px;
@@ -2439,7 +2654,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     }
     .network-picker {
       display: flex;
-      gap: 8px;
+      gap: 10px;
       flex-wrap: wrap;
     }
     .network-chip {
@@ -2455,19 +2670,35 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       align-items: center;
       gap: 8px;
       cursor: pointer;
+      transition: box-shadow .12s ease, color .12s ease, background .12s ease;
     }
-    .network-chip svg {
-      flex: 0 0 auto;
+    .network-chip:focus-visible {
+      outline: 2px solid var(--accent-orange);
+      outline-offset: 2px;
+    }
+    .network-chip-icon {
+      width: 20px;
+      height: 20px;
+      border-radius: 999px;
+      background: #161616;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #f5f5f5;
+    }
+    .network-chip-icon svg {
+      width: 12px;
+      height: 12px;
+      display: block;
     }
     .network-chip.active {
       background: var(--bg-elevated, #2d2d2d);
       color: var(--accent-orange);
       box-shadow: inset 0 0 0 2px var(--accent-orange);
     }
-    .network-chip.active::after {
-      content: "✓";
-      font-size: 11px;
-      line-height: 1;
+    .network-chip.active .network-chip-icon {
+      background: var(--accent-orange);
+      color: #111111;
     }
     .network-chip.disabled {
       background: var(--bg-card, #212121);
@@ -2609,6 +2840,108 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     }
     .settings-media-library {
       max-height: 440px;
+    }
+    .settings-accounts {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .settings-account-card {
+      border: 0;
+      border-radius: 12px;
+      background: #2a2a2a;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .settings-account-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .settings-account-title {
+      font-size: 12px;
+      color: #ffffff;
+      font-weight: 700;
+      line-height: 1.35;
+    }
+    .settings-account-meta {
+      margin-top: 2px;
+      font-size: 11px;
+      color: #a8a8a8;
+      line-height: 1.35;
+      word-break: break-word;
+    }
+    .settings-account-status {
+      border-radius: 999px;
+      padding: 3px 8px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      border: 1px solid transparent;
+      white-space: nowrap;
+    }
+    .settings-account-status.status-connected {
+      background: rgba(0, 212, 170, 0.15);
+      color: #9ef1e2;
+      border-color: rgba(0, 212, 170, 0.3);
+    }
+    .settings-account-status.status-disconnected {
+      background: rgba(148, 148, 148, 0.15);
+      color: #cecece;
+      border-color: rgba(148, 148, 148, 0.3);
+    }
+    .settings-account-status.status-error {
+      background: rgba(255, 68, 68, 0.16);
+      color: #ffb7bf;
+      border-color: rgba(255, 68, 68, 0.3);
+    }
+    .settings-account-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .settings-account-actions form {
+      margin: 0;
+    }
+    .settings-account-icon-btn {
+      width: 30px;
+      height: 30px;
+      min-height: 30px;
+      border-radius: 999px;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .settings-account-icon-btn svg {
+      width: 14px;
+      height: 14px;
+      display: block;
+    }
+    .settings-connect-grid {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .settings-connect-grid form {
+      margin: 0;
+    }
+    .settings-connect-grid button {
+      min-height: 28px;
+      padding: 6px 10px;
+    }
+    .settings-account-error {
+      margin: 0;
+      font-size: 12px;
+      line-height: 1.35;
+      word-break: break-word;
     }
     .media-library-item {
       border: 0;
@@ -3148,8 +3481,12 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
             </div>
             <div class="day-item-text">{{.Text}}</div>
             <div class="day-item-actions">
-              {{if .Editable}}<a class="day-item-btn" href="/?view=create&edit_id={{.PostID}}&return_to={{urlquery $.CurrentViewURL}}" title="Edit">&#9998;</a>{{end}}
-              <button class="day-item-btn day-item-btn-del" title="Delete" disabled>&#10005;</button>
+              {{if .Deletable}}
+              <form method="post" action="/posts/{{.PostID}}/delete" onsubmit="return confirm('Delete this publication?');">
+                <input type="hidden" name="return_to" value="{{$.CurrentViewURL}}" />
+                <button type="submit" class="day-item-btn day-item-btn-del" title="Delete">&#10005;</button>
+              </form>
+              {{end}}
             </div>
           </article>
           {{end}}
@@ -3166,9 +3503,6 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
               <span class="day-item-platform">{{.Platform}}</span>
             </div>
             <div class="day-item-text">{{.Text}}</div>
-            <div class="day-item-actions">
-              <button class="day-item-btn day-item-btn-del" title="Delete" disabled>&#10005;</button>
-            </div>
           </article>
           {{end}}
           {{end}}
@@ -3236,8 +3570,11 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         <div class="bulk-actions">
           <button type="button" class="pill" id="failed-select-all">mark all</button>
           <button type="button" class="pill" id="failed-clear-all">clear all</button>
-          <form method="post" action="/dlq/requeue" id="failed-bulk-form">
+          <form method="post" action="/dlq/requeue" id="failed-bulk-requeue-form">
             <button type="submit" id="failed-requeue-selected" class="btn-primary" disabled>requeue selected</button>
+          </form>
+          <form method="post" action="/dlq/delete" id="failed-bulk-delete-form">
+            <button type="submit" id="failed-delete-selected" class="btn-danger" disabled>delete selected</button>
           </form>
         </div>
         {{range .FailedItems}}
@@ -3262,6 +3599,9 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
             <form method="post" action="/dlq/{{.DeadLetterID}}/requeue">
               <button type="submit" class="btn-secondary">requeue</button>
             </form>
+            <form method="post" action="/dlq/{{.DeadLetterID}}/delete" onsubmit="return confirm('Delete this failed publication?');">
+              <button type="submit" class="btn-danger">delete</button>
+            </form>
           </div>
         </article>
         {{else}}
@@ -3285,14 +3625,46 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 
 	              <div class="field create-field create-field-networks">
 	                <div class="composer-label">// select account</div>
-	                <div class="network-picker" id="create-network-picker">
-	                  <button type="button" class="network-chip active" data-network-chip data-platform="x" aria-pressed="true" hidden>legacy</button>
-	                  <select id="create-account-select" name="account_id" required data-account-select>
-	                    {{range .Accounts}}
-	                    <option value="{{.ID}}" data-platform="{{.Platform}}" {{if eq .ID $.CreateAccountID}}selected{{end}}>{{.DisplayName}} · {{.Platform}}</option>
-	                    {{end}}
-	                  </select>
+	                <div class="network-picker" id="create-network-picker" role="radiogroup" aria-label="select network">
+	                  {{range .Accounts}}
+	                  <button
+	                    type="button"
+	                    class="network-chip {{if eq .ID $.CreateAccountID}}active{{end}}"
+	                    data-network-chip
+	                    data-account-id="{{.ID}}"
+	                    data-platform="{{.Platform}}"
+	                    role="radio"
+	                    aria-checked="{{if eq .ID $.CreateAccountID}}true{{else}}false{{end}}"
+	                    aria-pressed="{{if eq .ID $.CreateAccountID}}true{{else}}false{{end}}">
+	                    <span class="network-chip-icon" aria-hidden="true">
+	                      {{if eq .Platform "x"}}
+	                      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.9 2h3.6l-7.8 8.9L24 22h-7.2l-5.7-6.8L5.2 22H1.6l8.4-9.6L0 2h7.4l5.2 6.2L18.9 2z"/></svg>
+	                      {{else if eq .Platform "linkedin"}}
+	                      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6.6 8.8v8.6H3.7V8.8h2.9zm.2-2.7c0 1-.7 1.7-1.7 1.7S3.4 7.1 3.4 6.1 4.1 4.4 5.1 4.4s1.7.7 1.7 1.7zM20.6 12.5v4.9h-2.9v-4.6c0-1.2-.4-2-1.5-2-.8 0-1.2.5-1.4 1-.1.2-.1.5-.1.7v4.9h-2.9s0-7.9 0-8.6h2.9v1.2c.4-.6 1.1-1.5 2.8-1.5 2 0 3.1 1.3 3.1 4z"/></svg>
+	                      {{else if eq .Platform "facebook"}}
+	                      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M13.7 22v-8h2.7l.4-3.1h-3.1V8.8c0-.9.3-1.5 1.6-1.5h1.7V4.5c-.3 0-1.3-.1-2.4-.1-2.4 0-4 1.4-4 4.2v2.3H8v3.1h2.6v8h3.1z"/></svg>
+	                      {{else if eq .Platform "instagram"}}
+	                      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7.5 2h9A5.5 5.5 0 0 1 22 7.5v9a5.5 5.5 0 0 1-5.5 5.5h-9A5.5 5.5 0 0 1 2 16.5v-9A5.5 5.5 0 0 1 7.5 2zm0 2A3.5 3.5 0 0 0 4 7.5v9A3.5 3.5 0 0 0 7.5 20h9a3.5 3.5 0 0 0 3.5-3.5v-9A3.5 3.5 0 0 0 16.5 4h-9zm9.8 1.5a1.2 1.2 0 1 1 0 2.4 1.2 1.2 0 0 1 0-2.4zM12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10zm0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>
+	                      {{else}}
+	                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg>
+	                      {{end}}
+	                    </span>
+	                    <span>
+	                      {{if eq .Platform "x"}}X{{else if eq .Platform "linkedin"}}LinkedIn{{else if eq .Platform "facebook"}}Facebook{{else if eq .Platform "instagram"}}Instagram{{else}}{{.Platform}}{{end}}
+	                    </span>
+	                  </button>
+	                  {{else}}
+	                  <button type="button" class="network-chip disabled" disabled>
+	                    <span class="network-chip-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg></span>
+	                    <span>no networks</span>
+	                  </button>
+	                  {{end}}
 	                </div>
+	                <select id="create-account-select" name="account_id" required data-account-select class="is-hidden" aria-hidden="true" tabindex="-1">
+	                  {{range .Accounts}}
+	                  <option value="{{.ID}}" data-platform="{{.Platform}}" {{if eq .ID $.CreateAccountID}}selected{{end}}>{{.DisplayName}} · {{.Platform}}</option>
+	                  {{end}}
+	                </select>
 	              </div>
 
               <div class="field create-field create-field-content">
@@ -3419,6 +3791,75 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
           </div>
           <div class="meta"><span class="meta-soft">current timezone: {{.UITimezone}}</span></div>
         </form>
+      </section>
+      <section class="editor editor-wide">
+        <div class="editor-head">accounts</div>
+        <div class="editor-body">
+          {{if .AccountsError}}<div class="alert error">{{.AccountsError}}</div>{{end}}
+          {{if .AccountsSuccess}}<div class="alert success">{{.AccountsSuccess}}</div>{{end}}
+          <div class="meta">
+            <span class="meta-soft">{{.ConnectedAccountCount}} connected · {{.TotalAccountCount}} total</span>
+          </div>
+          <div class="settings-accounts">
+            {{range .SettingsAccounts}}
+            <article class="settings-account-card">
+              <div class="settings-account-head">
+                <div>
+                  <div class="settings-account-title">{{.DisplayName}}</div>
+                  <div class="settings-account-meta">{{.Platform}} · {{.AuthMethod}}</div>
+                </div>
+                <span class="settings-account-status {{.StatusClass}}">{{.StatusLabel}}</span>
+              </div>
+              {{if .LastError}}
+              <div class="alert error settings-account-error">{{.LastError}}</div>
+              {{end}}
+              <div class="settings-account-actions">
+                {{if eq .Status "connected"}}
+                <form method="post" action="/accounts/{{.ID}}/disconnect">
+                  <input type="hidden" name="return_to" value="/?view=settings" />
+                  <button type="submit" class="btn-secondary settings-account-icon-btn" aria-label="disconnect account" title="disconnect">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 17H7a5 5 0 010-10h2"/><path d="M15 7h2a5 5 0 010 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+                  </button>
+                </form>
+                {{end}}
+                {{if eq .Status "disconnected"}}
+                <form method="post" action="/accounts/{{.ID}}/connect">
+                  <input type="hidden" name="return_to" value="/?view=settings" />
+                  <button type="submit" class="btn-secondary settings-account-icon-btn" aria-label="connect account" title="connect">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+                  </button>
+                </form>
+                <form method="post" action="/accounts/{{.ID}}/delete" onsubmit="return confirm('Delete account?')">
+                  <input type="hidden" name="return_to" value="/?view=settings" />
+                  <button type="submit" class="btn-danger settings-account-icon-btn" aria-label="delete account" title="delete">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                  </button>
+                </form>
+                {{end}}
+              </div>
+            </article>
+            {{else}}
+            <div class="empty">No accounts connected yet.</div>
+            {{end}}
+          </div>
+          <div class="meta">
+            <span class="meta-soft">connect via oauth</span>
+          </div>
+          <div class="settings-connect-grid">
+            <form method="post" action="/oauth/x/start">
+              <button type="submit" class="btn-secondary">connect x</button>
+            </form>
+            <form method="post" action="/oauth/linkedin/start">
+              <button type="submit" class="btn-secondary">connect linkedin</button>
+            </form>
+            <form method="post" action="/oauth/facebook/start">
+              <button type="submit" class="btn-secondary">connect facebook</button>
+            </form>
+            <form method="post" action="/oauth/instagram/start">
+              <button type="submit" class="btn-secondary">connect instagram</button>
+            </form>
+          </div>
+        </div>
       </section>
       <section class="editor editor-wide">
         <div class="editor-head">media library</div>
@@ -4172,45 +4613,64 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
   const checkboxes = Array.from(document.querySelectorAll("[data-failed-checkbox]"));
   const selectAll = document.getElementById("failed-select-all");
   const clearAll = document.getElementById("failed-clear-all");
-  const form = document.getElementById("failed-bulk-form");
-  const submit = document.getElementById("failed-requeue-selected");
+  const requeueForm = document.getElementById("failed-bulk-requeue-form");
+  const deleteForm = document.getElementById("failed-bulk-delete-form");
+  const requeueSubmit = document.getElementById("failed-requeue-selected");
+  const deleteSubmit = document.getElementById("failed-delete-selected");
 
-  const updateSubmit = () => {
+  const updateBulkButtons = () => {
     const count = checkboxes.filter((cb) => cb.checked).length;
-    submit.disabled = count === 0;
-    submit.textContent = count > 0 ? "requeue selected (" + count + ")" : "requeue selected";
+    if (requeueSubmit instanceof HTMLButtonElement) {
+      requeueSubmit.disabled = count === 0;
+      requeueSubmit.textContent = count > 0 ? "requeue selected (" + count + ")" : "requeue selected";
+    }
+    if (deleteSubmit instanceof HTMLButtonElement) {
+      deleteSubmit.disabled = count === 0;
+      deleteSubmit.textContent = count > 0 ? "delete selected (" + count + ")" : "delete selected";
+    }
   };
 
   selectAll?.addEventListener("click", () => {
     checkboxes.forEach((cb) => { cb.checked = true; });
-    updateSubmit();
+    updateBulkButtons();
   });
 
   clearAll?.addEventListener("click", () => {
     checkboxes.forEach((cb) => { cb.checked = false; });
-    updateSubmit();
+    updateBulkButtons();
   });
 
-  checkboxes.forEach((cb) => cb.addEventListener("change", updateSubmit));
+  checkboxes.forEach((cb) => cb.addEventListener("change", updateBulkButtons));
 
-  form?.addEventListener("submit", (e) => {
-    const selected = checkboxes.filter((cb) => cb.checked).map((cb) => cb.value);
-    if (selected.length === 0) {
-      e.preventDefault();
-      updateSubmit();
+  const bindBulkSubmit = (form, confirmMessage) => {
+    if (!(form instanceof HTMLFormElement)) {
       return;
     }
-    form.querySelectorAll('input[name="ids"]').forEach((el) => el.remove());
-    selected.forEach((id) => {
-      const input = document.createElement("input");
-      input.type = "hidden";
-      input.name = "ids";
-      input.value = id;
-      form.appendChild(input);
+    form.addEventListener("submit", (e) => {
+      const selected = checkboxes.filter((cb) => cb.checked).map((cb) => cb.value);
+      if (selected.length === 0) {
+        e.preventDefault();
+        updateBulkButtons();
+        return;
+      }
+      if (confirmMessage && !window.confirm(confirmMessage)) {
+        e.preventDefault();
+        return;
+      }
+      form.querySelectorAll('input[name="ids"]').forEach((el) => el.remove());
+      selected.forEach((id) => {
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = "ids";
+        input.value = id;
+        form.appendChild(input);
+      });
     });
-  });
+  };
 
-  updateSubmit();
+  bindBulkSubmit(requeueForm, "");
+  bindBulkSubmit(deleteForm, "Delete selected failed publications?");
+  updateBulkButtons();
 })();
 
 (() => {
@@ -4225,6 +4685,8 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
   }
 
   const accountSelect = document.getElementById("create-account-select");
+  const networkPicker = document.getElementById("create-network-picker");
+  const networkChips = Array.from(document.querySelectorAll("[data-network-chip]")).filter((node) => node instanceof HTMLButtonElement);
   const previewNetwork = document.getElementById("preview-network");
   const textInput = document.getElementById("create-text");
   const charCount = document.getElementById("create-char-count");
@@ -4727,19 +5189,80 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     }
   });
 
+  if (accountSelect instanceof HTMLSelectElement && accountSelect.value.trim() === "" && accountSelect.options.length > 0) {
+    accountSelect.selectedIndex = 0;
+  }
+
+  const platformLabel = (platform, fallbackLabel) => {
+    switch ((platform || "").toLowerCase()) {
+      case "x":
+        return "X";
+      case "linkedin":
+        return "LinkedIn";
+      case "facebook":
+        return "Facebook";
+      case "instagram":
+        return "Instagram";
+      default:
+        return fallbackLabel || platform || "account";
+    }
+  };
+
+  const syncNetworkSelection = () => {
+    if (!(accountSelect instanceof HTMLSelectElement)) {
+      return;
+    }
+    const selectedAccountID = accountSelect.value.trim();
+    networkChips.forEach((node) => {
+      if (!(node instanceof HTMLButtonElement)) {
+        return;
+      }
+      const chipAccountID = (node.dataset.accountId || "").trim();
+      const active = chipAccountID !== "" && chipAccountID === selectedAccountID;
+      node.classList.toggle("active", active);
+      node.setAttribute("aria-checked", active ? "true" : "false");
+      node.setAttribute("aria-pressed", active ? "true" : "false");
+    });
+  };
+
   const updatePreviewNetwork = () => {
     if (!(previewNetwork instanceof HTMLElement) || !(accountSelect instanceof HTMLSelectElement)) {
       return;
     }
     const selected = accountSelect.selectedOptions[0];
     if (!(selected instanceof HTMLOptionElement)) {
+      previewNetwork.textContent = "account";
       return;
     }
     const platform = (selected.dataset.platform || "").trim();
-    previewNetwork.textContent = platform || selected.textContent || "account";
+    const fallbackLabel = (selected.textContent || "").trim();
+    previewNetwork.textContent = platformLabel(platform, fallbackLabel);
   };
+
+  networkPicker?.addEventListener("click", (event) => {
+    if (!(event.target instanceof Element) || !(accountSelect instanceof HTMLSelectElement)) {
+      return;
+    }
+    const chip = event.target.closest("[data-network-chip]");
+    if (!(chip instanceof HTMLButtonElement)) {
+      return;
+    }
+    const accountID = (chip.dataset.accountId || "").trim();
+    if (accountID === "") {
+      return;
+    }
+    accountSelect.value = accountID;
+    if (accountSelect.value !== accountID) {
+      return;
+    }
+    accountSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+
   if (accountSelect instanceof HTMLSelectElement) {
-    accountSelect.addEventListener("change", updatePreviewNetwork);
+    accountSelect.addEventListener("change", () => {
+      syncNetworkSelection();
+      updatePreviewNetwork();
+    });
   }
 
   textInput.addEventListener("input", () => {
@@ -4764,6 +5287,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
   updateCharCount();
   updatePreviewText();
   renderMediaList();
+  syncNetworkSelection();
   updatePreviewNetwork();
 })();
 
@@ -4859,12 +5383,17 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		FailedSuccess             string
 		SettingsError             string
 		SettingsSuccess           string
+		AccountsError             string
+		AccountsSuccess           string
 		MediaError                string
 		MediaSuccess              string
+		TotalAccountCount         int
+		ConnectedAccountCount     int
 		ScheduledCount            int
 		PublicationsWindowDays    int
 		DraftCount                int
 		FailedCount               int
+		SettingsAccounts          []settingsAccountItem
 		MediaLibrary              []mediaListItem
 		CreateRecentMedia         []mediaListItem
 		MediaInUseCount           int
@@ -4913,12 +5442,17 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		FailedSuccess:             failedSuccess,
 		SettingsError:             settingsError,
 		SettingsSuccess:           settingsSuccess,
+		AccountsError:             accountsError,
+		AccountsSuccess:           accountsSuccess,
 		MediaError:                mediaError,
 		MediaSuccess:              mediaSuccess,
+		TotalAccountCount:         len(accounts),
+		ConnectedAccountCount:     len(connectedAccounts),
 		ScheduledCount:            scheduledCount,
 		PublicationsWindowDays:    publicationsWindowDays,
 		DraftCount:                len(drafts),
 		FailedCount:               failedCount,
+		SettingsAccounts:          settingsAccounts,
 		MediaLibrary:              mediaLibrary,
 		CreateRecentMedia:         createRecentMedia,
 		MediaInUseCount:           mediaInUseCount,
@@ -5092,6 +5626,24 @@ func defaultStatusForScheduledAt(t time.Time) domain.PostStatus {
 		return domain.PostStatusDraft
 	}
 	return domain.PostStatusScheduled
+}
+
+func canEditPostStatus(status domain.PostStatus) bool {
+	switch status {
+	case domain.PostStatusDraft, domain.PostStatusScheduled, domain.PostStatusFailed, domain.PostStatusCanceled:
+		return true
+	default:
+		return false
+	}
+}
+
+func canDeletePostStatus(status domain.PostStatus) bool {
+	switch status {
+	case domain.PostStatusDraft, domain.PostStatusScheduled, domain.PostStatusFailed, domain.PostStatusCanceled:
+		return true
+	default:
+		return false
+	}
 }
 
 func writeJSON(w http.ResponseWriter, code int, payload any) {

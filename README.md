@@ -7,7 +7,7 @@ Estado actual (v2):
 - Modelo: `1 post = 1 account_id`
 - Auth por cuenta: `static` u `oauth`
 - Secretos de app en env + credenciales de cuenta cifradas en SQLite (AES-256-GCM)
-- UI mínima con selector de cuenta y vista de cuentas (`/accounts`)
+- UI web con scheduler/composer y bloque visual de cuentas dentro de `settings`
 
 ## Quickstart
 
@@ -153,6 +153,8 @@ curl 'http://localhost:8080/schedule'
 curl -X POST http://localhost:8080/posts/pst_xxx/cancel
 curl 'http://localhost:8080/dlq?limit=50'
 curl -X POST http://localhost:8080/dlq/dlq_xxx/requeue
+curl -X POST http://localhost:8080/dlq/dlq_xxx/delete
+curl -X POST http://localhost:8080/dlq/delete -H 'content-type: application/json' -d '{"ids":["dlq_xxx","dlq_yyy"]}'
 curl -X POST http://localhost:8080/accounts/acc_xxx/disconnect
 curl -X DELETE http://localhost:8080/accounts/acc_xxx
 ```
@@ -160,8 +162,8 @@ curl -X DELETE http://localhost:8080/accounts/acc_xxx
 ## UI
 
 - `GET /`: scheduler/composer (selector obligatorio de cuenta)
-- `GET /accounts`: listado básico de cuentas conectadas, acciones de connect/disconnect
-- `GET /?view=settings`: zona horaria UI + configuración MCP
+- `GET /accounts`: API JSON para listar cuentas (`text/html` redirige a `/?view=settings`)
+- `GET /?view=settings`: zona horaria UI + bloque de cuentas conectadas + configuración MCP
 
 ## MCP (streamable HTTP)
 

@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/antoniolg/publisher/internal/db"
 	"github.com/antoniolg/publisher/internal/domain"
+	"github.com/antoniolg/publisher/internal/publisher"
 )
 
 func TestCreatePostValidation(t *testing.T) {
@@ -299,6 +301,94 @@ func TestCreatePostWithIdempotencyKeyIsReplayed(t *testing.T) {
 	}
 }
 
+func TestDeletePostFromFormOnlyAllowsEditableStatuses(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+	accountID := testAccountID(t, store)
+
+	scheduledPayload, _ := json.Marshal(map[string]any{
+		"account_id":   accountID,
+		"text":         "scheduled deletable",
+		"scheduled_at": time.Now().UTC().Add(1 * time.Hour).Format(time.RFC3339),
+	})
+	scheduledReq := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(scheduledPayload))
+	scheduledW := httptest.NewRecorder()
+	h.ServeHTTP(scheduledW, scheduledReq)
+	if scheduledW.Code != http.StatusCreated {
+		t.Fatalf("expected 201 for scheduled post, got %d", scheduledW.Code)
+	}
+	var scheduledResp map[string]any
+	if err := json.Unmarshal(scheduledW.Body.Bytes(), &scheduledResp); err != nil {
+		t.Fatalf("decode scheduled response: %v", err)
+	}
+	scheduledID, _ := scheduledResp["id"].(string)
+	if scheduledID == "" {
+		t.Fatalf("expected scheduled post id")
+	}
+
+	deleteForm := url.Values{}
+	deleteForm.Set("return_to", "/?view=calendar")
+	deleteReq := httptest.NewRequest(http.MethodPost, "/posts/"+scheduledID+"/delete", bytes.NewBufferString(deleteForm.Encode()))
+	deleteReq.Header.Set("content-type", "application/x-www-form-urlencoded")
+	deleteW := httptest.NewRecorder()
+	h.ServeHTTP(deleteW, deleteReq)
+	if deleteW.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303 deleting scheduled post, got %d", deleteW.Code)
+	}
+	location := deleteW.Header().Get("Location")
+	if !strings.Contains(location, "success=post+deleted") {
+		t.Fatalf("expected success redirect, got %q", location)
+	}
+	if _, err := store.GetPost(t.Context(), scheduledID); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("expected deleted scheduled post, got err=%v", err)
+	}
+
+	publishedPayload, _ := json.Marshal(map[string]any{
+		"account_id":   accountID,
+		"text":         "published not deletable",
+		"scheduled_at": time.Now().UTC().Add(2 * time.Hour).Format(time.RFC3339),
+	})
+	publishedReq := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(publishedPayload))
+	publishedW := httptest.NewRecorder()
+	h.ServeHTTP(publishedW, publishedReq)
+	if publishedW.Code != http.StatusCreated {
+		t.Fatalf("expected 201 for seed published post, got %d", publishedW.Code)
+	}
+	var publishedResp map[string]any
+	if err := json.Unmarshal(publishedW.Body.Bytes(), &publishedResp); err != nil {
+		t.Fatalf("decode published response: %v", err)
+	}
+	publishedID, _ := publishedResp["id"].(string)
+	if publishedID == "" {
+		t.Fatalf("expected published post id")
+	}
+	if err := store.MarkPublished(t.Context(), publishedID, "x-published-seed"); err != nil {
+		t.Fatalf("mark published: %v", err)
+	}
+
+	publishedDeleteReq := httptest.NewRequest(http.MethodPost, "/posts/"+publishedID+"/delete", bytes.NewBufferString(deleteForm.Encode()))
+	publishedDeleteReq.Header.Set("content-type", "application/x-www-form-urlencoded")
+	publishedDeleteW := httptest.NewRecorder()
+	h.ServeHTTP(publishedDeleteW, publishedDeleteReq)
+	if publishedDeleteW.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303 when deleting published post, got %d", publishedDeleteW.Code)
+	}
+	publishedLocation := publishedDeleteW.Header().Get("Location")
+	if !strings.Contains(publishedLocation, "error=post+not+deletable") {
+		t.Fatalf("expected error redirect for published post, got %q", publishedLocation)
+	}
+	if _, err := store.GetPost(t.Context(), publishedID); err != nil {
+		t.Fatalf("expected published post to remain, got %v", err)
+	}
+}
+
 func TestRequeueDeadLetterFromFormRedirectsToFailedView(t *testing.T) {
 	tempDir := t.TempDir()
 	store, err := db.Open(filepath.Join(tempDir, "test.db"))
@@ -437,6 +527,82 @@ func TestBulkRequeueDeadLettersFromForm(t *testing.T) {
 	}
 }
 
+func TestBulkDeleteDeadLettersFromForm(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	makeFailed := func(text string) string {
+		payload, _ := json.Marshal(map[string]any{
+			"account_id":   testAccountID(t, store),
+			"text":         text,
+			"scheduled_at": time.Now().UTC().Add(1 * time.Minute).Format(time.RFC3339),
+			"max_attempts": 1,
+		})
+		createReq := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(payload))
+		createW := httptest.NewRecorder()
+		h.ServeHTTP(createW, createReq)
+		if createW.Code != http.StatusCreated {
+			t.Fatalf("expected 201, got %d", createW.Code)
+		}
+		var created map[string]any
+		if err := json.Unmarshal(createW.Body.Bytes(), &created); err != nil {
+			t.Fatalf("decode create response: %v", err)
+		}
+		postID, _ := created["id"].(string)
+		if postID == "" {
+			t.Fatalf("missing post id")
+		}
+		if err := store.RecordPublishFailure(t.Context(), postID, errors.New("boom"), 30*time.Second); err != nil {
+			t.Fatalf("record publish failure: %v", err)
+		}
+		return postID
+	}
+
+	postA := makeFailed("failed delete a")
+	postB := makeFailed("failed delete b")
+
+	dlqItems, err := store.ListDeadLetters(t.Context(), 10)
+	if err != nil {
+		t.Fatalf("list dead letters: %v", err)
+	}
+	if len(dlqItems) < 2 {
+		t.Fatalf("expected at least 2 dead letters, got %d", len(dlqItems))
+	}
+
+	form := url.Values{}
+	form.Add("ids", dlqItems[0].ID)
+	form.Add("ids", dlqItems[1].ID)
+	req := httptest.NewRequest(http.MethodPost, "/dlq/delete", bytes.NewBufferString(form.Encode()))
+	req.Header.Set("content-type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", w.Code)
+	}
+
+	if _, err := store.GetPost(t.Context(), postA); err == nil {
+		t.Fatalf("expected postA deleted")
+	}
+	if _, err := store.GetPost(t.Context(), postB); err == nil {
+		t.Fatalf("expected postB deleted")
+	}
+
+	dlqItems, err = store.ListDeadLetters(t.Context(), 10)
+	if err != nil {
+		t.Fatalf("list dead letters after bulk delete: %v", err)
+	}
+	if len(dlqItems) != 0 {
+		t.Fatalf("expected no dead letters after bulk delete, got %d", len(dlqItems))
+	}
+}
+
 func TestFailedViewUsesStyledCheckboxes(t *testing.T) {
 	tempDir := t.TempDir()
 	store, err := db.Open(filepath.Join(tempDir, "test.db"))
@@ -484,6 +650,12 @@ func TestFailedViewUsesStyledCheckboxes(t *testing.T) {
 	}
 	if !strings.Contains(body, ".failed-checkbox:checked::before {\n      transform: scale(1);") {
 		t.Fatalf("expected custom failed checkbox checked style")
+	}
+	if !strings.Contains(body, "id=\"failed-delete-selected\"") {
+		t.Fatalf("expected bulk delete button in failed view")
+	}
+	if !strings.Contains(body, "/dlq/") || !strings.Contains(body, "/delete") {
+		t.Fatalf("expected delete actions in failed view")
 	}
 }
 
@@ -941,6 +1113,119 @@ func TestCalendarDayDetailShowsPendingBeforePublished(t *testing.T) {
 	}
 }
 
+func TestCalendarDayDetailDeleteButtonVisibilityByStatus(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	settingsForm := url.Values{}
+	settingsForm.Set("timezone", "UTC")
+	settingsReq := httptest.NewRequest(http.MethodPost, "/settings/timezone", bytes.NewBufferString(settingsForm.Encode()))
+	settingsReq.Header.Set("content-type", "application/x-www-form-urlencoded")
+	settingsW := httptest.NewRecorder()
+	h.ServeHTTP(settingsW, settingsReq)
+	if settingsW.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303 on timezone update, got %d", settingsW.Code)
+	}
+
+	selectedDay := time.Date(2026, time.February, 26, 0, 0, 0, 0, time.UTC)
+	scheduledAt := selectedDay.Add(10 * time.Hour)
+	publishedAt := selectedDay.Add(11 * time.Hour)
+	accountID := testAccountID(t, store)
+
+	scheduledPayload, _ := json.Marshal(map[string]any{
+		"account_id":   accountID,
+		"text":         "scheduled deletable on panel",
+		"scheduled_at": scheduledAt.Format(time.RFC3339),
+	})
+	scheduledReq := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(scheduledPayload))
+	scheduledW := httptest.NewRecorder()
+	h.ServeHTTP(scheduledW, scheduledReq)
+	if scheduledW.Code != http.StatusCreated {
+		t.Fatalf("expected 201 for scheduled post, got %d", scheduledW.Code)
+	}
+	var scheduledResp map[string]any
+	if err := json.Unmarshal(scheduledW.Body.Bytes(), &scheduledResp); err != nil {
+		t.Fatalf("decode scheduled response: %v", err)
+	}
+	scheduledID, _ := scheduledResp["id"].(string)
+	if scheduledID == "" {
+		t.Fatalf("expected scheduled post id")
+	}
+
+	publishedPayload, _ := json.Marshal(map[string]any{
+		"account_id":   accountID,
+		"text":         "published should hide delete",
+		"scheduled_at": publishedAt.Format(time.RFC3339),
+	})
+	publishedReq := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(publishedPayload))
+	publishedW := httptest.NewRecorder()
+	h.ServeHTTP(publishedW, publishedReq)
+	if publishedW.Code != http.StatusCreated {
+		t.Fatalf("expected 201 for published seed post, got %d", publishedW.Code)
+	}
+	var publishedResp map[string]any
+	if err := json.Unmarshal(publishedW.Body.Bytes(), &publishedResp); err != nil {
+		t.Fatalf("decode published response: %v", err)
+	}
+	publishedID, _ := publishedResp["id"].(string)
+	if publishedID == "" {
+		t.Fatalf("expected published post id")
+	}
+	if err := store.MarkPublished(t.Context(), publishedID, "x-published-seed"); err != nil {
+		t.Fatalf("mark published: %v", err)
+	}
+
+	monthParam := selectedDay.Format("2006-01")
+	dayParam := selectedDay.Format("2006-01-02")
+	calendarReq := httptest.NewRequest(http.MethodGet, "/?view=calendar&month="+monthParam+"&day="+dayParam, nil)
+	calendarW := httptest.NewRecorder()
+	h.ServeHTTP(calendarW, calendarReq)
+	if calendarW.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", calendarW.Code)
+	}
+
+	body := calendarW.Body.String()
+	panelStart := strings.Index(body, "<aside class=\"day-panel\" aria-label=\"Day detail\">")
+	if panelStart == -1 {
+		t.Fatalf("expected day panel in calendar view")
+	}
+	panelEndRel := strings.Index(body[panelStart:], "</aside>")
+	if panelEndRel == -1 {
+		t.Fatalf("expected day panel closing tag")
+	}
+	panel := body[panelStart : panelStart+panelEndRel]
+
+	separatorIdx := strings.Index(panel, "class=\"day-separator\">published</div>")
+	if separatorIdx == -1 {
+		t.Fatalf("expected separator between pending and published sections")
+	}
+	pendingPanel := panel[:separatorIdx]
+	publishedPanel := panel[separatorIdx:]
+
+	if !strings.Contains(pendingPanel, "/posts/"+scheduledID+"/delete") {
+		t.Fatalf("expected delete action for scheduled post in pending section")
+	}
+	if !strings.Contains(pendingPanel, "onsubmit=\"return confirm('Delete this publication?');\"") {
+		t.Fatalf("expected delete action to require confirmation")
+	}
+	if strings.Contains(pendingPanel, "day-item-btn-del\" title=\"Delete\" disabled") {
+		t.Fatalf("expected pending delete action to be enabled")
+	}
+	if strings.Contains(pendingPanel, "title=\"Edit\"") {
+		t.Fatalf("did not expect explicit edit button in day panel items")
+	}
+	if strings.Contains(publishedPanel, "/posts/"+publishedID+"/delete") {
+		t.Fatalf("did not expect delete action for published post")
+	}
+}
+
 func TestDefaultViewIsCalendar(t *testing.T) {
 	tempDir := t.TempDir()
 	store, err := db.Open(filepath.Join(tempDir, "test.db"))
@@ -1137,6 +1422,7 @@ func TestCreateViewIncludesComposerPreviewUploadAndNetworks(t *testing.T) {
 		t.Fatalf("open db: %v", err)
 	}
 	defer store.Close()
+	accountID := testAccountID(t, store)
 
 	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
 	h := srv.Handler()
@@ -1151,6 +1437,15 @@ func TestCreateViewIncludesComposerPreviewUploadAndNetworks(t *testing.T) {
 	body := w.Body.String()
 	if !strings.Contains(body, "id=\"create-network-picker\"") || !strings.Contains(body, "data-network-chip") {
 		t.Fatalf("expected network picker in create view")
+	}
+	if !strings.Contains(body, "class=\"network-chip-icon\"") || !strings.Contains(body, "viewBox=\"0 0 24 24\"") {
+		t.Fatalf("expected network chips to include platform icons")
+	}
+	if !strings.Contains(body, "data-account-id=\""+accountID+"\"") {
+		t.Fatalf("expected network chip account binding for unique selection")
+	}
+	if !strings.Contains(body, "id=\"create-account-select\" name=\"account_id\" required data-account-select class=\"is-hidden\"") {
+		t.Fatalf("expected hidden account select backing field for selected network")
 	}
 	if !strings.Contains(body, "class=\"create-header-actions\"") || !strings.Contains(body, "form=\"create-post-form\"") {
 		t.Fatalf("expected create actions in header and connected to composer form")
@@ -1306,5 +1601,176 @@ func TestCalendarCellsRenderAllEventsForDynamicOverflow(t *testing.T) {
 	}
 	if !strings.Contains(body, "const syncCalendarCellOverflow = () => {") {
 		t.Fatalf("expected client-side overflow fit calculation script")
+	}
+}
+
+func TestListAccountsHTMLRedirectsToSettings(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	_ = testAccountID(t, store)
+
+	req := httptest.NewRequest(http.MethodGet, "/accounts", nil)
+	req.Header.Set("Accept", "text/html")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303 redirect for html /accounts, got %d", w.Code)
+	}
+	if got := w.Header().Get("Location"); got != "/?view=settings" {
+		t.Fatalf("expected settings redirect location, got %q", got)
+	}
+}
+
+func TestSettingsViewRendersAccountsBlockWithActions(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	connectedID := testAccountID(t, store)
+	liAccount, err := store.UpsertAccount(t.Context(), db.UpsertAccountParams{
+		Platform:          domain.PlatformLinkedIn,
+		DisplayName:       "LinkedIn Test",
+		ExternalAccountID: "li-test-account",
+		AuthMethod:        domain.AuthMethodOAuth,
+		Status:            domain.AccountStatusConnected,
+	})
+	if err != nil {
+		t.Fatalf("create linkedin account: %v", err)
+	}
+	if err := store.DisconnectAccount(t.Context(), liAccount.ID); err != nil {
+		t.Fatalf("disconnect linkedin account: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/?view=settings", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for settings view, got %d", w.Code)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "<div class=\"editor-head\">accounts</div>") {
+		t.Fatalf("expected accounts editor section in settings")
+	}
+	if !strings.Contains(body, "connect via oauth") {
+		t.Fatalf("expected oauth connect actions in settings")
+	}
+	if !strings.Contains(body, "1 connected · 2 total") {
+		t.Fatalf("expected connected/total account summary in settings")
+	}
+	if !strings.Contains(body, "action=\"/accounts/"+connectedID+"/disconnect\"") {
+		t.Fatalf("expected disconnect action for connected account")
+	}
+	if !strings.Contains(body, "action=\"/accounts/"+liAccount.ID+"/connect\"") {
+		t.Fatalf("expected connect action for disconnected account")
+	}
+	if !strings.Contains(body, "action=\"/accounts/"+liAccount.ID+"/delete\"") {
+		t.Fatalf("expected delete action for disconnected account")
+	}
+}
+
+func TestDisconnectAccountFormRedirectsBackToSettings(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	accountID := testAccountID(t, store)
+	form := url.Values{}
+	form.Set("return_to", "/?view=settings")
+
+	req := httptest.NewRequest(http.MethodPost, "/accounts/"+accountID+"/disconnect", bytes.NewBufferString(form.Encode()))
+	req.Header.Set("content-type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "text/html")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303 redirect for html account disconnect, got %d", w.Code)
+	}
+	loc := w.Header().Get("Location")
+	parsed, err := url.Parse(loc)
+	if err != nil {
+		t.Fatalf("parse redirect location: %v", err)
+	}
+	if got := parsed.Query().Get("view"); got != "settings" {
+		t.Fatalf("expected view=settings in redirect, got %q", got)
+	}
+	if got := parsed.Query().Get("accounts_success"); got != "account disconnected" {
+		t.Fatalf("expected account disconnect success message, got %q", got)
+	}
+}
+
+func TestConnectAccountFormRedirectsBackToSettings(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	accountID := testAccountID(t, store)
+	if err := srv.saveCredentials(t.Context(), accountID, publisher.Credentials{
+		AccessToken:       "token-connect-test",
+		AccessTokenSecret: "secret-connect-test",
+		TokenType:         "oauth1",
+	}); err != nil {
+		t.Fatalf("save account credentials: %v", err)
+	}
+	if err := store.DisconnectAccount(t.Context(), accountID); err != nil {
+		t.Fatalf("disconnect account: %v", err)
+	}
+
+	form := url.Values{}
+	form.Set("return_to", "/?view=settings")
+	req := httptest.NewRequest(http.MethodPost, "/accounts/"+accountID+"/connect", bytes.NewBufferString(form.Encode()))
+	req.Header.Set("content-type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "text/html")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303 redirect for html account connect, got %d", w.Code)
+	}
+	loc := w.Header().Get("Location")
+	parsed, err := url.Parse(loc)
+	if err != nil {
+		t.Fatalf("parse redirect location: %v", err)
+	}
+	if got := parsed.Query().Get("view"); got != "settings" {
+		t.Fatalf("expected view=settings in redirect, got %q", got)
+	}
+	if got := parsed.Query().Get("accounts_success"); got != "account connected" {
+		t.Fatalf("expected account connect success message, got %q", got)
+	}
+
+	account, err := store.GetAccount(t.Context(), accountID)
+	if err != nil {
+		t.Fatalf("get account after connect: %v", err)
+	}
+	if account.Status != domain.AccountStatusConnected {
+		t.Fatalf("expected account to be connected after connect action, got %s", account.Status)
 	}
 }

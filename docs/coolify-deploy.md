@@ -111,6 +111,12 @@ curl -H "Authorization: Bearer $API_TOKEN" "$BASE_URL/dlq?limit=50"
 curl -H "Authorization: Bearer $API_TOKEN" -X POST "$BASE_URL/dlq/<dead_letter_id>/requeue"
 ```
 
+- Delete one failed entry:
+
+```bash
+curl -H "Authorization: Bearer $API_TOKEN" -X POST "$BASE_URL/dlq/<dead_letter_id>/delete"
+```
+
 ## 6) Troubleshooting
 
 - `401 unauthorized`: check `API_TOKEN` or Basic Auth credentials.

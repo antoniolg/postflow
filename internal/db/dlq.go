@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/antoniolg/publisher/internal/domain"
@@ -74,4 +75,48 @@ func (s *Store) RequeueDeadLetter(ctx context.Context, deadLetterID string) (dom
 	}
 
 	return s.GetPost(ctx, postID)
+}
+
+func (s *Store) DeleteDeadLetter(ctx context.Context, deadLetterID string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	var postID string
+	if err := tx.QueryRowContext(ctx, `SELECT post_id FROM dead_letters WHERE id = ?`, deadLetterID).Scan(&postID); err != nil {
+		if err == sql.ErrNoRows {
+			return err
+		}
+		return err
+	}
+
+	var status string
+	if err := tx.QueryRowContext(ctx, `SELECT status FROM posts WHERE id = ?`, postID).Scan(&status); err != nil {
+		if err == sql.ErrNoRows {
+			return err
+		}
+		return err
+	}
+	if strings.TrimSpace(status) != string(domain.PostStatusFailed) {
+		return fmt.Errorf("post %s is not deletable", postID)
+	}
+
+	if _, err := tx.ExecContext(ctx, `DELETE FROM dead_letters WHERE id = ?`, deadLetterID); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM post_media WHERE post_id = ?`, postID); err != nil {
+		return err
+	}
+	result, err := tx.ExecContext(ctx, `DELETE FROM posts WHERE id = ?`, postID)
+	if err != nil {
+		return err
+	}
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		return sql.ErrNoRows
+	}
+
+	return tx.Commit()
 }

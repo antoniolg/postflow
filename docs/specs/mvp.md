@@ -47,6 +47,7 @@ Estados de post:
 - `POST /posts/{id}/cancel`
 - `GET /dlq`
 - `POST /dlq/{id}/requeue`
+- `POST /dlq/{id}/delete`
 - `GET /healthz`
 - `GET /` (UI read-only)
 
