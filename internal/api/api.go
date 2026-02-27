@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -908,6 +909,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, errors.New("not found"))
 		return
 	}
+	uiLang := preferredUILanguage(r.Header.Get("Accept-Language"))
 	uiLoc, uiTimezone, timezoneConfigured, err := s.resolveUILocation(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
@@ -1012,7 +1014,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 			nextRun = &t
 		}
 	}
-	nextRunLabel := "Sin próxima ejecución"
+	nextRunLabel := uiMessage(uiLang, "stats.next_run.none")
 	if nextRun != nil {
 		nextRunLabel = nextRun.In(uiLoc).Format("2006-01-02 15:04 MST")
 	}
@@ -1063,11 +1065,19 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 			lastError = strings.TrimSpace(*account.LastError)
 		}
 		statusClass := "status-disconnected"
+		statusLabel := strings.TrimSpace(string(account.Status))
 		switch account.Status {
 		case domain.AccountStatusConnected:
 			statusClass = "status-connected"
+			statusLabel = uiMessage(uiLang, "settings.status.connected")
+		case domain.AccountStatusDisconnected:
+			statusLabel = uiMessage(uiLang, "settings.status.disconnected")
 		case domain.AccountStatusError:
 			statusClass = "status-error"
+			statusLabel = uiMessage(uiLang, "settings.status.error")
+		}
+		if statusLabel == "" {
+			statusLabel = strings.ToUpper(strings.TrimSpace(string(account.Status)))
 		}
 		settingsAccounts = append(settingsAccounts, settingsAccountItem{
 			ID:          account.ID,
@@ -1077,7 +1087,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 			AuthMethod:  account.AuthMethod,
 			Status:      account.Status,
 			StatusClass: statusClass,
-			StatusLabel: strings.ToUpper(strings.TrimSpace(string(account.Status))),
+			StatusLabel: statusLabel,
 			LastError:   lastError,
 		})
 	}
@@ -1171,12 +1181,12 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		calendarWeeks = append(calendarWeeks, calendarDays[i:end])
 	}
 
-	calendarMonthLabel := strings.ToUpper(monthStartLocal.Format("January 2006"))
+	calendarMonthLabel := localizedCalendarMonthLabel(monthStartLocal, uiLang)
 	prevMonthParam := monthStartLocal.AddDate(0, -1, 0).Format("2006-01")
 	nextMonthParam := monthStartLocal.AddDate(0, 1, 0).Format("2006-01")
 	currentMonthParam := monthStartLocal.Format("2006-01")
 	selectedDayKey := selectedDayLocal.Format("2006-01-02")
-	selectedDayLabel := strings.ToUpper(selectedDayLocal.Format("Mon 02 Jan 2006"))
+	selectedDayLabel := localizedSelectedDayLabel(selectedDayLocal, uiLang)
 	selectedDayItems := detailsByDate[selectedDayKey]
 	selectedDayPendingItems := make([]dayDetailItem, 0, len(selectedDayItems))
 	selectedDayPublishedItems := make([]dayDetailItem, 0, len(selectedDayItems))
@@ -1230,7 +1240,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			continue
 		}
-		scheduledAtLabel := "no date"
+		scheduledAtLabel := uiMessage(uiLang, "common.no_date")
 		if !post.ScheduledAt.IsZero() {
 			scheduledAtLabel = post.ScheduledAt.In(uiLoc).Format("2006-01-02 15:04 MST")
 		}
@@ -1288,7 +1298,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		createAccountID = connectedAccounts[0].ID
 	}
 	if view == "create" && len(connectedAccounts) == 0 && createError == "" {
-		createError = "no connected accounts. connect one in settings first"
+		createError = uiMessage(uiLang, "create.no_connected_accounts")
 	}
 	if qText := strings.TrimSpace(r.URL.Query().Get("text")); qText != "" {
 		createText = qText
@@ -1296,13 +1306,16 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	if qScheduled := strings.TrimSpace(r.URL.Query().Get("scheduled_at_local")); qScheduled != "" {
 		createScheduledLocal = qScheduled
 	}
+	weekdayLabels := weekdayHeaders(uiLang)
+	datePickerMonthNames := datePickerMonthLabels(uiLang)
+	datePickerWeekdayNames := datePickerWeekdayLabels(uiLang)
 	mcpURL, mcpAuthHint, mcpConfigJSON, mcpClaudeCommand, mcpCodexCommand, mcpCodexConfigTOML := s.mcpSettingsInfo(r)
 	const tpl = `<!doctype html>
-<html lang="es">
+<html lang="{{.Lang}}">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>PostFlow · schedule</title>
+  <title>PostFlow · {{if eq .View "calendar"}}{{t "header.calendar"}}{{else if eq .View "drafts"}}{{t "header.drafts"}}{{else if eq .View "failed"}}{{t "header.failed"}}{{else if eq .View "create"}}{{t "header.new_post"}}{{else if eq .View "settings"}}{{t "header.settings"}}{{else}}{{t "header.scheduled"}}{{end}}</title>
   <meta name="theme-color" content="#1a1a1a" />
   <link rel="icon" type="image/x-icon" href="/assets/icons/favicon.ico" />
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png" />
@@ -1550,7 +1563,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       line-height: 1;
     }
     .title-back::after {
-      content: "back";
+      content: "{{t "common.back"}}";
       font-size: 12px;
       font-weight: 600;
       text-transform: lowercase;
@@ -3626,7 +3639,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 </head>
 <body data-view="{{.View}}" data-ui-timezone="{{.UITimezone}}">
   <div class="app">
-    <aside class="sidebar" aria-label="Primary navigation">
+    <aside class="sidebar" aria-label="{{t "aria.primary_navigation"}}">
       <div class="logo">
         <img class="logo-mark" src="/assets/icons/postflow-logo-header-transparent-64.png" alt="" aria-hidden="true" />
         <span>PostFlow</span>
@@ -3635,34 +3648,34 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         <a class="nav-item {{if eq .ActiveNavView "calendar"}}active{{end}}" href="/?view=calendar&month={{.CurrentMonthParam}}&day={{.SelectedDayKey}}">
           <span class="nav-main">
             <svg class="nav-icon nav-icon-calendar" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-            <span>calendar</span>
+            <span>{{t "nav.calendar"}}</span>
           </span>
         </a>
         <a class="nav-item {{if eq .ActiveNavView "publications"}}active{{end}}" href="/?view=publications">
           <span class="nav-main">
             <svg class="nav-icon nav-icon-scheduled" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            <span>scheduled</span>
+            <span>{{t "nav.scheduled"}}</span>
           </span>
           {{if gt .ScheduledCount 0}}<span class="nav-badge">{{.ScheduledCount}}</span>{{end}}
         </a>
         <a class="nav-item {{if eq .ActiveNavView "drafts"}}active{{end}}" href="/?view=drafts">
           <span class="nav-main">
             <svg class="nav-icon nav-icon-drafts" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
-            <span>drafts</span>
+            <span>{{t "nav.drafts"}}</span>
           </span>
           {{if gt .DraftCount 0}}<span class="nav-badge">{{.DraftCount}}</span>{{end}}
         </a>
         <a class="nav-item {{if eq .ActiveNavView "failed"}}active{{end}}" href="/?view=failed">
           <span class="nav-main">
             <svg class="nav-icon nav-icon-failed" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            <span>failed</span>
+            <span>{{t "nav.failed"}}</span>
           </span>
           {{if gt .FailedCount 0}}<span class="nav-badge nav-badge-danger">{{.FailedCount}}</span>{{end}}
         </a>
         <a class="nav-item nav-item-settings {{if eq .ActiveNavView "settings"}}active{{end}}" href="/?view=settings">
           <span class="nav-main">
             <svg class="nav-icon nav-icon-settings" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
-            <span>settings</span>
+            <span>{{t "nav.settings"}}</span>
           </span>
         </a>
       </nav>
@@ -3670,32 +3683,32 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     <main class="main">
       <header class="header">
         <div class="title-row">
-          {{if and (eq .View "create") .BackURL}}<a class="title-back" href="{{.BackURL}}" aria-label="back">←</a>{{end}}
+          {{if and (eq .View "create") .BackURL}}<a class="title-back" href="{{.BackURL}}" aria-label="{{t "common.back"}}">←</a>{{end}}
           <div class="title-copy">
-            <h1>{{if eq .View "calendar"}}CALENDAR{{else if eq .View "drafts"}}DRAFTS{{else if eq .View "failed"}}FAILED{{else if eq .View "create"}}NEW POST{{else if eq .View "settings"}}SETTINGS{{else}}SCHEDULED{{end}}</h1>
-            {{if eq .View "create"}}<div class="title-sub">// compose and schedule your content</div>{{end}}
+            <h1>{{if eq .View "calendar"}}{{t "header.calendar"}}{{else if eq .View "drafts"}}{{t "header.drafts"}}{{else if eq .View "failed"}}{{t "header.failed"}}{{else if eq .View "create"}}{{t "header.new_post"}}{{else if eq .View "settings"}}{{t "header.settings"}}{{else}}{{t "header.scheduled"}}{{end}}</h1>
+            {{if eq .View "create"}}<div class="title-sub">// {{t "create.subtitle"}}</div>{{end}}
           </div>
           {{if eq .View "calendar"}}
           <div class="calendar-controls">
-            <a class="month-link" href="/?view=calendar&month={{.PrevMonthParam}}&day={{.SelectedDayKey}}" aria-label="Previous month"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 12L6 8l4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+            <a class="month-link" href="/?view=calendar&month={{.PrevMonthParam}}&day={{.SelectedDayKey}}" aria-label="{{t "calendar.previous_month"}}"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 12L6 8l4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
             <span class="month-label">{{.CalendarMonthLabel}}</span>
-            <a class="month-link" href="/?view=calendar&month={{.NextMonthParam}}&day={{.SelectedDayKey}}" aria-label="Next month"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-            <a class="month-go" href="/?view=calendar&month={{.TodayMonthParam}}&day={{.TodayDayKey}}">today</a>
+            <a class="month-link" href="/?view=calendar&month={{.NextMonthParam}}&day={{.SelectedDayKey}}" aria-label="{{t "calendar.next_month"}}"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+            <a class="month-go" href="/?view=calendar&month={{.TodayMonthParam}}&day={{.TodayDayKey}}">{{t "common.today"}}</a>
           </div>
           {{end}}
         </div>
         {{if eq .View "calendar"}}
         <div class="header-right">
-          <a class="create-pill" href="{{.CreateViewURL}}">create_post</a>
+          <a class="create-pill" href="{{.CreateViewURL}}">{{t "common.create_post"}}</a>
         </div>
         {{else if eq .View "create"}}
         <div class="create-header-actions">
-          <button class="btn-secondary" type="submit" form="create-post-form" name="intent" value="draft"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> save_draft</button>
-          <button class="btn-secondary btn-schedule" type="submit" form="create-post-form" name="intent" value="schedule"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> {{if .EditingPost}}update_schedule{{else}}schedule{{end}}</button>
-          <button class="btn-primary" type="submit" form="create-post-form" name="intent" value="publish_now"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> publish_now</button>
+          <button class="btn-secondary" type="submit" form="create-post-form" name="intent" value="draft"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> {{t "common.save_draft"}}</button>
+          <button class="btn-secondary btn-schedule" type="submit" form="create-post-form" name="intent" value="schedule"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> {{if .EditingPost}}{{t "common.update_schedule"}}{{else}}{{t "common.schedule"}}{{end}}</button>
+          <button class="btn-primary" type="submit" form="create-post-form" name="intent" value="publish_now"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> {{t "common.publish_now"}}</button>
         </div>
         {{else}}
-        <a class="create-pill" href="{{.CreateViewURL}}">create_post</a>
+        <a class="create-pill" href="{{.CreateViewURL}}">{{t "common.create_post"}}</a>
         {{end}}
       </header>
       {{if eq .View "calendar"}}
@@ -3703,13 +3716,9 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       <div class="calendar-wrap">
         <div class="calendar-grid-scroll">
           <div class="weekday-row">
-            <div class="weekday">Mon</div>
-            <div class="weekday">Tue</div>
-            <div class="weekday">Wed</div>
-            <div class="weekday">Thu</div>
-            <div class="weekday">Fri</div>
-            <div class="weekday">Sat</div>
-            <div class="weekday">Sun</div>
+            {{range .WeekdayLabels}}
+            <div class="weekday">{{.}}</div>
+            {{end}}
           </div>
           {{range .CalendarWeeks}}
           <div class="week-row">
@@ -3718,7 +3727,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
               <a class="day-link" href="/?view=calendar&month={{$.CurrentMonthParam}}&day={{.DateKey}}">
                 <div class="day-head">
                   <span class="day-num {{if .IsToday}}today{{end}}">{{.DayNumber}}</span>
-                  {{if .IsToday}}<span class="today-badge">// today</span>{{end}}
+                  {{if .IsToday}}<span class="today-badge">// {{t "common.today"}}</span>{{end}}
                   {{if gt (len .Events) 0}}<span class="day-count">{{len .Events}}</span>{{end}}
                 </div>
                 <div class="day-events" data-day-events>
@@ -3740,17 +3749,17 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
           {{end}}
         </div>
       </div>
-      <aside class="day-panel" aria-label="Day detail">
+      <aside class="day-panel" aria-label="{{t "aria.day_detail"}}">
         <div class="day-panel-head">
           <div class="day-panel-title">{{.SelectedDayLabel}}</div>
-          <div class="day-panel-sub">// {{len .SelectedDayPendingItems}} scheduled posts</div>
+          <div class="day-panel-sub">// {{t "calendar.scheduled_posts" (len .SelectedDayPendingItems)}}</div>
         </div>
         <div class="day-panel-body">
           {{if and (eq (len .SelectedDayPendingItems) 0) (eq (len .SelectedDayPublishedItems) 0)}}
-          <div class="empty">No hay publicaciones para este día.</div>
+          <div class="empty">{{t "calendar.empty_day"}}</div>
           {{else}}
           {{if gt (len .SelectedDayPendingItems) 0}}
-          <div class="day-group-title">to publish ({{len .SelectedDayPendingItems}})</div>
+          <div class="day-group-title">{{t "calendar.to_publish" (len .SelectedDayPendingItems)}}</div>
           {{range .SelectedDayPendingItems}}
           <article class="day-item {{.StatusClass}}" data-status="{{.StatusKey}}" {{if .Editable}}data-edit-url="/?view=create&edit_id={{.PostID}}&return_to={{urlquery $.CurrentViewURL}}"{{end}}>
             <div class="day-item-head">
@@ -3760,9 +3769,9 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
             <div class="day-item-text">{{.Text}}</div>
             <div class="day-item-actions">
               {{if .Deletable}}
-              <form method="post" action="/posts/{{.PostID}}/delete" onsubmit="return confirm('Delete this publication?');">
+              <form method="post" action="/posts/{{.PostID}}/delete" onsubmit="return confirm('{{t "calendar.delete_publication_confirm"}}');">
                 <input type="hidden" name="return_to" value="{{$.CurrentViewURL}}" />
-                <button type="submit" class="day-item-btn day-item-btn-del" title="Delete">&#10005;</button>
+                <button type="submit" class="day-item-btn day-item-btn-del" title="{{t "common.delete"}}">&#10005;</button>
               </form>
               {{end}}
             </div>
@@ -3770,10 +3779,10 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
           {{end}}
           {{end}}
           {{if and (gt (len .SelectedDayPendingItems) 0) (gt (len .SelectedDayPublishedItems) 0)}}
-          <div class="day-separator">published</div>
+          <div class="day-separator">{{t "calendar.published"}}</div>
           {{end}}
           {{if gt (len .SelectedDayPublishedItems) 0}}
-          <div class="day-group-title">published ({{len .SelectedDayPublishedItems}})</div>
+          <div class="day-group-title">{{t "calendar.published_count" (len .SelectedDayPublishedItems)}}</div>
           {{range .SelectedDayPublishedItems}}
           <article class="day-item {{.StatusClass}}" data-status="{{.StatusKey}}">
             <div class="day-item-head">
@@ -3798,15 +3807,15 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
             <div class="content">
               <div class="text">{{.Text}}</div>
               <div class="meta">
-                <span class="meta-accent">{{if .ScheduledAt.IsZero}}no date{{else}}{{.ScheduledAt.Format "2006-01-02 15:04 MST"}}{{end}}</span>
+                <span class="meta-accent">{{if .ScheduledAt.IsZero}}{{t "common.no_date"}}{{else}}{{.ScheduledAt.Format "2006-01-02 15:04 MST"}}{{end}}</span>
                 <span>{{.Platform}}</span>
-                <span>{{len .Media}} media</span>
+                <span>{{t "common.media_count" (len .Media)}}</span>
               </div>
             </div>
           </div>
         </article>
         {{else}}
-        <div class="empty">No hay publicaciones programadas para los próximos {{.PublicationsWindowDays}} días.</div>
+        <div class="empty">{{t "publications.empty" .PublicationsWindowDays}}</div>
         {{end}}
       </section>
       {{end}}
@@ -3819,21 +3828,21 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
             <div class="content">
               <div class="text">{{.Text}}</div>
               <div class="meta">
-                <span class="meta-soft">no date assigned</span>
+                <span class="meta-soft">{{t "drafts.no_date_assigned"}}</span>
                 <span>{{.Platform}}</span>
-                <span>{{len .Media}} media</span>
+                <span>{{t "common.media_count" (len .Media)}}</span>
               </div>
             </div>
           </div>
           <div class="card-actions">
             <form method="post" action="/posts/{{.ID}}/schedule">
-              <input type="datetime-local" name="scheduled_at_local" required data-date-picker aria-label="scheduled at for draft {{.ID}}" />
-              <button type="submit" class="btn-primary">schedule</button>
+              <input type="datetime-local" name="scheduled_at_local" required data-date-picker aria-label="{{t "drafts.schedule_for_draft" .ID}}" />
+              <button type="submit" class="btn-primary">{{t "common.schedule"}}</button>
             </form>
           </div>
         </article>
         {{else}}
-        <div class="empty">No hay borradores aún. Crea ideas por API y aparecerán aquí.</div>
+        <div class="empty">{{t "drafts.empty"}}</div>
         {{end}}
       </section>
       {{end}}
@@ -3843,44 +3852,44 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	        {{if .FailedError}}<div class="alert error">{{.FailedError}}</div>{{end}}
 	        {{if .FailedSuccess}}<div class="alert success">{{.FailedSuccess}}</div>{{end}}
         <div class="bulk-actions">
-          <button type="button" class="pill" id="failed-select-all">mark all</button>
-          <button type="button" class="pill" id="failed-clear-all">clear all</button>
+          <button type="button" class="pill" id="failed-select-all">{{t "failed.mark_all"}}</button>
+          <button type="button" class="pill" id="failed-clear-all">{{t "failed.clear_all"}}</button>
           <form method="post" action="/dlq/requeue" id="failed-bulk-requeue-form">
-            <button type="submit" id="failed-requeue-selected" class="btn-primary" disabled>requeue selected</button>
+            <button type="submit" id="failed-requeue-selected" class="btn-primary" disabled>{{t "failed.requeue_selected"}}</button>
           </form>
           <form method="post" action="/dlq/delete" id="failed-bulk-delete-form">
-            <button type="submit" id="failed-delete-selected" class="btn-danger" disabled>delete selected</button>
+            <button type="submit" id="failed-delete-selected" class="btn-danger" disabled>{{t "failed.delete_selected"}}</button>
           </form>
         </div>
         {{range .FailedItems}}
         <article class="card failed card-editable" data-edit-url="/?view=create&edit_id={{.PostID}}&return_to={{urlquery $.CurrentViewURL}}">
           <div class="card-left">
             <div class="failed-select">
-              <input class="failed-checkbox" type="checkbox" value="{{.DeadLetterID}}" data-failed-checkbox aria-label="select failed publication {{.PostID}}" />
+              <input class="failed-checkbox" type="checkbox" value="{{.DeadLetterID}}" data-failed-checkbox aria-label="{{t "failed.select_publication" .PostID}}" />
             </div>
             <div class="content">
               <div class="text">{{.Text}}</div>
               <div class="meta">
                 <span class="meta-soft">{{.ScheduledAtLabel}}</span>
                 <span>{{.Platform}}</span>
-                <span>{{.MediaCount}} media</span>
-                <span>attempts {{.Attempts}}/{{.MaxAttempts}}</span>
-                <span>failed {{.FailedAtLabel}}</span>
+                <span>{{t "common.media_count" .MediaCount}}</span>
+                <span>{{t "failed.attempts" .Attempts .MaxAttempts}}</span>
+                <span>{{t "failed.failed_at" .FailedAtLabel}}</span>
                 <span>{{.LastError}}</span>
               </div>
             </div>
           </div>
           <div class="card-actions">
             <form method="post" action="/dlq/{{.DeadLetterID}}/requeue">
-              <button type="submit" class="btn-secondary">requeue</button>
+              <button type="submit" class="btn-secondary">{{t "failed.requeue"}}</button>
             </form>
-            <form method="post" action="/dlq/{{.DeadLetterID}}/delete" onsubmit="return confirm('Delete this failed publication?');">
-              <button type="submit" class="btn-danger">delete</button>
+            <form method="post" action="/dlq/{{.DeadLetterID}}/delete" onsubmit="return confirm('{{t "failed.delete_confirm"}}');">
+              <button type="submit" class="btn-danger">{{t "common.delete"}}</button>
             </form>
           </div>
         </article>
         {{else}}
-        <div class="empty">No hay publicaciones fallidas en cola.</div>
+        <div class="empty">{{t "failed.empty"}}</div>
         {{end}}
       </section>
       {{end}}
@@ -3889,7 +3898,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       <div class="composer-layout">
         <section class="composer-main">
           <section class="editor">
-	            <div class="editor-head">{{if .EditingPost}}edit publication{{else}}new post{{end}}</div>
+		            <div class="editor-head">{{if .EditingPost}}{{t "create.edit_publication"}}{{else}}{{t "create.new_post"}}{{end}}</div>
 	            <form class="editor-body" id="create-post-form" method="post" action="{{if .EditingPost}}/posts/{{.EditingPost.ID}}/edit{{else}}/posts{{end}}">
 	              <input type="hidden" name="return_to" value="{{.ReturnTo}}" />
 	              <div id="create-media-hidden"></div>
@@ -3899,8 +3908,8 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	              {{if .MediaSuccess}}<div class="alert success">{{.MediaSuccess}}</div>{{end}}
 
 	              <div class="field create-field create-field-networks">
-	                <div class="composer-label">// select account</div>
-	                <div class="network-picker" id="create-network-picker" role="radiogroup" aria-label="select network">
+		                <div class="composer-label">// {{t "create.select_account"}}</div>
+		                <div class="network-picker" id="create-network-picker" role="radiogroup" aria-label="{{t "create.select_network"}}">
 	                  {{range .Accounts}}
 	                  <button
 	                    type="button"
@@ -3932,7 +3941,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	                  {{else}}
 	                  <button type="button" class="network-chip disabled" disabled>
 	                    <span class="network-chip-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg></span>
-	                    <span>no networks</span>
+		                    <span>{{t "create.no_networks"}}</span>
 	                  </button>
 	                  {{end}}
 	                </div>
@@ -3945,33 +3954,33 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 
               <div class="field create-field create-field-content">
                 <div class="composer-text-wrap">
-                  <div class="composer-label">// post content</div>
-                  <textarea id="create-text" name="text" required placeholder="Write your post...">{{.CreateText}}</textarea>
-                  <div class="composer-text-meta">
-                    <span id="create-char-count">// 0 chars</span>
-                    <span class="composer-format-btns">**bold** _italic_</span>
-                  </div>
-                </div>
+	                  <div class="composer-label">// {{t "create.post_content"}}</div>
+	                  <textarea id="create-text" name="text" required placeholder="{{t "create.placeholder"}}">{{.CreateText}}</textarea>
+	                  <div class="composer-text-meta">
+	                    <span id="create-char-count">{{t "create.char_count_initial"}}</span>
+	                    <span class="composer-format-btns">**bold** _italic_</span>
+	                  </div>
+	                </div>
               </div>
 
               <div class="field create-field create-field-schedule">
                 <div class="schedule-block">
-                  <label class="schedule-label" for="create-scheduled-at">scheduled at ({{.UITimezone}})</label>
+	                  <label class="schedule-label" for="create-scheduled-at">{{t "create.scheduled_at" .UITimezone}}</label>
                   <input id="create-scheduled-at" type="datetime-local" name="scheduled_at_local" data-date-picker value="{{.CreateScheduledLocal}}" />
                 </div>
               </div>
 
               <div class="field create-field create-field-media">
-                <div class="composer-label">// media attachment (4 max)</div>
-                <div class="media-block">
-                  <div class="media-upload-dropzone" id="create-media-dropzone" role="button" tabindex="0" aria-label="add media">
-                    <input id="create-media-input" type="file" accept="image/*,video/*" multiple hidden />
-                    <span class="media-upload-title">drop media here or click to upload</span>
-                    <span class="upload-notice" id="create-upload-notice"></span>
-                  </div>
-                  <div class="media-list" id="create-media-list"></div>
-                  <div class="media-library-wrap">
-                    <div class="composer-label">// recent library</div>
+	                <div class="composer-label">// {{t "create.media_attachment_max" 4}}</div>
+	                <div class="media-block">
+	                  <div class="media-upload-dropzone" id="create-media-dropzone" role="button" tabindex="0" aria-label="{{t "create.add_media"}}">
+	                    <input id="create-media-input" type="file" accept="image/*,video/*" multiple hidden />
+	                    <span class="media-upload-title">{{t "create.drop_media_here"}}</span>
+	                    <span class="upload-notice" id="create-upload-notice"></span>
+	                  </div>
+	                  <div class="media-list" id="create-media-list"></div>
+	                  <div class="media-library-wrap">
+	                    <div class="composer-label">// {{t "create.recent_library"}}</div>
                     <div class="media-library create-media-library-grid" id="create-media-library">
                       {{range .CreateRecentMedia}}
                       <article class="create-media-card {{if .InUse}}in-use{{end}}" data-media-library-item data-media-id="{{.ID}}" data-media-name="{{.OriginalName}}" data-media-size="{{.SizeBytes}}" data-media-mime="{{.MimeType}}" data-media-preview="{{.PreviewURL}}">
@@ -3979,20 +3988,20 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
                           {{if .IsImage}}<img src="{{.PreviewURL}}" alt="{{.OriginalName}}" loading="lazy" />{{else if .IsVideo}}<video src="{{.PreviewURL}}" muted preload="metadata" playsinline></video><span class="settings-media-video-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="8 6 19 12 8 18"/></svg></span>{{else}}<span class="settings-media-file-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg></span>{{end}}
                         </div>
                         <div class="create-media-overlay-actions">
-                          <button type="button" class="btn-secondary settings-account-icon-btn create-media-icon-btn" data-media-attach="{{.ID}}" aria-label="attach media to post" title="attach to post">
+	                          <button type="button" class="btn-secondary settings-account-icon-btn create-media-icon-btn" data-media-attach="{{.ID}}" aria-label="{{t "create.attach_media"}}" title="{{t "create.attach_to_post"}}">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
                           </button>
                           {{if .InUse}}
-                          <span class="pill media-pill-used">used {{.UsageCount}}</span>
-                          {{else}}
-                          <button type="button" class="btn-danger settings-account-icon-btn create-media-icon-btn" data-media-delete="{{.ID}}" aria-label="delete media" title="delete media">
+	                          <span class="pill media-pill-used">{{t "common.used_count" .UsageCount}}</span>
+	                          {{else}}
+	                          <button type="button" class="btn-danger settings-account-icon-btn create-media-icon-btn" data-media-delete="{{.ID}}" aria-label="{{t "common.delete_media"}}" title="{{t "common.delete_media"}}">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
                           </button>
                           {{end}}
                         </div>
                       </article>
                       {{else}}
-                      <div class="empty">No media uploaded yet.</div>
+	                      <div class="empty">{{t "create.no_media_uploaded"}}</div>
                       {{end}}
                     </div>
                   </div>
@@ -4000,18 +4009,18 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
               </div>
 
               <div class="editor-actions composer-submit-actions">
-                <button class="btn-secondary" type="submit" name="intent" value="draft">save_draft</button>
-                <button class="btn-secondary" type="submit" name="intent" value="schedule">{{if .EditingPost}}update_schedule{{else}}schedule{{end}}</button>
-                <button class="btn-primary" type="submit" name="intent" value="publish_now">publish_now</button>
+	                <button class="btn-secondary" type="submit" name="intent" value="draft">{{t "common.save_draft"}}</button>
+	                <button class="btn-secondary" type="submit" name="intent" value="schedule">{{if .EditingPost}}{{t "common.update_schedule"}}{{else}}{{t "common.schedule"}}{{end}}</button>
+	                <button class="btn-primary" type="submit" name="intent" value="publish_now">{{t "common.publish_now"}}</button>
               </div>
             </form>
           </section>
         </section>
 
-        <aside class="preview-panel" aria-label="Live preview">
-          <div class="preview-head">
-            <div class="preview-title">// live preview</div>
-          </div>
+	        <aside class="preview-panel" aria-label="{{t "aria.live_preview"}}">
+	          <div class="preview-head">
+	            <div class="preview-title">// {{t "create.live_preview"}}</div>
+	          </div>
           <div class="preview-body">
             <article class="preview-card">
               <div class="preview-author">
@@ -4021,28 +4030,28 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
                   <div class="preview-handle">@postflow_app</div>
                 </div>
               </div>
-              <div class="preview-text" id="preview-text">{{if .CreateText}}{{previewMarkdown .CreateText}}{{else}}Start typing to preview your post...{{end}}</div>
-              <div class="preview-media" id="preview-media" hidden>
-                <img id="preview-media-image" alt="media preview" hidden />
-                <div class="preview-media-empty" id="preview-media-empty">No media selected yet.</div>
-              </div>
-              <div class="preview-footer">just now</div>
-            </article>
-          </div>
-        </aside>
+		              <div class="preview-text" id="preview-text">{{if .CreateText}}{{previewMarkdown .CreateText}}{{else}}{{t "create.preview_default"}}{{end}}</div>
+	              <div class="preview-media" id="preview-media" hidden>
+	                <img id="preview-media-image" alt="{{t "create.media_preview"}}" hidden />
+	                <div class="preview-media-empty" id="preview-media-empty">{{t "create.preview_no_media"}}</div>
+	              </div>
+	              <div class="preview-footer">{{t "create.just_now"}}</div>
+	            </article>
+	          </div>
+	        </aside>
       </div>
       {{end}}
 
       {{if eq .View "settings"}}
-      <div class="line">preferences</div>
+      <div class="line">{{t "settings.preferences"}}</div>
       <section class="editor">
-        <div class="editor-head">timezone</div>
+        <div class="editor-head">{{t "settings.timezone"}}</div>
         <form class="editor-body" method="post" action="/settings/timezone">
           <input type="hidden" name="return_to" value="{{.CurrentViewURL}}" />
           {{if .SettingsError}}<div class="alert error">{{.SettingsError}}</div>{{end}}
           {{if .SettingsSuccess}}<div class="alert success">{{.SettingsSuccess}}</div>{{end}}
           <div class="field">
-            <label for="timezone-select">Timezone (IANA)</label>
+            <label for="timezone-select">{{t "settings.timezone_label"}}</label>
             <select name="timezone" id="timezone-select" data-current-timezone="{{.UITimezone}}" required>
               <option value="UTC">UTC</option>
               <option value="Europe/Madrid">Europe/Madrid</option>
@@ -4056,19 +4065,19 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
             </select>
           </div>
           <div class="editor-actions">
-            <button type="submit" class="btn-primary">save timezone</button>
-            <button type="button" class="btn-secondary" id="tz-detect">use browser timezone</button>
+            <button type="submit" class="btn-primary">{{t "settings.save_timezone"}}</button>
+            <button type="button" class="btn-secondary" id="tz-detect">{{t "settings.use_browser_timezone"}}</button>
           </div>
-          <div class="meta"><span class="meta-soft">current timezone: {{.UITimezone}}</span></div>
+          <div class="meta"><span class="meta-soft">{{t "settings.current_timezone" .UITimezone}}</span></div>
         </form>
       </section>
       <section class="editor editor-wide">
-        <div class="editor-head">accounts</div>
+        <div class="editor-head">{{t "settings.accounts"}}</div>
         <div class="editor-body">
           {{if .AccountsError}}<div class="alert error">{{.AccountsError}}</div>{{end}}
           {{if .AccountsSuccess}}<div class="alert success">{{.AccountsSuccess}}</div>{{end}}
           <div class="meta">
-            <span class="meta-soft">{{.ConnectedAccountCount}} connected · {{.TotalAccountCount}} total</span>
+            <span class="meta-soft">{{t "settings.connected_total" .ConnectedAccountCount .TotalAccountCount}}</span>
           </div>
           <div class="settings-accounts">
             {{range .SettingsAccounts}}
@@ -4088,17 +4097,17 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		                <input type="hidden" name="return_to" value="/?view=settings" />
 		                <input type="hidden" name="x_premium" value="0" />
 		                <label class="settings-account-premium-toggle">
-		                  <input class="failed-checkbox" type="checkbox" name="x_premium" value="1" {{if .XPremium}}checked{{end}} onchange="if (this.form.requestSubmit) { this.form.requestSubmit(); } else { this.form.submit(); }" />
-		                  <span>x premium (long posts)</span>
-		                </label>
-	                <noscript><button type="submit" class="btn-secondary">save</button></noscript>
-	              </form>
-	              {{end}}
-	              <div class="settings-account-actions">
+			                  <input class="failed-checkbox" type="checkbox" name="x_premium" value="1" {{if .XPremium}}checked{{end}} onchange="if (this.form.requestSubmit) { this.form.requestSubmit(); } else { this.form.submit(); }" />
+			                  <span>{{t "settings.x_premium"}}</span>
+			                </label>
+		                <noscript><button type="submit" class="btn-secondary">{{t "common.save"}}</button></noscript>
+		              </form>
+		              {{end}}
+		              <div class="settings-account-actions">
                 {{if eq .Status "connected"}}
                 <form method="post" action="/accounts/{{.ID}}/disconnect">
                   <input type="hidden" name="return_to" value="/?view=settings" />
-                  <button type="submit" class="btn-secondary settings-account-icon-btn" aria-label="disconnect account" title="disconnect">
+                  <button type="submit" class="btn-secondary settings-account-icon-btn" aria-label="{{t "settings.disconnect_account"}}" title="{{t "settings.disconnect"}}">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 17H7a5 5 0 010-10h2"/><path d="M15 7h2a5 5 0 010 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
                   </button>
                 </form>
@@ -4106,13 +4115,13 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
                 {{if eq .Status "disconnected"}}
                 <form method="post" action="/accounts/{{.ID}}/connect">
                   <input type="hidden" name="return_to" value="/?view=settings" />
-                  <button type="submit" class="btn-secondary settings-account-icon-btn" aria-label="connect account" title="connect">
+                  <button type="submit" class="btn-secondary settings-account-icon-btn" aria-label="{{t "settings.connect_account"}}" title="{{t "settings.connect"}}">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
                   </button>
                 </form>
-                <form method="post" action="/accounts/{{.ID}}/delete" onsubmit="return confirm('Delete account?')">
+                <form method="post" action="/accounts/{{.ID}}/delete" onsubmit="return confirm('{{t "settings.delete_account_confirm"}}')">
                   <input type="hidden" name="return_to" value="/?view=settings" />
-                  <button type="submit" class="btn-danger settings-account-icon-btn" aria-label="delete account" title="delete">
+                  <button type="submit" class="btn-danger settings-account-icon-btn" aria-label="{{t "settings.delete_account"}}" title="{{t "common.delete"}}">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
                   </button>
                 </form>
@@ -4120,51 +4129,51 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
               </div>
             </article>
             {{else}}
-            <div class="empty">No accounts connected yet.</div>
+            <div class="empty">{{t "settings.no_accounts"}}</div>
             {{end}}
           </div>
           <div class="meta">
-            <span class="meta-soft">connect via oauth</span>
+            <span class="meta-soft">{{t "settings.connect_via_oauth"}}</span>
           </div>
           <div class="settings-connect-grid">
             <form method="post" action="/oauth/x/start">
-              <button type="submit" class="btn-secondary">connect x</button>
+              <button type="submit" class="btn-secondary">{{t "settings.connect_x"}}</button>
             </form>
             <form method="post" action="/oauth/linkedin/start">
-              <button type="submit" class="btn-secondary">connect linkedin</button>
+              <button type="submit" class="btn-secondary">{{t "settings.connect_linkedin"}}</button>
             </form>
             <form method="post" action="/oauth/facebook/start">
-              <button type="submit" class="btn-secondary">connect facebook</button>
+              <button type="submit" class="btn-secondary">{{t "settings.connect_facebook"}}</button>
             </form>
             <form method="post" action="/oauth/instagram/start">
-              <button type="submit" class="btn-secondary">connect instagram</button>
+              <button type="submit" class="btn-secondary">{{t "settings.connect_instagram"}}</button>
             </form>
           </div>
         </div>
       </section>
       <section class="editor editor-wide">
-        <div class="editor-head">media library</div>
+        <div class="editor-head">{{t "settings.media_library"}}</div>
         <div class="editor-body">
           {{if .MediaError}}<div class="alert error">{{.MediaError}}</div>{{end}}
           {{if .MediaSuccess}}<div class="alert success">{{.MediaSuccess}}</div>{{end}}
           <div class="meta">
-            <span class="meta-soft">{{len .MediaLibrary}} files · {{.MediaInUseCount}} in use · {{.MediaTotalSizeLabel}}</span>
+            <span class="meta-soft">{{t "settings.media_summary" (len .MediaLibrary) .MediaInUseCount .MediaTotalSizeLabel}}</span>
           </div>
           <div class="settings-media-library">
             {{range .MediaLibrary}}
             <article class="settings-media-card {{if .InUse}}in-use{{end}}">
-              <a class="settings-media-open" href="{{.PreviewURL}}" target="_blank" rel="noreferrer" aria-label="open media">
+              <a class="settings-media-open" href="{{.PreviewURL}}" target="_blank" rel="noreferrer" aria-label="{{t "settings.open_media"}}">
                 <div class="media-library-thumb">
                   {{if .IsImage}}<img src="{{.PreviewURL}}" alt="{{.OriginalName}}" loading="lazy" />{{else if .IsVideo}}<video src="{{.PreviewURL}}" muted preload="metadata" playsinline></video><span class="settings-media-video-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="8 6 19 12 8 18"/></svg></span>{{else}}<span class="settings-media-file-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg></span>{{end}}
                 </div>
               </a>
               <div class="settings-media-overlay-actions">
                 {{if .InUse}}
-                <span class="pill media-pill-used settings-media-used">used {{.UsageCount}}</span>
+                <span class="pill media-pill-used settings-media-used">{{t "common.used_count" .UsageCount}}</span>
                 {{else}}
                 <form method="post" action="/media/{{.ID}}/delete">
                   <input type="hidden" name="return_to" value="/?view=settings" />
-                  <button type="submit" class="btn-danger settings-account-icon-btn" aria-label="delete media" title="delete">
+                  <button type="submit" class="btn-danger settings-account-icon-btn" aria-label="{{t "common.delete_media"}}" title="{{t "common.delete"}}">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
                   </button>
                 </form>
@@ -4172,7 +4181,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
               </div>
             </article>
             {{else}}
-            <div class="empty">No media uploaded yet.</div>
+            <div class="empty">{{t "create.no_media_uploaded"}}</div>
             {{end}}
           </div>
         </div>
@@ -4229,8 +4238,15 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 })();
 
 (() => {
-  const monthNames = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
-  const weekdayNames = ["L", "M", "X", "J", "V", "S", "D"];
+  const monthNames = {{toJSON .DatePickerMonthNames}};
+  const weekdayNames = {{toJSON .DatePickerWeekdayNames}};
+  const monthYearSeparator = {{printf "%q" (t "datepicker.month_year_separator")}};
+  const pickerPreviousMonth = {{printf "%q" (t "datepicker.previous_month")}};
+  const pickerNextMonth = {{printf "%q" (t "datepicker.next_month")}};
+  const pickerClear = {{printf "%q" (t "datepicker.clear")}};
+  const pickerToday = {{printf "%q" (t "datepicker.today")}};
+  const pickerApply = {{printf "%q" (t "datepicker.apply")}};
+  const pickerOpenAria = {{printf "%q" (t "datepicker.open")}};
   const pad2 = (value) => String(value).padStart(2, "0");
 
   const parseInputValue = (raw, mode) => {
@@ -4305,9 +4321,9 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
   popover.hidden = true;
   popover.innerHTML =
     '<div class="date-picker-head">' +
-      '<button type="button" class="date-picker-nav" data-date-nav="-1" aria-label="previous month">‹</button>' +
+      '<button type="button" class="date-picker-nav" data-date-nav="-1" aria-label="' + pickerPreviousMonth + '">‹</button>' +
       '<div class="date-picker-month" data-date-month></div>' +
-      '<button type="button" class="date-picker-nav" data-date-nav="1" aria-label="next month">›</button>' +
+      '<button type="button" class="date-picker-nav" data-date-nav="1" aria-label="' + pickerNextMonth + '">›</button>' +
     "</div>" +
     '<div class="date-picker-weekdays" data-date-weekdays></div>' +
     '<div class="date-picker-days" data-date-days></div>' +
@@ -4318,11 +4334,11 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     "</div>" +
     '<div class="date-picker-actions">' +
       '<div class="date-picker-actions-left">' +
-        '<button type="button" class="btn-secondary" data-date-clear>clear</button>' +
-        '<button type="button" class="btn-secondary" data-date-now>today</button>' +
+        '<button type="button" class="btn-secondary" data-date-clear>' + pickerClear + '</button>' +
+        '<button type="button" class="btn-secondary" data-date-now>' + pickerToday + '</button>' +
       "</div>" +
       '<div class="date-picker-actions-right">' +
-        '<button type="button" class="btn-primary" data-date-apply>apply</button>' +
+        '<button type="button" class="btn-primary" data-date-apply>' + pickerApply + '</button>' +
       "</div>" +
     "</div>";
   document.body.appendChild(popover);
@@ -4431,7 +4447,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 
   const renderPicker = () => {
     const displayMonth = monthNames[state.viewMonth] || "";
-    monthLabel.textContent = displayMonth + " de " + String(state.viewYear);
+    monthLabel.textContent = displayMonth + monthYearSeparator + String(state.viewYear);
     popover.setAttribute("data-mode", state.mode === "date" ? "date" : "datetime-local");
 
     weekdaysRoot.innerHTML = "";
@@ -4658,7 +4674,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       trigger.type = "button";
       trigger.className = "date-trigger";
       trigger.setAttribute("data-date-trigger", "1");
-      trigger.setAttribute("aria-label", "open date picker");
+      trigger.setAttribute("aria-label", pickerOpenAria);
       trigger.textContent = "▾";
       wrapper.appendChild(trigger);
     }
@@ -4897,16 +4913,19 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
   const deleteForm = document.getElementById("failed-bulk-delete-form");
   const requeueSubmit = document.getElementById("failed-requeue-selected");
   const deleteSubmit = document.getElementById("failed-delete-selected");
+  const requeueSelectedText = {{printf "%q" (t "failed.requeue_selected")}};
+  const deleteSelectedText = {{printf "%q" (t "failed.delete_selected")}};
+  const deleteSelectedConfirm = {{printf "%q" (t "failed.delete_selected_confirm")}};
 
   const updateBulkButtons = () => {
     const count = checkboxes.filter((cb) => cb.checked).length;
     if (requeueSubmit instanceof HTMLButtonElement) {
       requeueSubmit.disabled = count === 0;
-      requeueSubmit.textContent = count > 0 ? "requeue selected (" + count + ")" : "requeue selected";
+      requeueSubmit.textContent = count > 0 ? requeueSelectedText + " (" + count + ")" : requeueSelectedText;
     }
     if (deleteSubmit instanceof HTMLButtonElement) {
       deleteSubmit.disabled = count === 0;
-      deleteSubmit.textContent = count > 0 ? "delete selected (" + count + ")" : "delete selected";
+      deleteSubmit.textContent = count > 0 ? deleteSelectedText + " (" + count + ")" : deleteSelectedText;
     }
   };
 
@@ -4949,7 +4968,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
   };
 
   bindBulkSubmit(requeueForm, "");
-  bindBulkSubmit(deleteForm, "Delete selected failed publications?");
+  bindBulkSubmit(deleteForm, deleteSelectedConfirm);
   updateBulkButtons();
 })();
 
@@ -5006,6 +5025,34 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
   const maxMedia = 4;
   let uploadInFlight = 0;
   const attachments = [];
+  const formatTemplate = (pattern, ...values) => String(pattern || "").replace(/\{(\d+)\}/g, (_, rawIndex) => {
+    const index = Number(rawIndex);
+    if (!Number.isInteger(index) || index < 0 || index >= values.length) {
+      return "";
+    }
+    return String(values[index]);
+  });
+  const i18n = {
+    charsWithLimit: {{printf "%q" (t "create.chars_with_limit")}},
+    charsUnknown: {{printf "%q" (t "create.chars_unknown")}},
+    previewDefault: {{printf "%q" (t "create.preview_default")}},
+    attachMedia: {{printf "%q" (t "create.attach_media")}},
+    removeMediaFromPost: {{printf "%q" (t "create.remove_media_from_post")}},
+    attachToPost: {{printf "%q" (t "create.attach_to_post")}},
+    removeFromPost: {{printf "%q" (t "create.remove_from_post")}},
+    usedLabel: {{printf "%q" (t "common.used")}},
+    mediaItemLabel: {{printf "%q" (t "create.media_item")}},
+    removeMedia: {{printf "%q" (t "create.remove_media")}},
+    mediaUploaded: {{printf "%q" (t "create.media_uploaded")}},
+    uploadFailed: {{printf "%q" (t "create.upload_failed")}},
+    uploadFailedMissingID: {{printf "%q" (t "create.upload_failed_missing_id")}},
+    maxFiles: {{printf "%q" (t "create.max_files")}},
+    uploadingFile: {{printf "%q" (t "create.uploading_file")}},
+    unsupportedMedia: {{printf "%q" (t "create.unsupported_media")}},
+    deleteFailed: {{printf "%q" (t "create.delete_failed")}},
+    mediaDeleted: {{printf "%q" (t "create.media_deleted")}},
+    waitUploads: {{printf "%q" (t "create.wait_uploads")}}
+  };
 
   const toDatetimeLocal = (d) => {
     const year = d.getFullYear();
@@ -5221,18 +5268,18 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     const count = textInput.value.length;
     const rule = selectedPlatformRule();
     if (rule && Number.isFinite(rule.max) && rule.max > 0) {
-      charCount.textContent = "// " + count + "/" + rule.max + " chars (" + rule.label + " limit)";
+      charCount.textContent = formatTemplate(i18n.charsWithLimit, count, rule.max, rule.label);
       charCount.classList.toggle("char-over", count > rule.max);
       return;
     }
-    charCount.textContent = "// " + count + " chars (network limit unknown)";
+    charCount.textContent = formatTemplate(i18n.charsUnknown, count);
     charCount.classList.remove("char-over");
   };
 
   const updatePreviewText = () => {
     const raw = textInput.value;
     if (raw.trim() === "") {
-      previewText.textContent = "Start typing to preview your post...";
+      previewText.textContent = i18n.previewDefault;
       return;
     }
     previewText.innerHTML = markdownToPreviewHTML(raw);
@@ -5305,8 +5352,8 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     }
     button.classList.toggle("attached", attached);
     button.innerHTML = attached ? detachIcon : attachIcon;
-    button.setAttribute("aria-label", attached ? "remove media from post" : "attach media to post");
-    button.setAttribute("title", attached ? "remove from post" : "attach to post");
+    button.setAttribute("aria-label", attached ? i18n.removeMediaFromPost : i18n.attachMedia);
+    button.setAttribute("title", attached ? i18n.removeFromPost : i18n.attachToPost);
   };
 
   const syncLibraryAttachButtons = () => {
@@ -5442,7 +5489,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     if (inUse) {
       const used = document.createElement("span");
       used.className = "pill media-pill-used";
-      used.textContent = "used";
+      used.textContent = i18n.usedLabel;
       actions.appendChild(used);
     } else {
       const del = document.createElement("button");
@@ -5450,8 +5497,8 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       del.className = "btn-danger settings-account-icon-btn create-media-icon-btn";
       del.setAttribute("data-media-delete", item.id);
       del.innerHTML = deleteIcon;
-      del.setAttribute("aria-label", "delete media");
-      del.setAttribute("title", "delete media");
+      del.setAttribute("aria-label", i18n.removeMedia);
+      del.setAttribute("title", i18n.removeMedia);
       actions.appendChild(del);
     }
 
@@ -5486,7 +5533,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       const row = document.createElement("article");
       row.className = "media-item";
       row.setAttribute("data-media-item", "");
-      row.setAttribute("aria-label", item.name || "media");
+      row.setAttribute("aria-label", item.name || i18n.mediaItemLabel);
 
       const thumb = document.createElement("div");
       thumb.className = "media-thumb";
@@ -5496,15 +5543,15 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       remove.type = "button";
       remove.className = "btn-danger media-item-remove";
       remove.setAttribute("data-media-remove", String(index));
-      remove.setAttribute("aria-label", "remove media");
-      remove.setAttribute("title", "remove media");
+      remove.setAttribute("aria-label", i18n.removeMedia);
+      remove.setAttribute("title", i18n.removeMedia);
       remove.innerHTML = closeIcon;
 
       row.appendChild(thumb);
       row.appendChild(remove);
       mediaList.appendChild(row);
     });
-    setNotice(attachments.length + "/" + maxMedia + " media uploaded", "success");
+    setNotice(formatTemplate(i18n.mediaUploaded, attachments.length, maxMedia), "success");
     updatePreviewMedia();
     syncLibraryAttachButtons();
   };
@@ -5518,7 +5565,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     payload.append("file", file);
     const res = await fetch("/media", { method: "POST", body: payload });
     if (!res.ok) {
-      let message = "upload failed (" + res.status + ")";
+      let message = i18n.uploadFailed + " (" + res.status + ")";
       try {
         const body = await res.json();
         if (body && typeof body.error === "string" && body.error.trim() !== "") {
@@ -5535,13 +5582,13 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       return;
     }
     if (attachments.length >= maxMedia) {
-      setNotice("max " + maxMedia + " files", "error");
+      setNotice(formatTemplate(i18n.maxFiles, maxMedia), "error");
       return;
     }
 
     uploadInFlight += 1;
     setActionsEnabled(false);
-    setNotice("uploading " + file.name + "...");
+    setNotice(formatTemplate(i18n.uploadingFile, file.name));
 
     try {
       const uploaded = await uploadMediaFile(file);
@@ -5555,7 +5602,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       };
 
       if (item.id === "") {
-        throw new Error("upload failed: missing media id");
+        throw new Error(i18n.uploadFailedMissingID);
       }
 
       attachments.push(item);
@@ -5564,7 +5611,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       renderMediaList();
       upsertLibraryItem(item, false);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "upload failed";
+      const message = err instanceof Error ? err.message : i18n.uploadFailed;
       setNotice(message, "error");
     } finally {
       uploadInFlight -= 1;
@@ -5575,7 +5622,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
   const processSelectedFiles = async (rawFiles) => {
     const files = rawFiles.filter((file) => isSupportedMediaFile(file));
     if (files.length === 0) {
-      setNotice("only image/video files are supported", "error");
+      setNotice(i18n.unsupportedMedia, "error");
       return;
     }
 
@@ -5707,7 +5754,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         return;
       }
       if (attachments.length >= maxMedia) {
-        setNotice("max " + maxMedia + " files", "error");
+        setNotice(formatTemplate(i18n.maxFiles, maxMedia), "error");
         return;
       }
       const itemNode = target.closest("[data-media-library-item]");
@@ -5728,7 +5775,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       try {
         const res = await fetch("/media/" + encodeURIComponent(deleteID), { method: "DELETE" });
         if (!res.ok) {
-          let message = "delete failed (" + res.status + ")";
+          let message = i18n.deleteFailed + " (" + res.status + ")";
           try {
             const payload = await res.json();
             if (payload && typeof payload.error === "string" && payload.error.trim() !== "") {
@@ -5747,9 +5794,9 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         } else {
           syncLibraryAttachButtons();
         }
-        setNotice("media deleted", "success");
+        setNotice(i18n.mediaDeleted, "success");
       } catch (err) {
-        const message = err instanceof Error ? err.message : "delete failed";
+        const message = err instanceof Error ? err.message : i18n.deleteFailed;
         setNotice(message, "error");
       } finally {
         deleteButton.removeAttribute("disabled");
@@ -5825,7 +5872,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
   form.addEventListener("submit", (event) => {
     if (uploadInFlight > 0) {
       event.preventDefault();
-      setNotice("wait for uploads to finish", "error");
+      setNotice(i18n.waitUploads, "error");
       return;
     }
     const submitter = event.submitter;
@@ -5913,6 +5960,16 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		"previewMarkdown": func(raw string) template.HTML {
 			return template.HTML(textfmt.MarkdownToPreviewHTML(raw))
 		},
+		"t": func(key string, args ...any) string {
+			return uiMessage(uiLang, key, args...)
+		},
+		"toJSON": func(v any) template.JS {
+			raw, err := json.Marshal(v)
+			if err != nil {
+				return template.JS("null")
+			}
+			return template.JS(raw)
+		},
 	}).Parse(tpl)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
@@ -5920,6 +5977,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	type pageData struct {
+		Lang                      string
 		View                      string
 		ActiveNavView             string
 		UITimezone                string
@@ -5966,6 +6024,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		MediaTotalSizeLabel       string
 		NextRunLabel              string
 		CalendarMonthLabel        string
+		WeekdayLabels             []string
 		CalendarWeeks             [][]calendarDay
 		PrevMonthParam            string
 		NextMonthParam            string
@@ -5977,8 +6036,11 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		SelectedDayItems          []dayDetailItem
 		SelectedDayPendingItems   []dayDetailItem
 		SelectedDayPublishedItems []dayDetailItem
+		DatePickerMonthNames      []string
+		DatePickerWeekdayNames    []string
 	}
 	_ = t.Execute(w, pageData{
+		Lang:                      uiLang,
 		View:                      view,
 		ActiveNavView:             activeNavView,
 		UITimezone:                uiTimezone,
@@ -6025,6 +6087,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		MediaTotalSizeLabel:       mediaTotalSizeLabel,
 		NextRunLabel:              nextRunLabel,
 		CalendarMonthLabel:        calendarMonthLabel,
+		WeekdayLabels:             weekdayLabels,
 		CalendarWeeks:             calendarWeeks,
 		PrevMonthParam:            prevMonthParam,
 		NextMonthParam:            nextMonthParam,
@@ -6036,7 +6099,394 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		SelectedDayItems:          selectedDayItems,
 		SelectedDayPendingItems:   selectedDayPendingItems,
 		SelectedDayPublishedItems: selectedDayPublishedItems,
+		DatePickerMonthNames:      datePickerMonthNames,
+		DatePickerWeekdayNames:    datePickerWeekdayNames,
 	})
+}
+
+var uiMessages = map[string]map[string]string{
+	"en": {
+		"aria.primary_navigation":             "Primary navigation",
+		"aria.day_detail":                     "Day detail",
+		"aria.live_preview":                   "Live preview",
+		"nav.calendar":                        "calendar",
+		"nav.scheduled":                       "scheduled",
+		"nav.drafts":                          "drafts",
+		"nav.failed":                          "failed",
+		"nav.settings":                        "settings",
+		"header.calendar":                     "CALENDAR",
+		"header.scheduled":                    "SCHEDULED",
+		"header.drafts":                       "DRAFTS",
+		"header.failed":                       "FAILED",
+		"header.settings":                     "SETTINGS",
+		"header.new_post":                     "NEW POST",
+		"common.back":                         "back",
+		"common.today":                        "today",
+		"common.create_post":                  "create_post",
+		"common.save_draft":                   "save_draft",
+		"common.schedule":                     "schedule",
+		"common.update_schedule":              "update_schedule",
+		"common.publish_now":                  "publish_now",
+		"common.delete":                       "delete",
+		"common.save":                         "save",
+		"common.no_date":                      "no date",
+		"common.media_count":                  "%d media",
+		"common.used":                         "used",
+		"common.used_count":                   "used %d",
+		"common.delete_media":                 "delete media",
+		"calendar.previous_month":             "Previous month",
+		"calendar.next_month":                 "Next month",
+		"calendar.scheduled_posts":            "%d scheduled posts",
+		"calendar.empty_day":                  "No posts for this day.",
+		"calendar.to_publish":                 "to publish (%d)",
+		"calendar.published":                  "published",
+		"calendar.published_count":            "published (%d)",
+		"calendar.delete_publication_confirm": "Delete this publication?",
+		"publications.empty":                  "No scheduled posts for the next %d days.",
+		"drafts.no_date_assigned":             "no date assigned",
+		"drafts.schedule_for_draft":           "scheduled at for draft %s",
+		"drafts.empty":                        "No drafts yet. Create ideas via API and they will appear here.",
+		"failed.mark_all":                     "mark all",
+		"failed.clear_all":                    "clear all",
+		"failed.requeue_selected":             "requeue selected",
+		"failed.delete_selected":              "delete selected",
+		"failed.select_publication":           "select failed publication %s",
+		"failed.attempts":                     "attempts %d/%d",
+		"failed.failed_at":                    "failed %s",
+		"failed.requeue":                      "requeue",
+		"failed.delete_confirm":               "Delete this failed publication?",
+		"failed.delete_selected_confirm":      "Delete selected failed publications?",
+		"failed.empty":                        "No failed posts in queue.",
+		"create.subtitle":                     "compose and schedule your content",
+		"create.edit_publication":             "edit publication",
+		"create.new_post":                     "new post",
+		"create.select_account":               "select account",
+		"create.select_network":               "select network",
+		"create.no_networks":                  "no networks",
+		"create.post_content":                 "post content",
+		"create.placeholder":                  "Write your post...",
+		"create.char_count_initial":           "// 0 chars",
+		"create.scheduled_at":                 "scheduled at (%s)",
+		"create.media_attachment_max":         "media attachment (%d max)",
+		"create.add_media":                    "add media",
+		"create.drop_media_here":              "drop media here or click to upload",
+		"create.recent_library":               "recent library",
+		"create.attach_media":                 "attach media to post",
+		"create.attach_to_post":               "attach to post",
+		"create.no_media_uploaded":            "No media uploaded yet.",
+		"create.live_preview":                 "live preview",
+		"create.preview_default":              "Start typing to preview your post...",
+		"create.media_preview":                "media preview",
+		"create.preview_no_media":             "No media selected yet.",
+		"create.just_now":                     "just now",
+		"create.no_connected_accounts":        "no connected accounts. connect one in settings first",
+		"create.chars_with_limit":             "// {0}/{1} chars ({2} limit)",
+		"create.chars_unknown":                "// {0} chars (network limit unknown)",
+		"create.remove_media_from_post":       "remove media from post",
+		"create.remove_from_post":             "remove from post",
+		"create.media_item":                   "media",
+		"create.remove_media":                 "remove media",
+		"create.media_uploaded":               "{0}/{1} media uploaded",
+		"create.upload_failed":                "upload failed",
+		"create.upload_failed_missing_id":     "upload failed: missing media id",
+		"create.max_files":                    "max {0} files",
+		"create.uploading_file":               "uploading {0}...",
+		"create.unsupported_media":            "only image/video files are supported",
+		"create.delete_failed":                "delete failed",
+		"create.media_deleted":                "media deleted",
+		"create.wait_uploads":                 "wait for uploads to finish",
+		"settings.preferences":                "preferences",
+		"settings.timezone":                   "timezone",
+		"settings.timezone_label":             "Timezone (IANA)",
+		"settings.save_timezone":              "save timezone",
+		"settings.use_browser_timezone":       "use browser timezone",
+		"settings.current_timezone":           "current timezone: %s",
+		"settings.accounts":                   "accounts",
+		"settings.connected_total":            "%d connected · %d total",
+		"settings.status.connected":           "connected",
+		"settings.status.disconnected":        "disconnected",
+		"settings.status.error":               "error",
+		"settings.x_premium":                  "x premium (long posts)",
+		"settings.disconnect_account":         "disconnect account",
+		"settings.disconnect":                 "disconnect",
+		"settings.connect_account":            "connect account",
+		"settings.connect":                    "connect",
+		"settings.delete_account_confirm":     "Delete account?",
+		"settings.delete_account":             "delete account",
+		"settings.no_accounts":                "No accounts connected yet.",
+		"settings.connect_via_oauth":          "connect via oauth",
+		"settings.connect_x":                  "connect x",
+		"settings.connect_linkedin":           "connect linkedin",
+		"settings.connect_facebook":           "connect facebook",
+		"settings.connect_instagram":          "connect instagram",
+		"settings.media_library":              "media library",
+		"settings.media_summary":              "%d files · %d in use · %s",
+		"settings.open_media":                 "open media",
+		"datepicker.month_year_separator":     " ",
+		"datepicker.previous_month":           "previous month",
+		"datepicker.next_month":               "next month",
+		"datepicker.clear":                    "clear",
+		"datepicker.today":                    "today",
+		"datepicker.apply":                    "apply",
+		"datepicker.open":                     "open date picker",
+		"stats.next_run.none":                 "No upcoming run",
+	},
+	"es": {
+		"aria.primary_navigation":             "Navegacion principal",
+		"aria.day_detail":                     "Detalle del dia",
+		"aria.live_preview":                   "Vista previa en vivo",
+		"nav.calendar":                        "calendario",
+		"nav.scheduled":                       "programadas",
+		"nav.drafts":                          "borradores",
+		"nav.failed":                          "fallidas",
+		"nav.settings":                        "ajustes",
+		"header.calendar":                     "CALENDARIO",
+		"header.scheduled":                    "PROGRAMADAS",
+		"header.drafts":                       "BORRADORES",
+		"header.failed":                       "FALLIDAS",
+		"header.settings":                     "AJUSTES",
+		"header.new_post":                     "NUEVA PUBLICACION",
+		"common.back":                         "volver",
+		"common.today":                        "hoy",
+		"common.create_post":                  "crear_post",
+		"common.save_draft":                   "guardar_borrador",
+		"common.schedule":                     "programar",
+		"common.update_schedule":              "actualizar_programacion",
+		"common.publish_now":                  "publicar_ahora",
+		"common.delete":                       "eliminar",
+		"common.save":                         "guardar",
+		"common.no_date":                      "sin fecha",
+		"common.media_count":                  "%d media",
+		"common.used":                         "en uso",
+		"common.used_count":                   "en uso %d",
+		"common.delete_media":                 "eliminar media",
+		"calendar.previous_month":             "mes anterior",
+		"calendar.next_month":                 "mes siguiente",
+		"calendar.scheduled_posts":            "%d publicaciones programadas",
+		"calendar.empty_day":                  "No hay publicaciones para este dia.",
+		"calendar.to_publish":                 "por publicar (%d)",
+		"calendar.published":                  "publicadas",
+		"calendar.published_count":            "publicadas (%d)",
+		"calendar.delete_publication_confirm": "Eliminar esta publicacion?",
+		"publications.empty":                  "No hay publicaciones programadas para los proximos %d dias.",
+		"drafts.no_date_assigned":             "sin fecha asignada",
+		"drafts.schedule_for_draft":           "programar fecha para borrador %s",
+		"drafts.empty":                        "No hay borradores aun. Crea ideas por API y apareceran aqui.",
+		"failed.mark_all":                     "marcar todas",
+		"failed.clear_all":                    "limpiar",
+		"failed.requeue_selected":             "reencolar seleccionadas",
+		"failed.delete_selected":              "eliminar seleccionadas",
+		"failed.select_publication":           "seleccionar publicacion fallida %s",
+		"failed.attempts":                     "intentos %d/%d",
+		"failed.failed_at":                    "fallo %s",
+		"failed.requeue":                      "reencolar",
+		"failed.delete_confirm":               "Eliminar esta publicacion fallida?",
+		"failed.delete_selected_confirm":      "Eliminar publicaciones fallidas seleccionadas?",
+		"failed.empty":                        "No hay publicaciones fallidas en cola.",
+		"create.subtitle":                     "redacta y programa tu contenido",
+		"create.edit_publication":             "editar publicacion",
+		"create.new_post":                     "nueva publicacion",
+		"create.select_account":               "seleccionar cuenta",
+		"create.select_network":               "seleccionar red",
+		"create.no_networks":                  "sin redes",
+		"create.post_content":                 "contenido de la publicacion",
+		"create.placeholder":                  "Escribe tu publicacion...",
+		"create.char_count_initial":           "// 0 caracteres",
+		"create.scheduled_at":                 "programada para (%s)",
+		"create.media_attachment_max":         "adjuntos multimedia (%d max)",
+		"create.add_media":                    "anadir multimedia",
+		"create.drop_media_here":              "suelta multimedia aqui o haz click para subir",
+		"create.recent_library":               "biblioteca reciente",
+		"create.attach_media":                 "adjuntar multimedia a la publicacion",
+		"create.attach_to_post":               "adjuntar a la publicacion",
+		"create.no_media_uploaded":            "Aun no hay multimedia subida.",
+		"create.live_preview":                 "vista previa en vivo",
+		"create.preview_default":              "Empieza a escribir para previsualizar tu publicacion...",
+		"create.media_preview":                "vista previa multimedia",
+		"create.preview_no_media":             "No hay multimedia seleccionada.",
+		"create.just_now":                     "justo ahora",
+		"create.no_connected_accounts":        "no hay cuentas conectadas. conecta una primero en ajustes",
+		"create.chars_with_limit":             "// {0}/{1} caracteres (limite {2})",
+		"create.chars_unknown":                "// {0} caracteres (limite de red desconocido)",
+		"create.remove_media_from_post":       "quitar multimedia de la publicacion",
+		"create.remove_from_post":             "quitar de la publicacion",
+		"create.media_item":                   "multimedia",
+		"create.remove_media":                 "quitar multimedia",
+		"create.media_uploaded":               "{0}/{1} multimedia subida",
+		"create.upload_failed":                "subida fallida",
+		"create.upload_failed_missing_id":     "subida fallida: falta id de multimedia",
+		"create.max_files":                    "maximo {0} archivos",
+		"create.uploading_file":               "subiendo {0}...",
+		"create.unsupported_media":            "solo se soportan imagenes o videos",
+		"create.delete_failed":                "eliminacion fallida",
+		"create.media_deleted":                "multimedia eliminada",
+		"create.wait_uploads":                 "espera a que terminen las subidas",
+		"settings.preferences":                "preferencias",
+		"settings.timezone":                   "zona horaria",
+		"settings.timezone_label":             "Zona horaria (IANA)",
+		"settings.save_timezone":              "guardar zona horaria",
+		"settings.use_browser_timezone":       "usar zona horaria del navegador",
+		"settings.current_timezone":           "zona horaria actual: %s",
+		"settings.accounts":                   "cuentas",
+		"settings.connected_total":            "%d conectadas · %d total",
+		"settings.status.connected":           "conectado",
+		"settings.status.disconnected":        "desconectado",
+		"settings.status.error":               "error",
+		"settings.x_premium":                  "x premium (posts largos)",
+		"settings.disconnect_account":         "desconectar cuenta",
+		"settings.disconnect":                 "desconectar",
+		"settings.connect_account":            "conectar cuenta",
+		"settings.connect":                    "conectar",
+		"settings.delete_account_confirm":     "Eliminar cuenta?",
+		"settings.delete_account":             "eliminar cuenta",
+		"settings.no_accounts":                "Aun no hay cuentas conectadas.",
+		"settings.connect_via_oauth":          "conectar via oauth",
+		"settings.connect_x":                  "conectar x",
+		"settings.connect_linkedin":           "conectar linkedin",
+		"settings.connect_facebook":           "conectar facebook",
+		"settings.connect_instagram":          "conectar instagram",
+		"settings.media_library":              "biblioteca multimedia",
+		"settings.media_summary":              "%d archivos · %d en uso · %s",
+		"settings.open_media":                 "abrir multimedia",
+		"datepicker.month_year_separator":     " de ",
+		"datepicker.previous_month":           "mes anterior",
+		"datepicker.next_month":               "mes siguiente",
+		"datepicker.clear":                    "limpiar",
+		"datepicker.today":                    "hoy",
+		"datepicker.apply":                    "aplicar",
+		"datepicker.open":                     "abrir selector de fecha",
+		"stats.next_run.none":                 "Sin proxima ejecucion",
+	},
+}
+
+func preferredUILanguage(rawAcceptLanguage string) string {
+	type candidate struct {
+		lang  string
+		q     float64
+		order int
+	}
+	best := candidate{lang: "en", q: -1, order: 1 << 30}
+	parts := strings.Split(rawAcceptLanguage, ",")
+	for index, part := range parts {
+		token := strings.TrimSpace(part)
+		if token == "" {
+			continue
+		}
+		langTag := token
+		q := 1.0
+		if semi := strings.Index(token, ";"); semi >= 0 {
+			langTag = strings.TrimSpace(token[:semi])
+			params := strings.Split(token[semi+1:], ";")
+			for _, param := range params {
+				p := strings.TrimSpace(param)
+				if len(p) < 3 || !strings.HasPrefix(strings.ToLower(p), "q=") {
+					continue
+				}
+				if parsed, err := strconv.ParseFloat(strings.TrimSpace(p[2:]), 64); err == nil {
+					q = parsed
+				}
+			}
+		}
+		lang := normalizeUILanguage(langTag)
+		if lang == "" {
+			continue
+		}
+		if q > best.q || (q == best.q && index < best.order) {
+			best = candidate{lang: lang, q: q, order: index}
+		}
+	}
+	return best.lang
+}
+
+func normalizeUILanguage(rawTag string) string {
+	tag := strings.ToLower(strings.TrimSpace(rawTag))
+	if tag == "" {
+		return ""
+	}
+	if tag == "*" {
+		return "en"
+	}
+	if cut := strings.IndexAny(tag, "-_"); cut >= 0 {
+		tag = tag[:cut]
+	}
+	switch tag {
+	case "en", "es":
+		return tag
+	default:
+		return ""
+	}
+}
+
+func uiMessage(lang, key string, args ...any) string {
+	catalog := uiMessages["en"]
+	if specific, ok := uiMessages[lang]; ok {
+		catalog = specific
+	}
+	msg, ok := catalog[key]
+	if !ok {
+		msg = uiMessages["en"][key]
+	}
+	if msg == "" {
+		msg = key
+	}
+	if len(args) == 0 {
+		return msg
+	}
+	return fmt.Sprintf(msg, args...)
+}
+
+func localizedCalendarMonthLabel(localDate time.Time, lang string) string {
+	monthNames := []string{
+		"January", "February", "March", "April", "May", "June",
+		"July", "August", "September", "October", "November", "December",
+	}
+	if lang == "es" {
+		monthNames = []string{
+			"Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+			"Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+		}
+	}
+	index := int(localDate.Month()) - 1
+	if index < 0 || index >= len(monthNames) {
+		return strings.ToUpper(localDate.Format("January 2006"))
+	}
+	return strings.ToUpper(fmt.Sprintf("%s %d", monthNames[index], localDate.Year()))
+}
+
+func localizedSelectedDayLabel(localDate time.Time, lang string) string {
+	weekdayShort := []string{"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"}
+	monthShort := []string{"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"}
+	if lang == "es" {
+		weekdayShort = []string{"Dom", "Lun", "Mar", "Mie", "Jue", "Vie", "Sab"}
+		monthShort = []string{"Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"}
+	}
+	weekdayIdx := int(localDate.Weekday())
+	monthIdx := int(localDate.Month()) - 1
+	if weekdayIdx < 0 || weekdayIdx >= len(weekdayShort) || monthIdx < 0 || monthIdx >= len(monthShort) {
+		return strings.ToUpper(localDate.Format("Mon 02 Jan 2006"))
+	}
+	return strings.ToUpper(fmt.Sprintf("%s %02d %s %d", weekdayShort[weekdayIdx], localDate.Day(), monthShort[monthIdx], localDate.Year()))
+}
+
+func weekdayHeaders(lang string) []string {
+	if lang == "es" {
+		return []string{"Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"}
+	}
+	return []string{"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"}
+}
+
+func datePickerMonthLabels(lang string) []string {
+	if lang == "es" {
+		return []string{"enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"}
+	}
+	return []string{"january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"}
+}
+
+func datePickerWeekdayLabels(lang string) []string {
+	if lang == "es" {
+		return []string{"L", "M", "X", "J", "V", "S", "D"}
+	}
+	return []string{"M", "T", "W", "T", "F", "S", "S"}
 }
 
 func parseCreatePostRequest(r *http.Request) (createPostRequest, bool, error) {
