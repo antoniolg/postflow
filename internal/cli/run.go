@@ -30,6 +30,7 @@ type scheduleResponse struct {
 
 type postDTO struct {
 	ID          string `json:"id"`
+	AccountID   string `json:"account_id"`
 	Platform    string `json:"platform"`
 	Status      string `json:"status"`
 	Text        string `json:"text"`
@@ -178,13 +179,13 @@ func runPosts(ctx context.Context, client *APIClient, cfg config, args []string,
 func runPostsCreate(ctx context.Context, client *APIClient, cfg config, args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("posts create", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	var platform string
+	var accountID string
 	var text string
 	var scheduledAt string
 	var maxAttempts int
 	var idempotencyKey string
 	var mediaIDs stringListFlag
-	fs.StringVar(&platform, "platform", "x", "Target platform")
+	fs.StringVar(&accountID, "account-id", "", "Target account ID")
 	fs.StringVar(&text, "text", "", "Post content")
 	fs.StringVar(&scheduledAt, "scheduled-at", "", "Scheduled datetime (RFC3339)")
 	fs.IntVar(&maxAttempts, "max-attempts", 0, "Max publish retries")
@@ -197,11 +198,15 @@ func runPostsCreate(ctx context.Context, client *APIClient, cfg config, args []s
 		fmt.Fprintln(stderr, "--text is required")
 		return 2
 	}
+	if strings.TrimSpace(accountID) == "" {
+		fmt.Fprintln(stderr, "--account-id is required")
+		return 2
+	}
 
 	payload := map[string]any{
-		"platform":  platform,
-		"text":      text,
-		"media_ids": []string(mediaIDs),
+		"account_id": strings.TrimSpace(accountID),
+		"text":       text,
+		"media_ids":  []string(mediaIDs),
 	}
 	if strings.TrimSpace(scheduledAt) != "" {
 		payload["scheduled_at"] = strings.TrimSpace(scheduledAt)
@@ -234,12 +239,12 @@ func runPostsCreate(ctx context.Context, client *APIClient, cfg config, args []s
 func runPostsValidate(ctx context.Context, client *APIClient, cfg config, args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("posts validate", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	var platform string
+	var accountID string
 	var text string
 	var scheduledAt string
 	var maxAttempts int
 	var mediaIDs stringListFlag
-	fs.StringVar(&platform, "platform", "x", "Target platform")
+	fs.StringVar(&accountID, "account-id", "", "Target account ID")
 	fs.StringVar(&text, "text", "", "Post content")
 	fs.StringVar(&scheduledAt, "scheduled-at", "", "Scheduled datetime (RFC3339)")
 	fs.IntVar(&maxAttempts, "max-attempts", 0, "Max publish retries")
@@ -251,11 +256,15 @@ func runPostsValidate(ctx context.Context, client *APIClient, cfg config, args [
 		fmt.Fprintln(stderr, "--text is required")
 		return 2
 	}
+	if strings.TrimSpace(accountID) == "" {
+		fmt.Fprintln(stderr, "--account-id is required")
+		return 2
+	}
 
 	payload := map[string]any{
-		"platform":  platform,
-		"text":      text,
-		"media_ids": []string(mediaIDs),
+		"account_id": strings.TrimSpace(accountID),
+		"text":       text,
+		"media_ids":  []string(mediaIDs),
 	}
 	if strings.TrimSpace(scheduledAt) != "" {
 		payload["scheduled_at"] = strings.TrimSpace(scheduledAt)
@@ -381,8 +390,8 @@ Commands:
 
 Examples:
   publisher-cli schedule list --from 2026-03-01T00:00:00Z --to 2026-03-31T23:59:59Z
-  publisher-cli posts create --text "hello world" --scheduled-at 2026-03-01T10:00:00Z
-  publisher-cli posts validate --text "draft check" --scheduled-at 2026-03-01T10:00:00Z
+  publisher-cli posts create --account-id acc_abc123 --text "hello world" --scheduled-at 2026-03-01T10:00:00Z
+  publisher-cli posts validate --account-id acc_abc123 --text "draft check" --scheduled-at 2026-03-01T10:00:00Z
   publisher-cli dlq list --limit 50
   publisher-cli dlq requeue --id dlq_abc123`)
 }

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/antoniolg/publisher/internal/domain"
+	"github.com/antoniolg/publisher/internal/publisher"
 )
 
 type validatePostResponse struct {
@@ -18,6 +19,7 @@ type validatePostResponse struct {
 }
 
 type normalizedPost struct {
+	AccountID   string   `json:"account_id"`
 	Platform    string   `json:"platform"`
 	Text        string   `json:"text"`
 	ScheduledAt string   `json:"scheduled_at"`
@@ -31,13 +33,23 @@ func (s Server) handleValidatePost(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, fmt.Errorf("invalid json body: %w", err))
 		return
 	}
-
-	platform := domain.Platform(strings.ToLower(strings.TrimSpace(req.Platform)))
-	if platform == "" {
-		platform = domain.PlatformX
+	if strings.TrimSpace(req.AccountID) == "" {
+		writeError(w, http.StatusBadRequest, errors.New("account_id is required"))
+		return
 	}
-	if platform != domain.PlatformX {
-		writeError(w, http.StatusBadRequest, errors.New("only platform 'x' is supported in this MVP"))
+
+	account, err := s.resolveTargetAccount(r.Context(), req.AccountID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, errors.New("account not found"))
+		return
+	}
+	if account.Status != domain.AccountStatusConnected {
+		writeError(w, http.StatusBadRequest, errors.New("account is not connected"))
+		return
+	}
+	provider, ok := s.providerRegistry().Get(account.Platform)
+	if !ok {
+		writeError(w, http.StatusBadRequest, errors.New("provider is not configured for account platform"))
 		return
 	}
 
@@ -57,7 +69,8 @@ func (s Server) handleValidatePost(w http.ResponseWriter, r *http.Request) {
 		scheduledAt = parsed
 	}
 
-	if _, err := s.Store.GetMediaByIDs(r.Context(), req.MediaIDs); err != nil {
+	mediaItems, err := s.Store.GetMediaByIDs(r.Context(), req.MediaIDs)
+	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
@@ -76,7 +89,11 @@ func (s Server) handleValidatePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	warnings := make([]string, 0)
+	warnings, err := provider.ValidateDraft(r.Context(), account, publisher.Draft{Text: text, Media: mediaItems})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
 	if scheduledAt.IsZero() {
 		warnings = append(warnings, "draft mode: no scheduled_at provided")
 	}
@@ -92,7 +109,8 @@ func (s Server) handleValidatePost(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, validatePostResponse{
 		Valid: true,
 		Normalized: normalizedPost{
-			Platform:    string(platform),
+			AccountID:   account.ID,
+			Platform:    string(account.Platform),
 			Text:        text,
 			ScheduledAt: normalizedScheduledAt,
 			MediaIDs:    req.MediaIDs,

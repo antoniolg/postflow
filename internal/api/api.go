@@ -16,6 +16,8 @@ import (
 
 	"github.com/antoniolg/publisher/internal/db"
 	"github.com/antoniolg/publisher/internal/domain"
+	"github.com/antoniolg/publisher/internal/publisher"
+	"github.com/antoniolg/publisher/internal/secure"
 )
 
 type Server struct {
@@ -26,6 +28,9 @@ type Server struct {
 	APIToken          string
 	UIBasicUser       string
 	UIBasicPass       string
+	Registry          *publisher.ProviderRegistry
+	Cipher            *secure.Cipher
+	PublicBaseURL     string
 }
 
 func (s Server) Handler() http.Handler {
@@ -43,6 +48,12 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("POST /posts", s.handleCreatePost)
 	mux.HandleFunc("POST /posts/", s.handlePostActions)
 	mux.HandleFunc("POST /posts/validate", s.handleValidatePost)
+	mux.HandleFunc("GET /accounts", s.handleListAccounts)
+	mux.HandleFunc("POST /accounts/static", s.handleCreateStaticAccount)
+	mux.HandleFunc("POST /accounts/", s.handleAccountActions)
+	mux.HandleFunc("DELETE /accounts/", s.handleDeleteAccount)
+	mux.HandleFunc("POST /oauth/", s.handleOAuthStart)
+	mux.HandleFunc("GET /oauth/", s.handleOAuthCallback)
 	mux.HandleFunc("GET /schedule", s.handleScheduleJSON)
 	mux.HandleFunc("GET /dlq", s.handleListDLQ)
 	mux.HandleFunc("POST /dlq/requeue", s.handleBulkRequeueDLQ)
@@ -69,14 +80,6 @@ func (s Server) handleUploadMedia(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	platform := domain.Platform(strings.ToLower(upload.Platform))
-	if platform == "" {
-		platform = domain.PlatformX
-	}
-	if platform != domain.PlatformX {
-		writeError(w, http.StatusBadRequest, errors.New("only platform 'x' is supported in this MVP"))
-		return
-	}
 	kind := strings.ToLower(upload.Kind)
 	if kind == "" {
 		kind = "video"
@@ -84,7 +87,6 @@ func (s Server) handleUploadMedia(w http.ResponseWriter, r *http.Request) {
 
 	created, err := s.Store.CreateMedia(r.Context(), domain.Media{
 		ID:           upload.MediaID,
-		Platform:     platform,
 		Kind:         kind,
 		OriginalName: upload.OriginalName,
 		StoragePath:  upload.StoragePath,
@@ -99,7 +101,6 @@ func (s Server) handleUploadMedia(w http.ResponseWriter, r *http.Request) {
 	mimeLower := strings.ToLower(strings.TrimSpace(created.MimeType))
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"id":            created.ID,
-		"platform":      created.Platform,
 		"kind":          created.Kind,
 		"original_name": created.OriginalName,
 		"storage_path":  created.StoragePath,
@@ -115,7 +116,7 @@ func (s Server) handleUploadMedia(w http.ResponseWriter, r *http.Request) {
 }
 
 type createPostRequest struct {
-	Platform    string   `json:"platform"`
+	AccountID   string   `json:"account_id"`
 	Text        string   `json:"text"`
 	ScheduledAt string   `json:"scheduled_at"`
 	MediaIDs    []string `json:"media_ids"`
@@ -134,16 +135,38 @@ func (s Server) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	platform := domain.Platform(strings.ToLower(req.Platform))
-	if platform == "" {
-		platform = domain.PlatformX
-	}
-	if platform != domain.PlatformX {
+	if strings.TrimSpace(req.AccountID) == "" {
 		if fromForm {
-			http.Redirect(w, r, createViewURL("", req.Text, req.ScheduledAt, req.ReturnTo, "only platform 'x' is supported in this MVP", ""), http.StatusSeeOther)
+			http.Redirect(w, r, createViewURL("", req.Text, req.ScheduledAt, req.ReturnTo, "account_id is required", ""), http.StatusSeeOther)
 			return
 		}
-		writeError(w, http.StatusBadRequest, errors.New("only platform 'x' is supported in this MVP"))
+		writeError(w, http.StatusBadRequest, errors.New("account_id is required"))
+		return
+	}
+	account, err := s.resolveTargetAccount(r.Context(), req.AccountID)
+	if err != nil {
+		if fromForm {
+			http.Redirect(w, r, createViewURL("", req.Text, req.ScheduledAt, req.ReturnTo, "account not found", ""), http.StatusSeeOther)
+			return
+		}
+		writeError(w, http.StatusBadRequest, errors.New("account not found"))
+		return
+	}
+	if account.Status != domain.AccountStatusConnected {
+		if fromForm {
+			http.Redirect(w, r, createViewURL("", req.Text, req.ScheduledAt, req.ReturnTo, "account is not connected", ""), http.StatusSeeOther)
+			return
+		}
+		writeError(w, http.StatusBadRequest, errors.New("account is not connected"))
+		return
+	}
+	provider, ok := s.providerRegistry().Get(account.Platform)
+	if !ok {
+		if fromForm {
+			http.Redirect(w, r, createViewURL("", req.Text, req.ScheduledAt, req.ReturnTo, "provider is not configured for account platform", ""), http.StatusSeeOther)
+			return
+		}
+		writeError(w, http.StatusBadRequest, errors.New("provider is not configured for account platform"))
 		return
 	}
 	if strings.TrimSpace(req.Text) == "" {
@@ -188,7 +211,16 @@ func (s Server) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	if _, err := s.Store.GetMediaByIDs(r.Context(), req.MediaIDs); err != nil {
+	mediaItems, err := s.Store.GetMediaByIDs(r.Context(), req.MediaIDs)
+	if err != nil {
+		if fromForm {
+			http.Redirect(w, r, createViewURL("", req.Text, req.ScheduledAt, req.ReturnTo, err.Error(), ""), http.StatusSeeOther)
+			return
+		}
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if _, err := provider.ValidateDraft(r.Context(), account, publisher.Draft{Text: req.Text, Media: mediaItems}); err != nil {
 		if fromForm {
 			http.Redirect(w, r, createViewURL("", req.Text, req.ScheduledAt, req.ReturnTo, err.Error(), ""), http.StatusSeeOther)
 			return
@@ -214,7 +246,8 @@ func (s Server) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := s.Store.CreatePost(r.Context(), db.CreatePostParams{
 		Post: domain.Post{
-			Platform:    platform,
+			AccountID:   account.ID,
+			Platform:    account.Platform,
 			Text:        req.Text,
 			Status:      defaultStatusForScheduledAt(scheduledAt),
 			ScheduledAt: scheduledAt,
@@ -768,6 +801,17 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+	accounts, err := s.Store.ListAccounts(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	connectedAccounts := make([]domain.SocialAccount, 0, len(accounts))
+	for _, account := range accounts {
+		if account.Status == domain.AccountStatusConnected {
+			connectedAccounts = append(connectedAccounts, account)
+		}
+	}
 	deadLetters, err := s.Store.ListDeadLetters(r.Context(), 200)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
@@ -1012,15 +1056,26 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	var editingPost *domain.Post
 	var createText string
 	var createScheduledLocal string
+	var createAccountID string
 	if editID != "" {
 		p, err := s.Store.GetPost(r.Context(), editID)
 		if err == nil {
 			editingPost = &p
 			createText = p.Text
+			createAccountID = strings.TrimSpace(p.AccountID)
 			if !p.ScheduledAt.IsZero() {
 				createScheduledLocal = p.ScheduledAt.In(uiLoc).Format("2006-01-02T15:04")
 			}
 		}
+	}
+	if qAccount := strings.TrimSpace(r.URL.Query().Get("account_id")); qAccount != "" {
+		createAccountID = qAccount
+	}
+	if createAccountID == "" && len(connectedAccounts) > 0 {
+		createAccountID = connectedAccounts[0].ID
+	}
+	if view == "create" && len(connectedAccounts) == 0 && createError == "" {
+		createError = "no connected accounts. connect one via /accounts or oauth first"
 	}
 	if qText := strings.TrimSpace(r.URL.Query().Get("text")); qText != "" {
 		createText = qText
@@ -3219,25 +3274,26 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       <div class="composer-layout">
         <section class="composer-main">
           <section class="editor">
-            <div class="editor-head">{{if .EditingPost}}edit publication{{else}}new post{{end}}</div>
-            <form class="editor-body" id="create-post-form" method="post" action="{{if .EditingPost}}/posts/{{.EditingPost.ID}}/edit{{else}}/posts{{end}}">
-              <input id="create-platform" type="hidden" name="platform" value="x" />
-              <input type="hidden" name="return_to" value="{{.ReturnTo}}" />
-              <div id="create-media-hidden"></div>
-              {{if .CreateError}}<div class="alert error">{{.CreateError}}</div>{{end}}
-              {{if .CreateSuccess}}<div class="alert success">{{.CreateSuccess}}</div>{{end}}
-              {{if .MediaError}}<div class="alert error">{{.MediaError}}</div>{{end}}
-              {{if .MediaSuccess}}<div class="alert success">{{.MediaSuccess}}</div>{{end}}
+	            <div class="editor-head">{{if .EditingPost}}edit publication{{else}}new post{{end}}</div>
+	            <form class="editor-body" id="create-post-form" method="post" action="{{if .EditingPost}}/posts/{{.EditingPost.ID}}/edit{{else}}/posts{{end}}">
+	              <input type="hidden" name="return_to" value="{{.ReturnTo}}" />
+	              <div id="create-media-hidden"></div>
+	              {{if .CreateError}}<div class="alert error">{{.CreateError}}</div>{{end}}
+	              {{if .CreateSuccess}}<div class="alert success">{{.CreateSuccess}}</div>{{end}}
+	              {{if .MediaError}}<div class="alert error">{{.MediaError}}</div>{{end}}
+	              {{if .MediaSuccess}}<div class="alert success">{{.MediaSuccess}}</div>{{end}}
 
-              <div class="field create-field create-field-networks">
-                <div class="composer-label">// select networks</div>
-                <div class="network-picker" id="create-network-picker">
-                  <button type="button" class="network-chip active" data-network-chip data-platform="x" aria-pressed="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4l11.733 16h4.267l-11.733-16zM4 20l6.768-6.768M20 4l-6.768 6.768"/></svg> X</button>
-                  <button type="button" class="network-chip disabled" disabled aria-disabled="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8a6 6 0 016 6v7h-4v-7a2 2 0 00-4 0v7h-4v-7a6 6 0 016-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg> LinkedIn</button>
-                  <button type="button" class="network-chip disabled" disabled aria-disabled="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg> Instagram</button>
-                  <button type="button" class="network-chip disabled" disabled aria-disabled="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z"/></svg> Facebook</button>
-                </div>
-              </div>
+	              <div class="field create-field create-field-networks">
+	                <div class="composer-label">// select account</div>
+	                <div class="network-picker" id="create-network-picker">
+	                  <button type="button" class="network-chip active" data-network-chip data-platform="x" aria-pressed="true" hidden>legacy</button>
+	                  <select id="create-account-select" name="account_id" required data-account-select>
+	                    {{range .Accounts}}
+	                    <option value="{{.ID}}" data-platform="{{.Platform}}" {{if eq .ID $.CreateAccountID}}selected{{end}}>{{.DisplayName}} · {{.Platform}}</option>
+	                    {{end}}
+	                  </select>
+	                </div>
+	              </div>
 
               <div class="field create-field create-field-content">
                 <div class="composer-text-wrap">
@@ -4168,8 +4224,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     return;
   }
 
-  const platformInput = document.getElementById("create-platform");
-  const networkChips = Array.from(document.querySelectorAll("[data-network-chip]"));
+  const accountSelect = document.getElementById("create-account-select");
   const previewNetwork = document.getElementById("preview-network");
   const textInput = document.getElementById("create-text");
   const charCount = document.getElementById("create-char-count");
@@ -4489,7 +4544,6 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 
   const uploadMediaFile = async (file) => {
     const payload = new FormData();
-    payload.append("platform", platformInput instanceof HTMLInputElement ? platformInput.value : "x");
     payload.append("kind", detectKind(file));
     payload.append("file", file);
     const res = await fetch("/media", { method: "POST", body: payload });
@@ -4673,31 +4727,20 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     }
   });
 
-  networkChips.forEach((chip) => {
-    if (!(chip instanceof HTMLButtonElement)) {
+  const updatePreviewNetwork = () => {
+    if (!(previewNetwork instanceof HTMLElement) || !(accountSelect instanceof HTMLSelectElement)) {
       return;
     }
-    chip.addEventListener("click", () => {
-      if (chip.disabled) {
-        return;
-      }
-      const platform = (chip.dataset.platform || "x").trim() || "x";
-      if (platformInput instanceof HTMLInputElement) {
-        platformInput.value = platform;
-      }
-      networkChips.forEach((item) => {
-        if (item instanceof HTMLButtonElement) {
-          item.classList.remove("active");
-          item.setAttribute("aria-pressed", "false");
-        }
-      });
-      chip.classList.add("active");
-      chip.setAttribute("aria-pressed", "true");
-      if (previewNetwork instanceof HTMLElement) {
-        previewNetwork.textContent = platform;
-      }
-    });
-  });
+    const selected = accountSelect.selectedOptions[0];
+    if (!(selected instanceof HTMLOptionElement)) {
+      return;
+    }
+    const platform = (selected.dataset.platform || "").trim();
+    previewNetwork.textContent = platform || selected.textContent || "account";
+  };
+  if (accountSelect instanceof HTMLSelectElement) {
+    accountSelect.addEventListener("change", updatePreviewNetwork);
+  }
 
   textInput.addEventListener("input", () => {
     updateCharCount();
@@ -4721,6 +4764,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
   updateCharCount();
   updatePreviewText();
   renderMediaList();
+  updatePreviewNetwork();
 })();
 
 (() => {
@@ -4804,7 +4848,9 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		CreateViewURL             string
 		ReturnTo                  string
 		BackURL                   string
+		Accounts                  []domain.SocialAccount
 		EditingPost               *domain.Post
+		CreateAccountID           string
 		CreateText                string
 		CreateScheduledLocal      string
 		CreateError               string
@@ -4856,7 +4902,9 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		CreateViewURL:             createViewURL,
 		ReturnTo:                  returnTo,
 		BackURL:                   backURL,
+		Accounts:                  connectedAccounts,
 		EditingPost:               editingPost,
+		CreateAccountID:           createAccountID,
 		CreateText:                createText,
 		CreateScheduledLocal:      createScheduledLocal,
 		CreateError:               createError,
@@ -4914,13 +4962,10 @@ func parseCreatePostRequest(r *http.Request) (createPostRequest, bool, error) {
 		return createPostRequest{}, true, fmt.Errorf("invalid form body: %w", err)
 	}
 	req := createPostRequest{
-		Platform: strings.TrimSpace(r.FormValue("platform")),
-		Text:     strings.TrimSpace(r.FormValue("text")),
-		Intent:   strings.ToLower(strings.TrimSpace(r.FormValue("intent"))),
-		ReturnTo: strings.TrimSpace(r.FormValue("return_to")),
-	}
-	if req.Platform == "" {
-		req.Platform = "x"
+		AccountID: strings.TrimSpace(r.FormValue("account_id")),
+		Text:      strings.TrimSpace(r.FormValue("text")),
+		Intent:    strings.ToLower(strings.TrimSpace(r.FormValue("intent"))),
+		ReturnTo:  strings.TrimSpace(r.FormValue("return_to")),
 	}
 	if raw := strings.TrimSpace(r.FormValue("scheduled_at_local")); raw != "" {
 		req.ScheduledAt = raw

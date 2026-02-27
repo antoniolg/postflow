@@ -16,7 +16,6 @@ type mcpListMediaInput struct {
 
 type mcpMediaSummary struct {
 	MediaID      string `json:"media_id"`
-	Platform     string `json:"platform"`
 	Kind         string `json:"kind"`
 	OriginalName string `json:"original_name"`
 	MimeType     string `json:"mime_type"`
@@ -44,7 +43,6 @@ type mcpDeleteMediaOutput struct {
 func toMCPMediaSummary(item mediaListItem) mcpMediaSummary {
 	return mcpMediaSummary{
 		MediaID:      item.ID,
-		Platform:     item.Platform,
 		Kind:         item.Kind,
 		OriginalName: item.OriginalName,
 		MimeType:     item.MimeType,

@@ -10,6 +10,7 @@ import (
 
 	"github.com/antoniolg/publisher/internal/db"
 	"github.com/antoniolg/publisher/internal/domain"
+	"github.com/antoniolg/publisher/internal/publisher"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -116,7 +117,7 @@ type mcpListFailedInput struct {
 }
 
 type mcpCreatePostInput struct {
-	Platform       string   `json:"platform,omitempty" jsonschema:"Target platform. Only x is supported."`
+	AccountID      string   `json:"account_id" jsonschema:"Target connected account ID."`
 	Text           string   `json:"text" jsonschema:"Post text content."`
 	ScheduledAt    string   `json:"scheduled_at,omitempty" jsonschema:"RFC3339 or datetime-local value. Empty means draft."`
 	MediaIDs       []string `json:"media_ids,omitempty" jsonschema:"Existing media IDs to attach."`
@@ -126,6 +127,7 @@ type mcpCreatePostInput struct {
 
 type mcpPostSummary struct {
 	ID          string `json:"id"`
+	AccountID   string `json:"account_id"`
 	Platform    string `json:"platform"`
 	Status      string `json:"status"`
 	Text        string `json:"text"`
@@ -253,12 +255,19 @@ func (s Server) mcpListFailedTool(ctx context.Context, _ *mcp.CallToolRequest, i
 }
 
 func (s Server) mcpCreatePostTool(ctx context.Context, _ *mcp.CallToolRequest, in mcpCreatePostInput) (*mcp.CallToolResult, mcpCreatePostOutput, error) {
-	platform := domain.Platform(strings.ToLower(strings.TrimSpace(in.Platform)))
-	if platform == "" {
-		platform = domain.PlatformX
+	if strings.TrimSpace(in.AccountID) == "" {
+		return nil, mcpCreatePostOutput{}, fmt.Errorf("account_id is required")
 	}
-	if platform != domain.PlatformX {
-		return nil, mcpCreatePostOutput{}, fmt.Errorf("only platform 'x' is supported in this MVP")
+	account, err := s.resolveTargetAccount(ctx, in.AccountID)
+	if err != nil {
+		return nil, mcpCreatePostOutput{}, fmt.Errorf("account not found")
+	}
+	if account.Status != domain.AccountStatusConnected {
+		return nil, mcpCreatePostOutput{}, fmt.Errorf("account is not connected")
+	}
+	provider, ok := s.providerRegistry().Get(account.Platform)
+	if !ok {
+		return nil, mcpCreatePostOutput{}, fmt.Errorf("provider is not configured for account platform")
 	}
 
 	text := strings.TrimSpace(in.Text)
@@ -276,7 +285,8 @@ func (s Server) mcpCreatePostTool(ctx context.Context, _ *mcp.CallToolRequest, i
 	}
 
 	mediaIDs := cleanMCPMediaIDs(in.MediaIDs)
-	if _, err := s.Store.GetMediaByIDs(ctx, mediaIDs); err != nil {
+	mediaItems, err := s.Store.GetMediaByIDs(ctx, mediaIDs)
+	if err != nil {
 		return nil, mcpCreatePostOutput{}, err
 	}
 
@@ -293,9 +303,13 @@ func (s Server) mcpCreatePostTool(ctx context.Context, _ *mcp.CallToolRequest, i
 		return nil, mcpCreatePostOutput{}, fmt.Errorf("idempotency key too long (max 128 chars)")
 	}
 
+	if _, err := provider.ValidateDraft(ctx, account, publisher.Draft{Text: text, Media: mediaItems}); err != nil {
+		return nil, mcpCreatePostOutput{}, err
+	}
 	result, err := s.Store.CreatePost(ctx, db.CreatePostParams{
 		Post: domain.Post{
-			Platform:    platform,
+			AccountID:   account.ID,
+			Platform:    account.Platform,
 			Text:        text,
 			Status:      defaultStatusForScheduledAt(scheduledAt),
 			ScheduledAt: scheduledAt,
@@ -317,6 +331,7 @@ func (s Server) mcpCreatePostTool(ctx context.Context, _ *mcp.CallToolRequest, i
 func toMCPPostSummary(post domain.Post) mcpPostSummary {
 	return mcpPostSummary{
 		ID:          post.ID,
+		AccountID:   post.AccountID,
 		Platform:    string(post.Platform),
 		Status:      string(post.Status),
 		Text:        strings.TrimSpace(post.Text),

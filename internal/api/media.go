@@ -22,7 +22,6 @@ const (
 
 type mediaListItem struct {
 	ID           string `json:"id"`
-	Platform     string `json:"platform"`
 	Kind         string `json:"kind"`
 	OriginalName string `json:"original_name"`
 	MimeType     string `json:"mime_type"`
@@ -84,7 +83,6 @@ func toMediaListItemWithUsage(media domain.Media, usageCount int, loc *time.Loca
 	}
 	return mediaListItem{
 		ID:           media.ID,
-		Platform:     string(media.Platform),
 		Kind:         media.Kind,
 		OriginalName: media.OriginalName,
 		MimeType:     mimeType,

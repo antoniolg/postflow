@@ -21,7 +21,6 @@ const (
 
 type mediaUpload struct {
 	MediaID      string
-	Platform     string
 	Kind         string
 	OriginalName string
 	StoragePath  string
@@ -45,7 +44,6 @@ func (s Server) saveUploadToDisk(r *http.Request) (_ mediaUpload, status int, er
 		return mediaUpload{}, http.StatusInternalServerError, err
 	}
 	upload := mediaUpload{MediaID: mediaID}
-	platformSet := false
 	kindSet := false
 
 	var out *os.File
@@ -69,16 +67,6 @@ func (s Server) saveUploadToDisk(r *http.Request) (_ mediaUpload, status int, er
 		}
 
 		switch part.FormName() {
-		case "platform":
-			platform, readErr := readMultipartField(part, maxUploadFieldBytes)
-			_ = part.Close()
-			if readErr != nil {
-				return mediaUpload{}, http.StatusBadRequest, fmt.Errorf("invalid platform field: %w", readErr)
-			}
-			if !platformSet {
-				upload.Platform = platform
-				platformSet = true
-			}
 		case "kind":
 			kind, readErr := readMultipartField(part, maxUploadFieldBytes)
 			_ = part.Close()
