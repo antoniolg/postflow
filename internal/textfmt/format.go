@@ -3,6 +3,7 @@ package textfmt
 import (
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 func MarkdownToPreviewHTML(input string) string {
@@ -11,6 +12,8 @@ func MarkdownToPreviewHTML(input string) string {
 	var plain strings.Builder
 	boldOpen := false
 	italicOpen := false
+	var boldMarker rune
+	var italicMarker rune
 
 	flushPlain := func() {
 		if plain.Len() == 0 {
@@ -22,8 +25,8 @@ func MarkdownToPreviewHTML(input string) string {
 
 	runes := []rune(source)
 	for i := 0; i < len(runes); {
-		if runes[i] == '\\' && i+1 < len(runes) && runes[i+1] == '*' {
-			plain.WriteRune('*')
+		if isEscapedDelimiter(runes, i) {
+			plain.WriteRune(runes[i+1])
 			i += 2
 			continue
 		}
@@ -33,31 +36,43 @@ func MarkdownToPreviewHTML(input string) string {
 			i++
 			continue
 		}
-		if runes[i] == '*' && italicOpen {
+		if italicOpen && runes[i] == italicMarker && canUseAsClosing(runes, i, italicMarker, 1) {
 			flushPlain()
 			out.WriteString("</em>")
 			italicOpen = false
+			italicMarker = 0
 			i++
 			continue
 		}
-		if runes[i] == '*' && i+1 < len(runes) && runes[i+1] == '*' && boldOpen {
+		if boldOpen && i+1 < len(runes) && runes[i] == boldMarker && runes[i+1] == boldMarker && canUseAsClosing(runes, i, boldMarker, 2) {
 			flushPlain()
 			out.WriteString("</strong>")
 			boldOpen = false
+			boldMarker = 0
 			i += 2
 			continue
 		}
-		if runes[i] == '*' && i+1 < len(runes) && runes[i+1] == '*' && hasClosingDoubleAsterisk(runes, i+2) {
+		if !boldOpen &&
+			i+1 < len(runes) &&
+			isMarkerRune(runes[i]) &&
+			runes[i+1] == runes[i] &&
+			canUseAsOpening(runes, i, runes[i], 2) &&
+			hasClosingDoubleDelimiter(runes, i+2, runes[i]) {
 			flushPlain()
 			out.WriteString("<strong>")
 			boldOpen = true
+			boldMarker = runes[i]
 			i += 2
 			continue
 		}
-		if runes[i] == '*' && hasClosingSingleAsterisk(runes, i+1) {
+		if !italicOpen &&
+			isMarkerRune(runes[i]) &&
+			canUseAsOpening(runes, i, runes[i], 1) &&
+			hasClosingSingleDelimiter(runes, i+1, runes[i]) {
 			flushPlain()
 			out.WriteString("<em>")
 			italicOpen = true
+			italicMarker = runes[i]
 			i++
 			continue
 		}
@@ -81,6 +96,8 @@ func MarkdownToRTF(input string) string {
 	var plain strings.Builder
 	boldOpen := false
 	italicOpen := false
+	var boldMarker rune
+	var italicMarker rune
 
 	out.WriteString("{\\rtf1\\ansi\\deff0 ")
 
@@ -94,8 +111,8 @@ func MarkdownToRTF(input string) string {
 
 	runes := []rune(source)
 	for i := 0; i < len(runes); {
-		if runes[i] == '\\' && i+1 < len(runes) && runes[i+1] == '*' {
-			plain.WriteRune('*')
+		if isEscapedDelimiter(runes, i) {
+			plain.WriteRune(runes[i+1])
 			i += 2
 			continue
 		}
@@ -105,31 +122,43 @@ func MarkdownToRTF(input string) string {
 			i++
 			continue
 		}
-		if runes[i] == '*' && italicOpen {
+		if italicOpen && runes[i] == italicMarker && canUseAsClosing(runes, i, italicMarker, 1) {
 			flushPlain()
 			out.WriteString("\\i0 ")
 			italicOpen = false
+			italicMarker = 0
 			i++
 			continue
 		}
-		if runes[i] == '*' && i+1 < len(runes) && runes[i+1] == '*' && boldOpen {
+		if boldOpen && i+1 < len(runes) && runes[i] == boldMarker && runes[i+1] == boldMarker && canUseAsClosing(runes, i, boldMarker, 2) {
 			flushPlain()
 			out.WriteString("\\b0 ")
 			boldOpen = false
+			boldMarker = 0
 			i += 2
 			continue
 		}
-		if runes[i] == '*' && i+1 < len(runes) && runes[i+1] == '*' && hasClosingDoubleAsterisk(runes, i+2) {
+		if !boldOpen &&
+			i+1 < len(runes) &&
+			isMarkerRune(runes[i]) &&
+			runes[i+1] == runes[i] &&
+			canUseAsOpening(runes, i, runes[i], 2) &&
+			hasClosingDoubleDelimiter(runes, i+2, runes[i]) {
 			flushPlain()
 			out.WriteString("\\b ")
 			boldOpen = true
+			boldMarker = runes[i]
 			i += 2
 			continue
 		}
-		if runes[i] == '*' && hasClosingSingleAsterisk(runes, i+1) {
+		if !italicOpen &&
+			isMarkerRune(runes[i]) &&
+			canUseAsOpening(runes, i, runes[i], 1) &&
+			hasClosingSingleDelimiter(runes, i+1, runes[i]) {
 			flushPlain()
 			out.WriteString("\\i ")
 			italicOpen = true
+			italicMarker = runes[i]
 			i++
 			continue
 		}
@@ -152,30 +181,74 @@ func normalizeMarkdownInput(input string) string {
 	return strings.ReplaceAll(strings.ReplaceAll(input, "\r\n", "\n"), "\r", "\n")
 }
 
-func hasClosingDoubleAsterisk(runes []rune, start int) bool {
+func hasClosingDoubleDelimiter(runes []rune, start int, marker rune) bool {
 	for i := start; i < len(runes)-1; i++ {
-		if runes[i] == '\\' {
+		if isEscapedDelimiter(runes, i) {
 			i++
 			continue
 		}
-		if runes[i] == '*' && runes[i+1] == '*' {
+		if runes[i] == marker && runes[i+1] == marker && canUseAsClosing(runes, i, marker, 2) {
 			return true
 		}
 	}
 	return false
 }
 
-func hasClosingSingleAsterisk(runes []rune, start int) bool {
+func hasClosingSingleDelimiter(runes []rune, start int, marker rune) bool {
 	for i := start; i < len(runes); i++ {
-		if runes[i] == '\\' {
+		if isEscapedDelimiter(runes, i) {
 			i++
 			continue
 		}
-		if runes[i] == '*' {
+		if runes[i] == marker && canUseAsClosing(runes, i, marker, 1) {
 			return true
 		}
 	}
 	return false
+}
+
+func isEscapedDelimiter(runes []rune, i int) bool {
+	if i+1 >= len(runes) || runes[i] != '\\' {
+		return false
+	}
+	return isMarkerRune(runes[i+1])
+}
+
+func isMarkerRune(r rune) bool {
+	return r == '*' || r == '_'
+}
+
+func canUseAsOpening(runes []rune, idx int, marker rune, width int) bool {
+	if marker != '_' {
+		return true
+	}
+	nextIdx := idx + width
+	if nextIdx >= len(runes) || unicode.IsSpace(runes[nextIdx]) {
+		return false
+	}
+	if idx == 0 {
+		return true
+	}
+	return !isWordRune(runes[idx-1])
+}
+
+func canUseAsClosing(runes []rune, idx int, marker rune, width int) bool {
+	if marker != '_' {
+		return true
+	}
+	prevIdx := idx - 1
+	if prevIdx < 0 || unicode.IsSpace(runes[prevIdx]) {
+		return false
+	}
+	nextIdx := idx + width
+	if nextIdx >= len(runes) {
+		return true
+	}
+	return !isWordRune(runes[nextIdx])
+}
+
+func isWordRune(r rune) bool {
+	return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_'
 }
 
 func escapeHTML(input string) string {

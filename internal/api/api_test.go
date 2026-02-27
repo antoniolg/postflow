@@ -1588,7 +1588,7 @@ func TestCreateViewPreviewRendersMarkdownFormatting(t *testing.T) {
 	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
 	h := srv.Handler()
 
-	previewText := url.QueryEscape("Hola **mundo** y *equipo*")
+	previewText := url.QueryEscape("Hola **mundo** y _equipo_")
 	req := httptest.NewRequest(http.MethodGet, "/?view=create&text="+previewText, nil)
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, req)

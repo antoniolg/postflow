@@ -13,7 +13,7 @@ import (
 )
 
 func TestFormatPostTextForPublishConvertsMarkdownToRTF(t *testing.T) {
-	got := formatPostTextForPublish("Hola **mundo** *equipo*")
+	got := formatPostTextForPublish("Hola **mundo** _equipo_")
 	want := "{\\rtf1\\ansi\\deff0 Hola \\b mundo\\b0  \\i equipo\\i0 }"
 	if got != want {
 		t.Fatalf("formatted text = %q, want %q", got, want)
@@ -53,7 +53,7 @@ func TestXProviderPublishSendsRTFText(t *testing.T) {
 		AccessTokenSecret: "token_secret",
 	}, domain.Post{
 		Platform: domain.PlatformX,
-		Text:     "Hola **mundo** *equipo*",
+		Text:     "Hola **mundo** _equipo_",
 	})
 	if err != nil {
 		t.Fatalf("publish: %v", err)

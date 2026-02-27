@@ -20,12 +20,39 @@ func TestMarkdownToPreviewHTMLSupportsMultiline(t *testing.T) {
 	}
 }
 
+func TestMarkdownToPreviewHTMLSupportsUnderscoreMarkers(t *testing.T) {
+	input := "Hola __mundo__ y _equipo_"
+	got := MarkdownToPreviewHTML(input)
+	want := "Hola <strong>mundo</strong> y <em>equipo</em>"
+	if got != want {
+		t.Fatalf("preview html underscore markers = %q, want %q", got, want)
+	}
+}
+
+func TestMarkdownToPreviewHTMLDoesNotTreatSnakeCaseAsItalic(t *testing.T) {
+	input := "usa variable snake_case aqui"
+	got := MarkdownToPreviewHTML(input)
+	want := "usa variable snake_case aqui"
+	if got != want {
+		t.Fatalf("preview html snake_case = %q, want %q", got, want)
+	}
+}
+
 func TestMarkdownToRTFSupportsBoldItalicAndEscaping(t *testing.T) {
 	input := "Hola **mundo** y *equipo* {ok}"
 	got := MarkdownToRTF(input)
 	want := "{\\rtf1\\ansi\\deff0 Hola \\b mundo\\b0  y \\i equipo\\i0  \\{ok\\}}"
 	if got != want {
 		t.Fatalf("rtf = %q, want %q", got, want)
+	}
+}
+
+func TestMarkdownToRTFSupportsUnderscoreMarkers(t *testing.T) {
+	input := "Hola __mundo__ y _equipo_"
+	got := MarkdownToRTF(input)
+	want := "{\\rtf1\\ansi\\deff0 Hola \\b mundo\\b0  y \\i equipo\\i0 }"
+	if got != want {
+		t.Fatalf("rtf underscore markers = %q, want %q", got, want)
 	}
 }
 

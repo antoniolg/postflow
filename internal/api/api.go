@@ -1496,6 +1496,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       justify-content: space-between;
       gap: 16px;
       align-items: center;
+      margin-bottom: 28px;
     }
     .title-row {
       display: inline-flex;
@@ -2844,6 +2845,9 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       font-size: 12px;
       color: #a8a8a8;
     }
+    .upload-notice:empty {
+      display: none;
+    }
     .upload-notice[data-state="error"] {
       color: #ffb0b9;
     }
@@ -2851,68 +2855,72 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       color: #8be7d7;
     }
     .media-list {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+      gap: 8px;
     }
     .media-item {
-      border: 0;
-      border-radius: 12px;
+      position: relative;
+      border-radius: 10px;
+      overflow: hidden;
       background: #2a2a2a;
-      padding: 8px 10px;
-      display: grid;
-      grid-template-columns: 44px minmax(0, 1fr) auto;
-      gap: 10px;
-      align-items: center;
+      border: 1px solid #323232;
+      aspect-ratio: 1 / 1;
     }
     .media-thumb {
-      width: 44px;
-      height: 44px;
-      border-radius: 8px;
-      background: #2d2d2d;
-      border: 0;
-      background-size: cover;
-      background-position: center;
+      width: 100%;
+      height: 100%;
+      border-radius: 0;
+      background: #1f1f1f;
       display: grid;
       place-items: center;
-      color: #a8a8a8;
-      font-size: 11px;
-      text-transform: uppercase;
-    }
-    .media-info {
-      min-width: 0;
-    }
-    .media-name {
-      font-size: 12px;
-      color: #ffffff;
-      white-space: nowrap;
-      text-overflow: ellipsis;
       overflow: hidden;
+      position: relative;
     }
-    .media-meta {
-      margin-top: 2px;
-      font-size: 11px;
+    .media-thumb img,
+    .media-thumb video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .media-thumb .settings-media-file-icon {
+      width: 24px;
+      height: 24px;
       color: #a8a8a8;
     }
-    .media-item-actions {
+    .media-thumb .settings-media-file-icon svg {
+      width: 16px;
+      height: 16px;
+    }
+    .media-thumb .settings-media-video-icon {
+      width: 28px;
+      height: 28px;
+    }
+    .media-thumb .settings-media-video-icon svg {
+      width: 13px;
+      height: 13px;
+    }
+    .media-item-remove {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      width: 22px;
+      height: 22px;
+      min-height: 22px;
+      border-radius: 999px;
+      padding: 0;
       display: inline-flex;
       align-items: center;
-      gap: 6px;
+      justify-content: center;
+      background: rgba(20, 20, 20, 0.9);
+      border: 1px solid rgba(255, 68, 68, 0.35);
+      color: #ffb7bf;
     }
-    .media-item-actions button {
-      padding: 5px 9px;
-      font-size: 11px;
-      min-height: 26px;
-    }
-    .media-item-actions .btn-secondary {
-      border: 0;
-      background: #2d2d2d;
-      color: #a8a8a8;
-    }
-    .media-item-actions .btn-danger {
-      border: 0;
-      background: #2d2d2d;
-      color: #ff4444;
+    .media-item-remove svg {
+      width: 12px;
+      height: 12px;
+      display: block;
     }
     .media-library-wrap {
       display: flex;
@@ -2943,6 +2951,9 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       padding: 0;
       display: block;
       cursor: pointer;
+    }
+    .create-media-card.in-use {
+      opacity: 0.9;
     }
     .create-media-card .media-library-thumb {
       width: 100%;
@@ -3444,6 +3455,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         flex-direction: row;
         align-items: flex-start;
         gap: 10px;
+        margin-bottom: 18px;
       }
       body[data-view="calendar"] .header {
         display: flex;
@@ -3936,7 +3948,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
                   <textarea id="create-text" name="text" required placeholder="Write your post...">{{.CreateText}}</textarea>
                   <div class="composer-text-meta">
                     <span id="create-char-count">// 0 chars</span>
-                    <span class="composer-format-btns">**bold** *italic*</span>
+                    <span class="composer-format-btns">**bold** _italic_</span>
                   </div>
                 </div>
               </div>
@@ -3954,14 +3966,14 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
                   <div class="media-upload-dropzone" id="create-media-dropzone" role="button" tabindex="0" aria-label="add media">
                     <input id="create-media-input" type="file" accept="image/*,video/*" multiple hidden />
                     <span class="media-upload-title">drop media here or click to upload</span>
-                    <span class="upload-notice" id="create-upload-notice">no media uploaded</span>
+                    <span class="upload-notice" id="create-upload-notice"></span>
                   </div>
                   <div class="media-list" id="create-media-list"></div>
                   <div class="media-library-wrap">
                     <div class="composer-label">// recent library</div>
                     <div class="media-library create-media-library-grid" id="create-media-library">
                       {{range .CreateRecentMedia}}
-                      <article class="media-library-item create-media-card {{if .InUse}}in-use{{end}}" data-media-library-item data-media-id="{{.ID}}" data-media-name="{{.OriginalName}}" data-media-size="{{.SizeBytes}}" data-media-mime="{{.MimeType}}" data-media-preview="{{.PreviewURL}}">
+                      <article class="create-media-card {{if .InUse}}in-use{{end}}" data-media-library-item data-media-id="{{.ID}}" data-media-name="{{.OriginalName}}" data-media-size="{{.SizeBytes}}" data-media-mime="{{.MimeType}}" data-media-preview="{{.PreviewURL}}">
                         <div class="media-library-thumb">
                           {{if .IsImage}}<img src="{{.PreviewURL}}" alt="{{.OriginalName}}" loading="lazy" />{{else if .IsVideo}}<video src="{{.PreviewURL}}" muted preload="metadata" playsinline></video><span class="settings-media-video-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="8 6 19 12 8 18"/></svg></span>{{else}}<span class="settings-media-file-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg></span>{{end}}
                         </div>
@@ -4992,7 +5004,6 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
   };
   const maxMedia = 4;
   let uploadInFlight = 0;
-  let replaceIndex = -1;
   const attachments = [];
 
   const formatBytes = (size) => {
@@ -5070,26 +5081,65 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     }
   });
 
-  const hasClosingDoubleAsterisk = (source, fromIndex) => {
-    for (let i = fromIndex; i < source.length - 1; i += 1) {
-      if (source[i] === "\\") {
+  const isMarker = (char) => char === "*" || char === "_";
+
+  const isWordChar = (char) => /[0-9A-Za-z_]/.test(char);
+
+  const isEscapedDelimiter = (source, index) => (
+    index + 1 < source.length &&
+    source[index] === "\\" &&
+    isMarker(source[index + 1])
+  );
+
+  const canUseAsOpening = (source, index, marker, width) => {
+    if (marker !== "_") {
+      return true;
+    }
+    const nextIndex = index + width;
+    if (nextIndex >= source.length || /\s/.test(source[nextIndex])) {
+      return false;
+    }
+    if (index === 0) {
+      return true;
+    }
+    return !isWordChar(source[index - 1]);
+  };
+
+  const canUseAsClosing = (source, index, marker, width) => {
+    if (marker !== "_") {
+      return true;
+    }
+    const prevIndex = index - 1;
+    if (prevIndex < 0 || /\s/.test(source[prevIndex])) {
+      return false;
+    }
+    const nextIndex = index + width;
+    if (nextIndex >= source.length) {
+      return true;
+    }
+    return !isWordChar(source[nextIndex]);
+  };
+
+  const hasClosingSingleMarker = (source, fromIndex, marker) => {
+    for (let i = fromIndex; i < source.length; i += 1) {
+      if (isEscapedDelimiter(source, i)) {
         i += 1;
         continue;
       }
-      if (source[i] === "*" && source[i + 1] === "*") {
+      if (source[i] === marker && canUseAsClosing(source, i, marker, 1)) {
         return true;
       }
     }
     return false;
   };
 
-  const hasClosingSingleAsterisk = (source, fromIndex) => {
-    for (let i = fromIndex; i < source.length; i += 1) {
-      if (source[i] === "\\") {
+  const hasClosingDoubleMarker = (source, fromIndex, marker) => {
+    for (let i = fromIndex; i < source.length - 1; i += 1) {
+      if (isEscapedDelimiter(source, i)) {
         i += 1;
         continue;
       }
-      if (source[i] === "*") {
+      if (source[i] === marker && source[i + 1] === marker && canUseAsClosing(source, i, marker, 2)) {
         return true;
       }
     }
@@ -5103,6 +5153,8 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     let i = 0;
     let boldOpen = false;
     let italicOpen = false;
+    let boldMarker = "";
+    let italicMarker = "";
 
     const flushPlain = () => {
       if (plain === "") {
@@ -5113,8 +5165,8 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     };
 
     while (i < source.length) {
-      if (source[i] === "\\" && i + 1 < source.length && source[i + 1] === "*") {
-        plain += "*";
+      if (isEscapedDelimiter(source, i)) {
+        plain += source[i + 1];
         i += 2;
         continue;
       }
@@ -5124,31 +5176,43 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         i += 1;
         continue;
       }
-      if (source[i] === "*" && italicOpen) {
+      if (italicOpen && source[i] === italicMarker && canUseAsClosing(source, i, italicMarker, 1)) {
         flushPlain();
         out += "</em>";
         italicOpen = false;
+        italicMarker = "";
         i += 1;
         continue;
       }
-      if (source[i] === "*" && i + 1 < source.length && source[i + 1] === "*" && boldOpen) {
+      if (boldOpen && i + 1 < source.length && source[i] === boldMarker && source[i + 1] === boldMarker && canUseAsClosing(source, i, boldMarker, 2)) {
         flushPlain();
         out += "</strong>";
         boldOpen = false;
+        boldMarker = "";
         i += 2;
         continue;
       }
-      if (source[i] === "*" && i + 1 < source.length && source[i + 1] === "*" && hasClosingDoubleAsterisk(source, i + 2)) {
+      if (!boldOpen &&
+          i + 1 < source.length &&
+          isMarker(source[i]) &&
+          source[i + 1] === source[i] &&
+          canUseAsOpening(source, i, source[i], 2) &&
+          hasClosingDoubleMarker(source, i + 2, source[i])) {
         flushPlain();
         out += "<strong>";
         boldOpen = true;
+        boldMarker = source[i];
         i += 2;
         continue;
       }
-      if (source[i] === "*" && hasClosingSingleAsterisk(source, i + 1)) {
+      if (!italicOpen &&
+          isMarker(source[i]) &&
+          canUseAsOpening(source, i, source[i], 1) &&
+          hasClosingSingleMarker(source, i + 1, source[i])) {
         flushPlain();
         out += "<em>";
         italicOpen = true;
+        italicMarker = source[i];
         i += 1;
         continue;
       }
@@ -5244,6 +5308,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
   const attachIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>';
   const detachIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 17H7a5 5 0 010-10h2"/><path d="M15 7h2a5 5 0 010 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/></svg>';
   const deleteIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
+  const closeIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
   const playIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="8 6 19 12 8 18"/></svg>';
   const fileIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>';
 
@@ -5363,7 +5428,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     }
 
     const row = document.createElement("article");
-    row.className = "media-library-item create-media-card";
+    row.className = "create-media-card";
     if (inUse) {
       row.classList.add("in-use");
     }
@@ -5421,7 +5486,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
   const renderMediaList = () => {
     if (attachments.length === 0) {
       mediaList.innerHTML = '<div class="empty">No media yet. Upload up to ' + maxMedia + " files.</div>";
-      setNotice("no media uploaded");
+      setNotice("");
       updatePreviewMedia();
       syncLibraryAttachButtons();
       return;
@@ -5429,46 +5494,25 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 
     mediaList.innerHTML = "";
     attachments.forEach((item, index) => {
-      const row = document.createElement("div");
+      const row = document.createElement("article");
       row.className = "media-item";
+      row.setAttribute("data-media-item", "");
+      row.setAttribute("aria-label", item.name || "media");
 
       const thumb = document.createElement("div");
       thumb.className = "media-thumb";
-      if (!item.previewUrl) {
-        thumb.textContent = "file";
-      } else {
-        thumb.style.backgroundImage = 'url("' + item.previewUrl + '")';
-      }
+      renderLibraryThumb(thumb, item);
 
-      const info = document.createElement("div");
-      info.className = "media-info";
-      const name = document.createElement("div");
-      name.className = "media-name";
-      name.textContent = item.name;
-      const meta = document.createElement("div");
-      meta.className = "media-meta";
-      meta.textContent = formatBytes(item.size) + " · " + (item.mime || "file");
-      info.appendChild(name);
-      info.appendChild(meta);
-
-      const actions = document.createElement("div");
-      actions.className = "media-item-actions";
-      const replace = document.createElement("button");
-      replace.type = "button";
-      replace.className = "btn-secondary";
-      replace.setAttribute("data-media-replace", String(index));
-      replace.textContent = "replace";
       const remove = document.createElement("button");
       remove.type = "button";
-      remove.className = "btn-danger";
+      remove.className = "btn-danger media-item-remove";
       remove.setAttribute("data-media-remove", String(index));
-      remove.textContent = "remove";
-      actions.appendChild(replace);
-      actions.appendChild(remove);
+      remove.setAttribute("aria-label", "remove media");
+      remove.setAttribute("title", "remove media");
+      remove.innerHTML = closeIcon;
 
       row.appendChild(thumb);
-      row.appendChild(info);
-      row.appendChild(actions);
+      row.appendChild(remove);
       mediaList.appendChild(row);
     });
     setNotice(attachments.length + "/" + maxMedia + " media uploaded", "success");
