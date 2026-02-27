@@ -1250,6 +1250,12 @@ func TestDefaultViewIsCalendar(t *testing.T) {
 	if !strings.Contains(body, "body[data-view=\"calendar\"] .main") {
 		t.Fatalf("expected calendar-specific main width rule")
 	}
+	if !strings.Contains(body, "height: 100vh;") || !strings.Contains(body, "align-self: flex-start;") {
+		t.Fatalf("expected desktop sidebar to stay viewport-height without stretching")
+	}
+	if !strings.Contains(body, "@media (max-width: 980px)") || !strings.Contains(body, "height: auto;") {
+		t.Fatalf("expected mobile sidebar override to disable fixed viewport height")
+	}
 	if !strings.Contains(body, "body[data-view=\"calendar\"] .calendar-layout") {
 		t.Fatalf("expected calendar-specific centered layout rule")
 	}

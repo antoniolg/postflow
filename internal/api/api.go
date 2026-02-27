@@ -1334,11 +1334,17 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     }
     .sidebar {
       width: 220px;
+      flex: 0 0 220px;
       border-right: 1px solid #242424;
       padding: 24px 16px;
       background: #1a1a1a;
       display: flex;
       flex-direction: column;
+      height: 100vh;
+      align-self: flex-start;
+      position: sticky;
+      top: 0;
+      overflow: hidden;
     }
     .logo {
       display: flex;
@@ -2839,7 +2845,106 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       padding-right: 2px;
     }
     .settings-media-library {
-      max-height: 440px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+      gap: 10px;
+      max-height: 520px;
+      overflow: auto;
+      padding-right: 2px;
+    }
+    .settings-media-card {
+      position: relative;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #252525;
+      border: 1px solid #323232;
+      aspect-ratio: 1 / 1;
+    }
+    .settings-media-open {
+      display: block;
+      width: 100%;
+      height: 100%;
+      text-decoration: none;
+    }
+    .settings-media-card .media-library-thumb {
+      width: 100%;
+      height: 100%;
+      border-radius: 0;
+      background: #1f1f1f;
+      position: relative;
+      display: grid;
+      place-items: center;
+    }
+    .settings-media-card .media-library-thumb img,
+    .settings-media-card .media-library-thumb video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .settings-media-video-icon {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 36px;
+      height: 36px;
+      border-radius: 999px;
+      background: rgba(0, 0, 0, 0.55);
+      color: #ffffff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+    }
+    .settings-media-video-icon svg {
+      width: 16px;
+      height: 16px;
+      display: block;
+      margin-left: 2px;
+    }
+    .settings-media-file-icon {
+      width: 30px;
+      height: 30px;
+      color: #d0d0d0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .settings-media-file-icon svg {
+      width: 18px;
+      height: 18px;
+      display: block;
+    }
+    .settings-media-overlay-actions {
+      position: absolute;
+      right: 8px;
+      top: 8px;
+      z-index: 1;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .settings-media-overlay-actions form {
+      margin: 0;
+    }
+    .settings-media-overlay-actions .settings-account-icon-btn {
+      width: 28px;
+      height: 28px;
+      min-height: 28px;
+      background: rgba(31, 31, 31, 0.88);
+      color: #ffb7bf;
+      border: 1px solid rgba(255, 68, 68, 0.35);
+    }
+    .settings-media-overlay-actions .settings-account-icon-btn svg {
+      width: 14px;
+      height: 14px;
+      display: block;
+    }
+    .settings-media-used {
+      background: rgba(20, 20, 20, 0.88);
+      color: #d0d0d0;
+      border: 1px solid rgba(180, 180, 180, 0.24);
     }
     .settings-accounts {
       display: grid;
@@ -3033,6 +3138,9 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       flex-direction: column;
       gap: 16px;
     }
+    body[data-view="create"] .preview-panel {
+      margin-top: 44px;
+    }
     .preview-head {
       padding: 0;
       border-bottom: 0;
@@ -3045,27 +3153,6 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       color: var(--text-secondary);
       font-weight: 600;
       margin-bottom: 6px;
-    }
-    .preview-platforms {
-      display: flex;
-      gap: 4px;
-      flex-wrap: wrap;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--text-secondary);
-    }
-    .preview-platforms span {
-      border-radius: 8px;
-      background: var(--bg-elevated, #2d2d2d);
-      padding: 6px 12px;
-      min-width: 24px;
-      text-align: center;
-      text-transform: uppercase;
-    }
-    .preview-platforms .active {
-      color: var(--text-primary);
-      background: var(--bg-elevated, #2d2d2d);
     }
     .preview-body {
       padding: 0;
@@ -3155,6 +3242,9 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       .sidebar {
         display: block;
         width: 100%;
+        height: auto;
+        align-self: stretch;
+        overflow: visible;
         border-right: 0;
         border-bottom: 1px solid #191e29;
         padding: 12px 12px 10px;
@@ -3321,6 +3411,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       }
       .preview-panel {
         padding: 0;
+        margin-top: 0;
       }
       .composer-submit-actions {
         display: flex;
@@ -3735,12 +3826,6 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         <aside class="preview-panel" aria-label="Live preview">
           <div class="preview-head">
             <div class="preview-title">// live preview</div>
-            <div class="preview-platforms">
-              <span class="active" id="preview-network">X</span>
-              <span>LI</span>
-              <span>IG</span>
-              <span>FB</span>
-            </div>
           </div>
           <div class="preview-body">
             <article class="preview-card">
@@ -3869,24 +3954,23 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
           <div class="meta">
             <span class="meta-soft">{{len .MediaLibrary}} files · {{.MediaInUseCount}} in use · {{.MediaTotalSizeLabel}}</span>
           </div>
-          <div class="media-library settings-media-library">
+          <div class="settings-media-library">
             {{range .MediaLibrary}}
-            <article class="media-library-item {{if .InUse}}in-use{{end}}">
-              <div class="media-library-thumb">
-                {{if .IsImage}}<img src="{{.PreviewURL}}" alt="{{.OriginalName}}" loading="lazy" />{{else if .IsVideo}}<span>video</span>{{else}}<span>file</span>{{end}}
-              </div>
-              <div class="media-library-info">
-                <div class="media-library-name">{{.OriginalName}}</div>
-                <div class="media-library-meta">{{.SizeLabel}} · {{.MimeType}} · {{.CreatedLabel}}</div>
-              </div>
-              <div class="media-library-actions">
-                <a class="btn-secondary" href="{{.PreviewURL}}" target="_blank" rel="noreferrer">view</a>
+            <article class="settings-media-card {{if .InUse}}in-use{{end}}">
+              <a class="settings-media-open" href="{{.PreviewURL}}" target="_blank" rel="noreferrer" aria-label="open media">
+                <div class="media-library-thumb">
+                  {{if .IsImage}}<img src="{{.PreviewURL}}" alt="{{.OriginalName}}" loading="lazy" />{{else if .IsVideo}}<video src="{{.PreviewURL}}" muted preload="metadata" playsinline></video><span class="settings-media-video-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="8 6 19 12 8 18"/></svg></span>{{else}}<span class="settings-media-file-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg></span>{{end}}
+                </div>
+              </a>
+              <div class="settings-media-overlay-actions">
                 {{if .InUse}}
-                <span class="pill media-pill-used">used {{.UsageCount}}</span>
+                <span class="pill media-pill-used settings-media-used">used {{.UsageCount}}</span>
                 {{else}}
                 <form method="post" action="/media/{{.ID}}/delete">
                   <input type="hidden" name="return_to" value="/?view=settings" />
-                  <button type="submit" class="btn-danger">delete</button>
+                  <button type="submit" class="btn-danger settings-account-icon-btn" aria-label="delete media" title="delete">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                  </button>
                 </form>
                 {{end}}
               </div>
@@ -4687,7 +4771,6 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
   const accountSelect = document.getElementById("create-account-select");
   const networkPicker = document.getElementById("create-network-picker");
   const networkChips = Array.from(document.querySelectorAll("[data-network-chip]")).filter((node) => node instanceof HTMLButtonElement);
-  const previewNetwork = document.getElementById("preview-network");
   const textInput = document.getElementById("create-text");
   const charCount = document.getElementById("create-char-count");
   const previewText = document.getElementById("preview-text");
@@ -5193,21 +5276,6 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     accountSelect.selectedIndex = 0;
   }
 
-  const platformLabel = (platform, fallbackLabel) => {
-    switch ((platform || "").toLowerCase()) {
-      case "x":
-        return "X";
-      case "linkedin":
-        return "LinkedIn";
-      case "facebook":
-        return "Facebook";
-      case "instagram":
-        return "Instagram";
-      default:
-        return fallbackLabel || platform || "account";
-    }
-  };
-
   const syncNetworkSelection = () => {
     if (!(accountSelect instanceof HTMLSelectElement)) {
       return;
@@ -5223,20 +5291,6 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       node.setAttribute("aria-checked", active ? "true" : "false");
       node.setAttribute("aria-pressed", active ? "true" : "false");
     });
-  };
-
-  const updatePreviewNetwork = () => {
-    if (!(previewNetwork instanceof HTMLElement) || !(accountSelect instanceof HTMLSelectElement)) {
-      return;
-    }
-    const selected = accountSelect.selectedOptions[0];
-    if (!(selected instanceof HTMLOptionElement)) {
-      previewNetwork.textContent = "account";
-      return;
-    }
-    const platform = (selected.dataset.platform || "").trim();
-    const fallbackLabel = (selected.textContent || "").trim();
-    previewNetwork.textContent = platformLabel(platform, fallbackLabel);
   };
 
   networkPicker?.addEventListener("click", (event) => {
@@ -5261,7 +5315,6 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
   if (accountSelect instanceof HTMLSelectElement) {
     accountSelect.addEventListener("change", () => {
       syncNetworkSelection();
-      updatePreviewNetwork();
     });
   }
 
@@ -5288,7 +5341,6 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
   updatePreviewText();
   renderMediaList();
   syncNetworkSelection();
-  updatePreviewNetwork();
 })();
 
 (() => {
