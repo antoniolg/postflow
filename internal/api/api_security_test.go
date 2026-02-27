@@ -2,12 +2,16 @@ package api
 
 import (
 	"encoding/base64"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/antoniolg/publisher/internal/db"
+	"github.com/antoniolg/publisher/internal/domain"
 )
 
 func TestAuthMiddlewareRejectsWhenMissingCredentials(t *testing.T) {
@@ -114,5 +118,43 @@ func TestRequestIDHeaderIsAlwaysPresent(t *testing.T) {
 	h.ServeHTTP(w, req)
 	if w.Header().Get("X-Request-Id") == "" {
 		t.Fatalf("expected X-Request-Id header to be set")
+	}
+}
+
+func TestAuthMiddlewareAllowsSignedMediaContentURL(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	mediaPath := filepath.Join(tempDir, "clip.txt")
+	if err := os.WriteFile(mediaPath, []byte("hello"), 0o644); err != nil {
+		t.Fatalf("write media file: %v", err)
+	}
+	created, err := store.CreateMedia(t.Context(), domain.Media{
+		Kind:         "image",
+		OriginalName: "clip.txt",
+		StoragePath:  mediaPath,
+		MimeType:     "text/plain",
+		SizeBytes:    5,
+	})
+	if err != nil {
+		t.Fatalf("create media: %v", err)
+	}
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3, APIToken: "secret-token"}
+	h := srv.Handler()
+
+	exp := time.Now().UTC().Add(10 * time.Minute).Unix()
+	payload := fmt.Sprintf("%s:%d", created.ID, exp)
+	sig := srv.credentialsCipher().SignString(payload)
+
+	req := httptest.NewRequest(http.MethodGet, "/media/"+created.ID+"/content?exp="+fmt.Sprintf("%d", exp)+"&sig="+sig, nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 with signed media url, got %d", w.Code)
 	}
 }

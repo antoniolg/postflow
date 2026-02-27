@@ -40,3 +40,25 @@ func TestNewCipherFromBase64RejectsWrongLength(t *testing.T) {
 		t.Fatalf("expected error for invalid key length")
 	}
 }
+
+func TestCipherSignAndVerifyString(t *testing.T) {
+	key := make([]byte, 32)
+	for i := range key {
+		key[i] = byte(i + 1)
+	}
+	cipher, err := NewCipher(key, 1)
+	if err != nil {
+		t.Fatalf("new cipher: %v", err)
+	}
+	message := "med_123:1234567890"
+	signature := cipher.SignString(message)
+	if signature == "" {
+		t.Fatalf("expected signature")
+	}
+	if !cipher.VerifyString(message, signature) {
+		t.Fatalf("expected signature to verify")
+	}
+	if cipher.VerifyString(message+"x", signature) {
+		t.Fatalf("expected tampered message to fail verification")
+	}
+}
