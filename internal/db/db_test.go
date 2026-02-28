@@ -144,6 +144,71 @@ func TestRecordPublishFailureRetriesThenMovesToDLQ(t *testing.T) {
 	}
 }
 
+func TestReschedulePublishWithoutAttemptKeepsAttempts(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+	account := createTestAccount(t, store, domain.PlatformInstagram)
+	created, err := store.CreatePost(ctx, CreatePostParams{
+		Post: domain.Post{
+			AccountID:   account.ID,
+			Text:        "wait for ig media processing",
+			Status:      domain.PostStatusScheduled,
+			ScheduledAt: time.Now().UTC().Add(-1 * time.Minute),
+			MaxAttempts: 3,
+		},
+	})
+	if err != nil {
+		t.Fatalf("create post: %v", err)
+	}
+
+	claimed, err := store.ClaimDuePosts(ctx, 1)
+	if err != nil {
+		t.Fatalf("claim due: %v", err)
+	}
+	if len(claimed) != 1 {
+		t.Fatalf("expected 1 claimed post, got %d", len(claimed))
+	}
+
+	before, err := store.GetPost(ctx, created.Post.ID)
+	if err != nil {
+		t.Fatalf("get post before defer: %v", err)
+	}
+	if before.Attempts != 0 {
+		t.Fatalf("expected attempts=0 before defer, got %d", before.Attempts)
+	}
+
+	if err := store.ReschedulePublishWithoutAttempt(ctx, created.Post.ID, errors.New("instagram publish failed: status=400 body={\"error\":{\"code\":9007,\"error_subcode\":2207027}}"), 2*time.Second); err != nil {
+		t.Fatalf("reschedule without attempt: %v", err)
+	}
+
+	after, err := store.GetPost(ctx, created.Post.ID)
+	if err != nil {
+		t.Fatalf("get post after defer: %v", err)
+	}
+	if after.Status != domain.PostStatusScheduled {
+		t.Fatalf("expected status scheduled, got %s", after.Status)
+	}
+	if after.Attempts != 0 {
+		t.Fatalf("expected attempts to stay 0, got %d", after.Attempts)
+	}
+	if after.NextRetryAt == nil {
+		t.Fatalf("expected next_retry_at to be set")
+	}
+
+	var dlqCount int
+	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM dead_letters WHERE post_id = ?`, created.Post.ID).Scan(&dlqCount); err != nil {
+		t.Fatalf("count dead letters: %v", err)
+	}
+	if dlqCount != 0 {
+		t.Fatalf("expected no dead letters, got %d", dlqCount)
+	}
+}
+
 func TestCreateDraftDefaultsToDraftStatus(t *testing.T) {
 	store, err := Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {

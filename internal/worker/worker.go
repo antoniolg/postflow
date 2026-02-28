@@ -83,6 +83,11 @@ func (w Worker) runOnce(ctx context.Context) {
 			}
 		}
 		if err != nil {
+			if isTransientMediaProcessingError(err) {
+				_ = w.Store.ReschedulePublishWithoutAttempt(ctx, post.ID, err, w.Interval)
+				slog.Warn("worker publish deferred while media is processing", "post_id", post.ID, "account_id", account.ID, "platform", post.Platform, "error", err)
+				continue
+			}
 			_ = w.Store.RecordPublishFailure(ctx, post.ID, err, w.RetryBackoff)
 			if isAuthFailure(err) {
 				_ = w.Store.UpdateAccountStatus(ctx, account.ID, domain.AccountStatusError, ptr(err.Error()))
@@ -149,6 +154,20 @@ func isAuthFailure(err error) bool {
 	}
 	msg := strings.ToLower(strings.TrimSpace(err.Error()))
 	return strings.Contains(msg, "401") || strings.Contains(msg, "invalid_token") || strings.Contains(msg, "unauthorized")
+}
+
+func isTransientMediaProcessingError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(strings.TrimSpace(err.Error()))
+	if !strings.Contains(msg, "instagram") {
+		return false
+	}
+	if strings.Contains(msg, "2207027") || strings.Contains(msg, "media id is not available") {
+		return true
+	}
+	return strings.Contains(msg, "not ready") && strings.Contains(msg, "publish")
 }
 
 func errUnsupportedPlatform(platform domain.Platform) error {

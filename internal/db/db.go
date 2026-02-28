@@ -708,6 +708,20 @@ func (s *Store) RecordPublishFailure(ctx context.Context, id string, postErr err
 	return tx.Commit()
 }
 
+func (s *Store) ReschedulePublishWithoutAttempt(ctx context.Context, id string, postErr error, retryDelay time.Duration) error {
+	if retryDelay <= 0 {
+		retryDelay = 30 * time.Second
+	}
+	now := time.Now().UTC()
+	nextRetry := now.Add(retryDelay)
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE posts
+		SET status = ?, error = ?, next_retry_at = ?, updated_at = ?
+		WHERE id = ? AND status = ?
+	`, domain.PostStatusScheduled, postErr.Error(), nextRetry.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano), strings.TrimSpace(id), domain.PostStatusPublishing)
+	return err
+}
+
 func sqlNullString(v *string) any {
 	if v == nil || strings.TrimSpace(*v) == "" {
 		return nil

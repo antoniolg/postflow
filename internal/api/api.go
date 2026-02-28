@@ -4247,13 +4247,13 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 (() => {
   const monthNames = {{toJSON .DatePickerMonthNames}};
   const weekdayNames = {{toJSON .DatePickerWeekdayNames}};
-  const monthYearSeparator = {{printf "%q" (t "datepicker.month_year_separator")}};
-  const pickerPreviousMonth = {{printf "%q" (t "datepicker.previous_month")}};
-  const pickerNextMonth = {{printf "%q" (t "datepicker.next_month")}};
-  const pickerClear = {{printf "%q" (t "datepicker.clear")}};
-  const pickerToday = {{printf "%q" (t "datepicker.today")}};
-  const pickerApply = {{printf "%q" (t "datepicker.apply")}};
-  const pickerOpenAria = {{printf "%q" (t "datepicker.open")}};
+  const monthYearSeparator = {{toJSON (t "datepicker.month_year_separator")}};
+  const pickerPreviousMonth = {{toJSON (t "datepicker.previous_month")}};
+  const pickerNextMonth = {{toJSON (t "datepicker.next_month")}};
+  const pickerClear = {{toJSON (t "datepicker.clear")}};
+  const pickerToday = {{toJSON (t "datepicker.today")}};
+  const pickerApply = {{toJSON (t "datepicker.apply")}};
+  const pickerOpenAria = {{toJSON (t "datepicker.open")}};
   const pad2 = (value) => String(value).padStart(2, "0");
 
   const parseInputValue = (raw, mode) => {
@@ -4920,9 +4920,9 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
   const deleteForm = document.getElementById("failed-bulk-delete-form");
   const requeueSubmit = document.getElementById("failed-requeue-selected");
   const deleteSubmit = document.getElementById("failed-delete-selected");
-  const requeueSelectedText = {{printf "%q" (t "failed.requeue_selected")}};
-  const deleteSelectedText = {{printf "%q" (t "failed.delete_selected")}};
-  const deleteSelectedConfirm = {{printf "%q" (t "failed.delete_selected_confirm")}};
+  const requeueSelectedText = {{toJSON (t "failed.requeue_selected")}};
+  const deleteSelectedText = {{toJSON (t "failed.delete_selected")}};
+  const deleteSelectedConfirm = {{toJSON (t "failed.delete_selected_confirm")}};
 
   const updateBulkButtons = () => {
     const count = checkboxes.filter((cb) => cb.checked).length;
@@ -5042,22 +5042,22 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     return String(values[index]);
   });
   const i18n = {
-    charsWithLimit: {{printf "%q" (t "create.chars_with_limit")}},
-    charsUnknown: {{printf "%q" (t "create.chars_unknown")}},
-    previewDefault: {{printf "%q" (t "create.preview_default")}},
-    openMedia: {{printf "%q" (t "settings.open_media")}},
-    usedLabel: {{printf "%q" (t "common.used")}},
-    mediaItemLabel: {{printf "%q" (t "create.media_item")}},
-    removeMedia: {{printf "%q" (t "create.remove_media")}},
-    mediaUploaded: {{printf "%q" (t "create.media_uploaded")}},
-    uploadFailed: {{printf "%q" (t "create.upload_failed")}},
-    uploadFailedMissingID: {{printf "%q" (t "create.upload_failed_missing_id")}},
-    maxFiles: {{printf "%q" (t "create.max_files")}},
-    uploadingFile: {{printf "%q" (t "create.uploading_file")}},
-    unsupportedMedia: {{printf "%q" (t "create.unsupported_media")}},
-    deleteFailed: {{printf "%q" (t "create.delete_failed")}},
-    mediaDeleted: {{printf "%q" (t "create.media_deleted")}},
-    waitUploads: {{printf "%q" (t "create.wait_uploads")}}
+    charsWithLimit: {{toJSON (t "create.chars_with_limit")}},
+    charsUnknown: {{toJSON (t "create.chars_unknown")}},
+    previewDefault: {{toJSON (t "create.preview_default")}},
+    openMedia: {{toJSON (t "settings.open_media")}},
+    usedLabel: {{toJSON (t "common.used")}},
+    mediaItemLabel: {{toJSON (t "create.media_item")}},
+    removeMedia: {{toJSON (t "create.remove_media")}},
+    mediaUploaded: {{toJSON (t "create.media_uploaded")}},
+    uploadFailed: {{toJSON (t "create.upload_failed")}},
+    uploadFailedMissingID: {{toJSON (t "create.upload_failed_missing_id")}},
+    maxFiles: {{toJSON (t "create.max_files")}},
+    uploadingFile: {{toJSON (t "create.uploading_file")}},
+    unsupportedMedia: {{toJSON (t "create.unsupported_media")}},
+    deleteFailed: {{toJSON (t "create.delete_failed")}},
+    mediaDeleted: {{toJSON (t "create.media_deleted")}},
+    waitUploads: {{toJSON (t "create.wait_uploads")}}
   };
 
   const toDatetimeLocal = (d) => {
