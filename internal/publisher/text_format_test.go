@@ -6,21 +6,28 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/antoniolg/publisher/internal/domain"
 )
 
-func TestFormatPostTextForPublishConvertsMarkdownToRTF(t *testing.T) {
+func TestFormatPostTextForPublishKeepsPlainMarkdownText(t *testing.T) {
 	got := formatPostTextForPublish("Hola **mundo** _equipo_")
-	want := "{\\rtf1\\ansi\\deff0 Hola \\b mundo\\b0  \\i equipo\\i0 }"
+	want := "Hola 𝗺𝘂𝗻𝗱𝗼 𝑒𝑞𝑢𝑖𝑝𝑜"
 	if got != want {
 		t.Fatalf("formatted text = %q, want %q", got, want)
 	}
 }
 
-func TestXProviderPublishSendsRTFText(t *testing.T) {
+func TestFormatPostTextForPublishUnwrapsRTFToPlainText(t *testing.T) {
+	got := formatPostTextForPublish("{\\rtf1\\ansi\\deff0 Prueba}")
+	want := "Prueba"
+	if got != want {
+		t.Fatalf("formatted rtf text = %q, want %q", got, want)
+	}
+}
+
+func TestXProviderPublishSendsPlainText(t *testing.T) {
 	var gotText string
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -61,13 +68,7 @@ func TestXProviderPublishSendsRTFText(t *testing.T) {
 	if externalID != "x_post_1" {
 		t.Fatalf("unexpected external id %q", externalID)
 	}
-	if !strings.HasPrefix(gotText, "{\\rtf1\\ansi\\deff0 ") {
-		t.Fatalf("expected RTF prefix in payload text, got %q", gotText)
-	}
-	if !strings.Contains(gotText, "\\b mundo\\b0") {
-		t.Fatalf("expected bold token in payload text, got %q", gotText)
-	}
-	if !strings.Contains(gotText, "\\i equipo\\i0") {
-		t.Fatalf("expected italic token in payload text, got %q", gotText)
+	if gotText != "Hola 𝗺𝘂𝗻𝗱𝗼 𝑒𝑞𝑢𝑖𝑝𝑜" {
+		t.Fatalf("expected plain payload text, got %q", gotText)
 	}
 }

@@ -64,3 +64,21 @@ func TestMarkdownToRTFSupportsUnicodeAndNewline(t *testing.T) {
 		t.Fatalf("rtf unicode/newline = %q, want %q", got, want)
 	}
 }
+
+func TestMarkdownToUnicodeStyledSupportsBoldAndItalic(t *testing.T) {
+	input := "Hola **mundo** _equipo_"
+	got := MarkdownToUnicodeStyled(input)
+	want := "Hola 𝗺𝘂𝗻𝗱𝗼 𝑒𝑞𝑢𝑖𝑝𝑜"
+	if got != want {
+		t.Fatalf("unicode styled = %q, want %q", got, want)
+	}
+}
+
+func TestMarkdownToUnicodeStyledSupportsEscapedMarkers(t *testing.T) {
+	input := `Literal \*asterisco\* y \_guion\_`
+	got := MarkdownToUnicodeStyled(input)
+	want := `Literal *asterisco* y _guion_`
+	if got != want {
+		t.Fatalf("unicode escaped = %q, want %q", got, want)
+	}
+}

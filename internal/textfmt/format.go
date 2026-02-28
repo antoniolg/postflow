@@ -177,6 +177,147 @@ func MarkdownToRTF(input string) string {
 	return out.String()
 }
 
+func MarkdownToUnicodeStyled(input string) string {
+	source := normalizeMarkdownInput(input)
+	var out strings.Builder
+	var plain strings.Builder
+	boldOpen := false
+	italicOpen := false
+	var boldMarker rune
+	var italicMarker rune
+
+	flushPlain := func() {
+		if plain.Len() == 0 {
+			return
+		}
+		out.WriteString(toUnicodeStyled(plain.String(), boldOpen, italicOpen))
+		plain.Reset()
+	}
+
+	runes := []rune(source)
+	for i := 0; i < len(runes); {
+		if isEscapedDelimiter(runes, i) {
+			plain.WriteRune(runes[i+1])
+			i += 2
+			continue
+		}
+		if runes[i] == '\n' {
+			flushPlain()
+			out.WriteRune('\n')
+			i++
+			continue
+		}
+		if italicOpen && runes[i] == italicMarker && canUseAsClosing(runes, i, italicMarker, 1) {
+			flushPlain()
+			italicOpen = false
+			italicMarker = 0
+			i++
+			continue
+		}
+		if boldOpen && i+1 < len(runes) && runes[i] == boldMarker && runes[i+1] == boldMarker && canUseAsClosing(runes, i, boldMarker, 2) {
+			flushPlain()
+			boldOpen = false
+			boldMarker = 0
+			i += 2
+			continue
+		}
+		if !boldOpen &&
+			i+1 < len(runes) &&
+			isMarkerRune(runes[i]) &&
+			runes[i+1] == runes[i] &&
+			canUseAsOpening(runes, i, runes[i], 2) &&
+			hasClosingDoubleDelimiter(runes, i+2, runes[i]) {
+			flushPlain()
+			boldOpen = true
+			boldMarker = runes[i]
+			i += 2
+			continue
+		}
+		if !italicOpen &&
+			isMarkerRune(runes[i]) &&
+			canUseAsOpening(runes, i, runes[i], 1) &&
+			hasClosingSingleDelimiter(runes, i+1, runes[i]) {
+			flushPlain()
+			italicOpen = true
+			italicMarker = runes[i]
+			i++
+			continue
+		}
+		plain.WriteRune(runes[i])
+		i++
+	}
+
+	flushPlain()
+	return out.String()
+}
+
+func toUnicodeStyled(input string, bold, italic bool) string {
+	if !bold && !italic {
+		return input
+	}
+	var out strings.Builder
+	for _, r := range input {
+		out.WriteRune(toUnicodeStyledRune(r, bold, italic))
+	}
+	return out.String()
+}
+
+func toUnicodeStyledRune(r rune, bold, italic bool) rune {
+	switch {
+	case bold && italic:
+		if styled, ok := toBoldItalicRune(r); ok {
+			return styled
+		}
+	case bold:
+		if styled, ok := toBoldRune(r); ok {
+			return styled
+		}
+	case italic:
+		if styled, ok := toItalicRune(r); ok {
+			return styled
+		}
+	}
+	return r
+}
+
+func toBoldRune(r rune) (rune, bool) {
+	switch {
+	case r >= 'A' && r <= 'Z':
+		return rune(0x1D5D4 + (r - 'A')), true
+	case r >= 'a' && r <= 'z':
+		return rune(0x1D5EE + (r - 'a')), true
+	case r >= '0' && r <= '9':
+		return rune(0x1D7EC + (r - '0')), true
+	default:
+		return r, false
+	}
+}
+
+func toItalicRune(r rune) (rune, bool) {
+	switch {
+	case r >= 'A' && r <= 'Z':
+		return rune(0x1D434 + (r - 'A')), true
+	case r >= 'a' && r <= 'z':
+		if r == 'h' {
+			return rune(0x210E), true
+		}
+		return rune(0x1D44E + (r - 'a')), true
+	default:
+		return r, false
+	}
+}
+
+func toBoldItalicRune(r rune) (rune, bool) {
+	switch {
+	case r >= 'A' && r <= 'Z':
+		return rune(0x1D468 + (r - 'A')), true
+	case r >= 'a' && r <= 'z':
+		return rune(0x1D482 + (r - 'a')), true
+	default:
+		return r, false
+	}
+}
+
 func normalizeMarkdownInput(input string) string {
 	return strings.ReplaceAll(strings.ReplaceAll(input, "\r\n", "\n"), "\r", "\n")
 }
