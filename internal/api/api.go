@@ -318,7 +318,12 @@ func (s Server) handleCancelPost(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	if err := s.Store.CancelPost(r.Context(), postID); err != nil {
+	svc := postsapp.MutationsService{Store: s.Store}
+	if err := svc.Cancel(r.Context(), postID); err != nil {
+		if errors.Is(err, postsapp.ErrPostIDRequired) {
+			writeError(w, http.StatusBadRequest, errors.New("post id is required"))
+			return
+		}
 		writeError(w, http.StatusConflict, err)
 		return
 	}
@@ -337,9 +342,14 @@ func (s Server) handleDeletePost(w http.ResponseWriter, r *http.Request) {
 		returnTo = "/?view=calendar"
 	}
 
-	if err := s.Store.DeletePostEditable(r.Context(), postID); err != nil {
+	svc := postsapp.MutationsService{Store: s.Store}
+	if err := svc.DeleteEditable(r.Context(), postID); err != nil {
 		if fromForm {
 			http.Redirect(w, r, withQueryValue(returnTo, "error", "post not deletable"), http.StatusSeeOther)
+			return
+		}
+		if errors.Is(err, postsapp.ErrPostIDRequired) {
+			writeError(w, http.StatusBadRequest, errors.New("post id is required"))
 			return
 		}
 		if errors.Is(err, db.ErrPostNotDeletable) {
@@ -396,13 +406,18 @@ func (s Server) handleScheduleDraftPost(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusBadRequest, fmt.Errorf("scheduled_at must be RFC3339: %w", err))
 		return
 	}
-	if err := s.Store.ScheduleDraftPost(r.Context(), postID, scheduledAt.UTC()); err != nil {
-		writeError(w, http.StatusConflict, err)
+	svc := postsapp.MutationsService{Store: s.Store}
+	post, err := svc.ScheduleDraft(r.Context(), postID, scheduledAt.UTC())
+	if errors.Is(err, postsapp.ErrPostIDRequired) {
+		writeError(w, http.StatusBadRequest, errors.New("post id is required"))
 		return
 	}
-	post, err := s.Store.GetPost(r.Context(), postID)
+	if errors.Is(err, postsapp.ErrScheduledAtNeeded) {
+		writeError(w, http.StatusBadRequest, errors.New("scheduled_at is required"))
+		return
+	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+		writeError(w, http.StatusConflict, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"id": postID, "status": string(post.Status), "post": post})
@@ -462,13 +477,14 @@ func (s Server) handleEditPost(w http.ResponseWriter, r *http.Request) {
 		}
 		scheduledAt = parsed
 	}
-	if intent == "draft" {
-		scheduledAt = time.Time{}
-	}
-	if intent == "publish_now" && scheduledAt.IsZero() {
-		scheduledAt = time.Now().UTC()
-	}
-	if intent == "schedule" && scheduledAt.IsZero() {
+	svc := postsapp.MutationsService{Store: s.Store}
+	post, err := svc.UpdateEditable(r.Context(), postsapp.EditInput{
+		PostID:      postID,
+		Text:        text,
+		Intent:      intent,
+		ScheduledAt: scheduledAt,
+	}, time.Now)
+	if errors.Is(err, postsapp.ErrScheduledAtNeeded) {
 		if fromForm {
 			http.Redirect(w, r, createViewURL(postID, text, scheduledAtRaw, returnTo, "scheduled_at is required to schedule", ""), http.StatusSeeOther)
 			return
@@ -476,17 +492,12 @@ func (s Server) handleEditPost(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, errors.New("scheduled_at is required"))
 		return
 	}
-	if err := s.Store.UpdatePostEditable(r.Context(), postID, text, scheduledAt); err != nil {
+	if err != nil {
 		if fromForm {
 			http.Redirect(w, r, createViewURL(postID, text, scheduledAtRaw, returnTo, err.Error(), ""), http.StatusSeeOther)
 			return
 		}
 		writeError(w, http.StatusConflict, err)
-		return
-	}
-	post, err := s.Store.GetPost(r.Context(), postID)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 	if !fromForm {
