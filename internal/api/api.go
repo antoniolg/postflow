@@ -2952,13 +2952,16 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       background: var(--bg-card, #212121);
       color: var(--text-secondary);
       border-radius: 12px;
-      padding: 10px 14px;
+      width: 42px;
+      height: 42px;
+      padding: 0;
       font-family: 'JetBrains Mono', monospace;
       font-size: 12px;
       font-weight: 600;
       display: inline-flex;
       align-items: center;
-      gap: 8px;
+      justify-content: center;
+      gap: 0;
       cursor: pointer;
       transition: box-shadow .12s ease, color .12s ease, background .12s ease;
     }
@@ -2967,8 +2970,8 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       outline-offset: 2px;
     }
     .network-chip-icon {
-      width: 20px;
-      height: 20px;
+      width: 22px;
+      height: 22px;
       border-radius: 999px;
       background: #161616;
       display: inline-flex;
@@ -2976,9 +2979,12 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       justify-content: center;
       color: #f5f5f5;
     }
+    .network-chip-label {
+      display: none;
+    }
     .network-chip-icon svg {
-      width: 12px;
-      height: 12px;
+      width: 13px;
+      height: 13px;
       display: block;
     }
     .network-chip.active {
@@ -3033,8 +3039,29 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       gap: 2px;
     }
     .char-count-line {
-      display: block;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
       line-height: 1.25;
+    }
+    .char-platform-icon {
+      width: 14px;
+      height: 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #d7d7d7;
+      flex: 0 0 auto;
+    }
+    .char-platform-icon svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .char-platform-text {
+      display: inline-flex;
+      align-items: center;
+      min-width: 0;
     }
     .char-over {
       color: var(--accent-orange);
@@ -3751,6 +3778,12 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         gap: 10px;
         margin-bottom: 10px;
       }
+      body[data-view="create"] .header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        margin-bottom: 12px;
+      }
       .title-row {
         align-items: flex-start;
       }
@@ -3759,7 +3792,12 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         flex-wrap: nowrap;
         width: 100%;
       }
+      body[data-view="create"] .title-row {
+        width: 100%;
+        align-items: flex-start;
+      }
       body[data-view="calendar"] h1 { font-size: 26px; }
+      body[data-view="create"] h1 { font-size: 42px; }
       .title-copy {
         gap: 2px;
       }
@@ -3802,6 +3840,9 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       .create-header-actions {
         width: 100%;
         justify-content: flex-start;
+      }
+      body[data-view="create"] .create-header-actions {
+        display: none;
       }
       .create-header-actions button {
         min-height: 32px;
@@ -4017,8 +4058,26 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         display: flex;
         justify-content: stretch;
       }
+      body[data-view="create"] .composer-submit-actions {
+        position: sticky;
+        bottom: calc(76px + env(safe-area-inset-bottom));
+        z-index: 35;
+        padding: 8px;
+        border-radius: 12px;
+        background: rgba(26, 26, 26, 0.95);
+        backdrop-filter: blur(8px);
+        box-shadow: 0 -8px 22px rgba(0, 0, 0, 0.25);
+        gap: 6px;
+      }
       .composer-submit-actions button {
         width: 100%;
+      }
+      body[data-view="create"] .composer-submit-actions button {
+        width: auto;
+        flex: 1 1 0;
+        min-height: 36px;
+        font-size: 11px;
+        padding: 0 8px;
       }
       .create-field-content .composer-text-wrap,
       .create-field-media .media-block {
@@ -4354,14 +4413,14 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg>
 	                      {{end}}
 	                    </span>
-	                    <span>
+	                    <span class="network-chip-label">
 	                      {{if eq .Platform "x"}}X{{else if eq .Platform "linkedin"}}LinkedIn{{else if eq .Platform "facebook"}}Facebook{{else if eq .Platform "instagram"}}Instagram{{else}}{{.Platform}}{{end}}
 	                    </span>
 	                  </button>
 	                  {{else}}
 	                  <button type="button" class="network-chip disabled" disabled>
 	                    <span class="network-chip-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg></span>
-		                    <span>{{t "create.no_networks"}}</span>
+		                    <span class="network-chip-label">{{t "create.no_networks"}}</span>
 	                  </button>
 	                  {{end}}
 	                </div>
@@ -5503,22 +5562,59 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 
   const selectedAccountOptions = () => Array.from(accountSelect.selectedOptions).filter((node) => node instanceof HTMLOptionElement);
 
-  const selectedPlatformRules = () => selectedAccountOptions().map((selected) => {
-    const platform = (selected.dataset.platform || "").trim().toLowerCase();
-    const accountLabel = String(selected.textContent || "").trim();
-    const baseRule = platformCharLimits[platform] || null;
-    if (!baseRule) {
-      return null;
-    }
-    if (platform === "x") {
-      const premiumRaw = (selected.dataset.xPremium || "").trim().toLowerCase();
-      const premium = premiumRaw === "1" || premiumRaw === "true" || premiumRaw === "yes" || premiumRaw === "on";
-      if (premium && Number.isFinite(baseRule.premiumMax) && baseRule.premiumMax > 0) {
-        return { max: baseRule.premiumMax, label: accountLabel || (baseRule.premiumLabel || baseRule.label) };
+  const selectedPlatformRules = () => {
+    const order = [];
+    const limits = new Map();
+    const labels = new Map();
+
+    selectedAccountOptions().forEach((selected) => {
+      const platform = (selected.dataset.platform || "").trim().toLowerCase();
+      const baseRule = platformCharLimits[platform] || null;
+      if (!baseRule) {
+        return;
       }
+      let max = baseRule.max;
+      if (platform === "x") {
+        const premiumRaw = (selected.dataset.xPremium || "").trim().toLowerCase();
+        const premium = premiumRaw === "1" || premiumRaw === "true" || premiumRaw === "yes" || premiumRaw === "on";
+        if (premium && Number.isFinite(baseRule.premiumMax) && baseRule.premiumMax > 0) {
+          max = baseRule.premiumMax;
+        }
+      }
+      if (!Number.isFinite(max) || max <= 0) {
+        return;
+      }
+      if (!limits.has(platform)) {
+        order.push(platform);
+        limits.set(platform, max);
+        labels.set(platform, baseRule.label || platform.toUpperCase());
+        return;
+      }
+      // Keep the strictest limit when multiple accounts of the same platform are selected.
+      limits.set(platform, Math.min(limits.get(platform), max));
+    });
+
+    return order.map((platform) => ({
+      platform: platform,
+      label: labels.get(platform) || platform.toUpperCase(),
+      max: limits.get(platform)
+    })).filter((rule) => Number.isFinite(rule.max) && rule.max > 0);
+  };
+
+  const platformIconSVG = (platform) => {
+    switch (platform) {
+      case "x":
+        return '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.9 2h3.6l-7.8 8.9L24 22h-7.2l-5.7-6.8L5.2 22H1.6l8.4-9.6L0 2h7.4l5.2 6.2L18.9 2z"/></svg>';
+      case "linkedin":
+        return '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6.6 8.8v8.6H3.7V8.8h2.9zm.2-2.7c0 1-.7 1.7-1.7 1.7S3.4 7.1 3.4 6.1 4.1 4.4 5.1 4.4s1.7.7 1.7 1.7zM20.6 12.5v4.9h-2.9v-4.6c0-1.2-.4-2-1.5-2-.8 0-1.2.5-1.4 1-.1.2-.1.5-.1.7v4.9h-2.9s0-7.9 0-8.6h2.9v1.2c.4-.6 1.1-1.5 2.8-1.5 2 0 3.1 1.3 3.1 4z"/></svg>';
+      case "facebook":
+        return '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13.7 22v-8h2.7l.4-3.1h-3.1V8.8c0-.9.3-1.5 1.6-1.5h1.7V4.5c-.3 0-1.3-.1-2.4-.1-2.4 0-4 1.4-4 4.2v2.3H8v3.1h2.6v8h3.1z"/></svg>';
+      case "instagram":
+        return '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7.5 2h9A5.5 5.5 0 0 1 22 7.5v9a5.5 5.5 0 0 1-5.5 5.5h-9A5.5 5.5 0 0 1 2 16.5v-9A5.5 5.5 0 0 1 7.5 2zm0 2A3.5 3.5 0 0 0 4 7.5v9A3.5 3.5 0 0 0 7.5 20h9a3.5 3.5 0 0 0 3.5-3.5v-9A3.5 3.5 0 0 0 16.5 4h-9zm9.8 1.5a1.2 1.2 0 1 1 0 2.4 1.2 1.2 0 0 1 0-2.4zM12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10zm0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>';
+      default:
+        return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg>';
     }
-    return { max: baseRule.max, label: accountLabel || baseRule.label };
-  }).filter((rule) => rule && Number.isFinite(rule.max) && rule.max > 0);
+  };
 
   const syncPrimaryAccountField = () => {
     const selected = selectedAccountOptions();
@@ -5702,7 +5798,8 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         const line = document.createElement("span");
         line.className = "char-count-line";
         const overLimit = count > rule.max;
-        line.textContent = formatTemplate(i18n.charsWithLimit, count, rule.max, rule.label);
+        const summary = rule.label + " - " + formatTemplate(i18n.charsWithLimit, count, rule.max);
+        line.innerHTML = '<span class="char-platform-icon" aria-hidden="true">' + platformIconSVG(rule.platform) + '</span><span class="char-platform-text">' + escapeHTML(summary) + '</span>';
         if (overLimit) {
           hasOverLimit = true;
           line.classList.add("char-over");
@@ -6620,7 +6717,7 @@ var uiMessages = map[string]map[string]string{
 		"create.no_networks":                  "no networks",
 		"create.post_content":                 "post content",
 		"create.placeholder":                  "Write your post...",
-		"create.char_count_initial":           "// 0 chars",
+		"create.char_count_initial":           "0 chars",
 		"create.scheduled_at":                 "scheduled at (%s)",
 		"create.media_attachment_max":         "media attachment (%d max)",
 		"create.add_media":                    "add media",
@@ -6635,8 +6732,8 @@ var uiMessages = map[string]map[string]string{
 		"create.preview_no_media":             "No media selected yet.",
 		"create.just_now":                     "just now",
 		"create.no_connected_accounts":        "no connected accounts. connect one in settings first",
-		"create.chars_with_limit":             "// {0}/{1} chars ({2} limit)",
-		"create.chars_unknown":                "// {0} chars (network limit unknown)",
+		"create.chars_with_limit":             "{0} / {1} chars",
+		"create.chars_unknown":                "{0} chars (network limit unknown)",
 		"create.remove_media_from_post":       "remove media from post",
 		"create.remove_from_post":             "remove from post",
 		"create.media_item":                   "media",
@@ -6747,7 +6844,7 @@ var uiMessages = map[string]map[string]string{
 		"create.no_networks":                  "sin redes",
 		"create.post_content":                 "contenido de la publicacion",
 		"create.placeholder":                  "Escribe tu publicacion...",
-		"create.char_count_initial":           "// 0 caracteres",
+		"create.char_count_initial":           "0 caracteres",
 		"create.scheduled_at":                 "programada para (%s)",
 		"create.media_attachment_max":         "adjuntos multimedia (%d max)",
 		"create.add_media":                    "anadir multimedia",
@@ -6762,8 +6859,8 @@ var uiMessages = map[string]map[string]string{
 		"create.preview_no_media":             "No hay multimedia seleccionada.",
 		"create.just_now":                     "justo ahora",
 		"create.no_connected_accounts":        "no hay cuentas conectadas. conecta una primero en ajustes",
-		"create.chars_with_limit":             "// {0}/{1} caracteres (limite {2})",
-		"create.chars_unknown":                "// {0} caracteres (limite de red desconocido)",
+		"create.chars_with_limit":             "{0} / {1} caracteres",
+		"create.chars_unknown":                "{0} caracteres (limite de red desconocido)",
 		"create.remove_media_from_post":       "quitar multimedia de la publicacion",
 		"create.remove_from_post":             "quitar de la publicacion",
 		"create.media_item":                   "multimedia",

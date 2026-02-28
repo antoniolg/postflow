@@ -1393,6 +1393,15 @@ func TestDefaultViewIsCalendar(t *testing.T) {
 	if !strings.Contains(body, ".create-fab {\n      display: none;") {
 		t.Fatalf("expected create FAB base style to be present")
 	}
+	if !strings.Contains(body, "body[data-view=\"create\"] .header {\n        flex-direction: column;\n        align-items: stretch;") {
+		t.Fatalf("expected create mobile header to stack cleanly")
+	}
+	if !strings.Contains(body, "body[data-view=\"create\"] .create-header-actions {\n        display: none;") {
+		t.Fatalf("expected create mobile header actions to be hidden")
+	}
+	if !strings.Contains(body, "body[data-view=\"create\"] .composer-submit-actions {\n        position: sticky;") {
+		t.Fatalf("expected create mobile submit actions to be sticky above bottom nav")
+	}
 	if !strings.Contains(body, "body[data-view=\"create\"] .create-fab {\n        display: none;") {
 		t.Fatalf("expected create FAB to be hidden in create view")
 	}
@@ -1598,6 +1607,9 @@ func TestCreateViewIncludesComposerPreviewUploadAndNetworks(t *testing.T) {
 	}
 	if !strings.Contains(body, "class=\"network-chip-icon\"") || !strings.Contains(body, "viewBox=\"0 0 24 24\"") {
 		t.Fatalf("expected network chips to include platform icons")
+	}
+	if !strings.Contains(body, ".network-chip-label {\n      display: none;") {
+		t.Fatalf("expected network chip text labels to be hidden")
 	}
 	if !strings.Contains(body, "data-account-id=\""+accountID+"\"") {
 		t.Fatalf("expected network chip account binding for unique selection")
