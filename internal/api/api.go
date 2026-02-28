@@ -1718,6 +1718,10 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       letter-spacing: 0.03em;
       text-decoration: none;
     }
+    .create-fab {
+      display: none;
+      text-decoration: none;
+    }
     body[data-view="create"] .create-pill {
       display: none;
     }
@@ -3770,6 +3774,31 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         padding: 8px 12px;
         font-size: 11px;
       }
+      .create-pill {
+        display: none;
+      }
+      .create-fab {
+        position: fixed;
+        right: 14px;
+        bottom: calc(88px + env(safe-area-inset-bottom));
+        z-index: 45;
+        width: 48px;
+        height: 48px;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--accent-orange);
+        color: #0d0d0d;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 26px;
+        font-weight: 700;
+        line-height: 1;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+      }
+      body[data-view="create"] .create-fab {
+        display: none;
+      }
       .create-header-actions {
         width: 100%;
         justify-content: flex-start;
@@ -4004,6 +4033,11 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       .stats { grid-template-columns: 1fr; }
       .content .text { font-size: 12px; }
       .meta { font-size: 11px; gap: 8px; }
+      .create-fab {
+        width: 46px;
+        height: 46px;
+        right: 12px;
+      }
     }
     @media (prefers-reduced-motion: reduce) {
       .main {
@@ -4602,6 +4636,9 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
           </div>
         </div>
       </section>
+      {{end}}
+      {{if ne .View "create"}}
+      <a class="create-fab" href="{{.CreateViewURL}}" aria-label="{{t "common.create_post"}}">+</a>
       {{end}}
     </main>
   </div>

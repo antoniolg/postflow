@@ -1390,6 +1390,15 @@ func TestDefaultViewIsCalendar(t *testing.T) {
 	if !strings.Contains(body, "@media (max-width: 980px)") || !strings.Contains(body, "height: auto;") {
 		t.Fatalf("expected mobile sidebar override to disable fixed viewport height")
 	}
+	if !strings.Contains(body, ".create-fab {\n      display: none;") {
+		t.Fatalf("expected create FAB base style to be present")
+	}
+	if !strings.Contains(body, "body[data-view=\"create\"] .create-fab {\n        display: none;") {
+		t.Fatalf("expected create FAB to be hidden in create view")
+	}
+	if !strings.Contains(body, "<a class=\"create-fab\" href=\"") {
+		t.Fatalf("expected floating create action in non-create views")
+	}
 	if !strings.Contains(body, "body[data-view=\"calendar\"] .calendar-layout {\n        width: 100%;\n        padding-top: 0;\n        grid-template-columns: minmax(0, 1fr);") {
 		t.Fatalf("expected mobile calendar layout override to force single-column full-width grid")
 	}
