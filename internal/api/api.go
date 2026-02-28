@@ -2207,6 +2207,83 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       margin-top: 1px;
       padding-left: 2px;
     }
+    /* Calendar visual pass: closer to design, cleaner density */
+    body[data-view="calendar"] .calendar-wrap {
+      border-radius: 12px;
+      background: #1f1f1f;
+      overflow: hidden;
+    }
+    body[data-view="calendar"] .calendar-grid-scroll {
+      overflow-x: hidden;
+      background: #2a2a2a;
+    }
+    body[data-view="calendar"] .weekday-row,
+    body[data-view="calendar"] .week-row {
+      min-width: 0;
+      gap: 1px;
+      background: #2a2a2a;
+    }
+    body[data-view="calendar"] .weekday {
+      text-align: center;
+      background: #1f1f1f;
+      padding: 6px 0;
+      font-size: 10px;
+    }
+    body[data-view="calendar"] .day-cell {
+      border-radius: 0;
+      min-width: 0;
+      min-height: 88px;
+      padding: 6px;
+      background: #1f1f1f;
+    }
+    body[data-view="calendar"] .day-link {
+      position: relative;
+      padding: 0;
+      border-radius: 6px;
+    }
+    body[data-view="calendar"] .day-head {
+      margin-bottom: 4px;
+    }
+    body[data-view="calendar"] .day-events {
+      align-items: flex-start;
+      gap: 2px;
+    }
+    body[data-view="calendar"] .day-event {
+      max-width: 100%;
+      font-size: 9px;
+      line-height: 1.15;
+      padding: 2px 4px;
+      border-radius: 4px;
+    }
+    body[data-view="calendar"] .event-network {
+      display: none;
+    }
+    body[data-view="calendar"] .event-time {
+      opacity: 0.85;
+    }
+    body[data-view="calendar"] .day-panel {
+      background: #1f1f1f;
+      border-radius: 12px;
+      top: 0;
+    }
+    body[data-view="calendar"] .day-panel-head {
+      padding: 14px 14px 10px;
+    }
+    body[data-view="calendar"] .day-panel-title {
+      font-size: 18px;
+    }
+    body[data-view="calendar"] .day-panel-body {
+      gap: 8px;
+    }
+    body[data-view="calendar"] .day-item {
+      background: #252525;
+      border-radius: 10px;
+      padding: 10px;
+    }
+    body[data-view="calendar"] .day-item-text {
+      font-size: 12px;
+      line-height: 1.35;
+    }
     .list {
       margin-top: 14px;
       display: flex;
@@ -3666,18 +3743,24 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       body[data-view="calendar"] .header {
         display: flex;
         flex-direction: row;
-        align-items: flex-start;
+        align-items: center;
         gap: 10px;
+        margin-bottom: 10px;
       }
       .title-row {
         align-items: flex-start;
       }
       body[data-view="calendar"] .title-row {
-        align-items: flex-start;
-        flex-wrap: wrap;
+        align-items: center;
+        flex-wrap: nowrap;
+        width: 100%;
       }
+      body[data-view="calendar"] h1 { font-size: 26px; }
       .title-copy {
         gap: 2px;
+      }
+      body[data-view="calendar"] .title-sub {
+        display: none;
       }
       h1 { font-size: 34px; }
       .title-sub {
@@ -3714,53 +3797,145 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         gap: 8px;
       }
       body[data-view="calendar"] .header-right {
-        margin-left: auto;
+        display: none;
       }
       .calendar-controls {
         gap: 4px;
       }
       body[data-view="calendar"] .calendar-controls {
-        margin-left: 0;
-        flex-wrap: wrap;
-        justify-content: flex-start;
+        margin-left: auto;
+        flex-wrap: nowrap;
+        justify-content: flex-end;
+        gap: 6px;
       }
-      .month-label {
-        font-size: 16px;
+      body[data-view="calendar"] .month-label {
+        font-size: 14px;
         min-width: auto;
+        text-align: center;
       }
-      .month-link {
-        width: 28px;
-        height: 28px;
+      body[data-view="calendar"] .month-link {
+        width: 26px;
+        height: 26px;
       }
-      .month-go {
-        min-height: 28px;
-        padding: 0 10px;
-        font-size: 11px;
+      body[data-view="calendar"] .month-go {
+        min-height: 24px;
+        padding: 0 8px;
+        font-size: 10px;
       }
       body[data-view="calendar"] .calendar-grid-scroll {
         display: block;
+        overflow: visible;
       }
       body[data-view="calendar"] .week-row {
         flex: initial;
         min-height: initial;
+        min-width: 0;
+        gap: 2px;
       }
-      .day-cell { min-height: 82px; height: auto; }
-      body[data-view="calendar"] .day-link {
-        min-height: 0;
+      body[data-view="calendar"] .weekday-row {
+        min-width: 0;
+        gap: 2px;
+      }
+      body[data-view="calendar"] .weekday {
+        font-size: 9px;
+        padding: 2px 0;
+      }
+      body[data-view="calendar"] .day-cell {
+        min-height: 52px;
         height: auto;
+        min-width: 0;
+        padding: 2px;
+        border-radius: 4px;
+      }
+      body[data-view="calendar"] .day-link {
+        min-height: 48px;
+        height: 48px;
         display: block;
+        position: relative;
+      }
+      body[data-view="calendar"] .day-head {
+        margin: 0;
+        justify-content: center;
+      }
+      body[data-view="calendar"] .day-num {
+        font-size: 11px;
+      }
+      body[data-view="calendar"] .today-badge {
+        display: none;
+      }
+      body[data-view="calendar"] .day-count {
+        position: absolute;
+        top: 2px;
+        right: 2px;
+        min-width: 14px;
+        padding: 0 4px;
+        font-size: 9px;
       }
       body[data-view="calendar"] .day-events {
+        position: absolute;
+        left: 2px;
+        right: 2px;
+        bottom: 2px;
         flex: initial;
         min-height: initial;
+        gap: 2px;
+      }
+      body[data-view="calendar"] .day-event {
+        font-size: 8px;
+        padding: 1px 3px;
+      }
+      body[data-view="calendar"] .day-event .event-time,
+      body[data-view="calendar"] .day-event .event-network {
+        display: none;
+      }
+      body[data-view="calendar"] .day-events .day-event:nth-child(n+2) {
+        display: none;
+      }
+      body[data-view="calendar"] .day-events .more {
+        font-size: 8px;
+        margin: 0;
+        padding: 0;
       }
       .calendar-layout { grid-template-columns: 1fr; }
-      .day-panel {
+      body[data-view="calendar"] .day-panel {
         position: static;
         max-height: none;
+        border-radius: 0;
+        background: transparent;
+        top: auto;
       }
-      .day-panel-body {
+      body[data-view="calendar"] .day-panel-head {
+        padding: 8px 0 4px;
+        border-bottom: 0;
+        background: transparent;
+      }
+      body[data-view="calendar"] .day-panel-title {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+      }
+      body[data-view="calendar"] .day-panel-sub {
+        font-size: 10px;
+        color: #8f8f8f;
+      }
+      body[data-view="calendar"] .day-panel-body {
         max-height: none;
+        padding: 0;
+        gap: 8px;
+      }
+      body[data-view="calendar"] .day-group-title {
+        font-size: 10px;
+      }
+      body[data-view="calendar"] .day-item {
+        background: #212121;
+        padding: 10px;
+        border-radius: 8px;
+      }
+      body[data-view="calendar"] .day-item-text {
+        font-size: 12px;
+      }
+      body[data-view="calendar"] .day-item-actions {
+        display: none;
       }
       .card {
         flex-direction: column;
@@ -3878,6 +4053,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
           {{if and (eq .View "create") .BackURL}}<a class="title-back" href="{{.BackURL}}" aria-label="{{t "common.back"}}">←</a>{{end}}
           <div class="title-copy">
             <h1>{{if eq .View "calendar"}}{{t "header.calendar"}}{{else if eq .View "drafts"}}{{t "header.drafts"}}{{else if eq .View "failed"}}{{t "header.failed"}}{{else if eq .View "create"}}{{t "header.new_post"}}{{else if eq .View "settings"}}{{t "header.settings"}}{{else}}{{t "header.scheduled"}}{{end}}</h1>
+            {{if eq .View "calendar"}}<div class="title-sub">// {{t "calendar.scheduled_overview"}}</div>{{end}}
           </div>
           {{if eq .View "calendar"}}
           <div class="calendar-controls">
@@ -3888,17 +4064,13 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
           </div>
           {{end}}
         </div>
-        {{if eq .View "calendar"}}
-        <div class="header-right">
-          <a class="create-pill" href="{{.CreateViewURL}}">{{t "common.create_post"}}</a>
-        </div>
-        {{else if eq .View "create"}}
+        {{if eq .View "create"}}
         <div class="create-header-actions">
           <button class="btn-secondary" type="submit" form="create-post-form" name="intent" value="draft"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> {{t "common.save_draft"}}</button>
           <button class="btn-secondary btn-schedule" type="submit" form="create-post-form" name="intent" value="schedule"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> {{if .EditingPost}}{{t "common.update_schedule"}}{{else}}{{t "common.schedule"}}{{end}}</button>
           <button class="btn-primary" type="submit" form="create-post-form" name="intent" value="publish_now"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> {{t "common.publish_now"}}</button>
         </div>
-        {{else}}
+        {{else if ne .View "calendar"}}
         <a class="create-pill" href="{{.CreateViewURL}}">{{t "common.create_post"}}</a>
         {{end}}
       </header>
@@ -6369,6 +6541,7 @@ var uiMessages = map[string]map[string]string{
 		"common.delete_media":                 "delete media",
 		"calendar.previous_month":             "Previous month",
 		"calendar.next_month":                 "Next month",
+		"calendar.scheduled_overview":         "scheduled content overview",
 		"calendar.scheduled_posts":            "%d scheduled posts",
 		"calendar.empty_day":                  "No posts for this day.",
 		"calendar.to_publish":                 "to publish (%d)",
@@ -6495,6 +6668,7 @@ var uiMessages = map[string]map[string]string{
 		"common.delete_media":                 "eliminar media",
 		"calendar.previous_month":             "mes anterior",
 		"calendar.next_month":                 "mes siguiente",
+		"calendar.scheduled_overview":         "resumen de contenido programado",
 		"calendar.scheduled_posts":            "%d publicaciones programadas",
 		"calendar.empty_day":                  "No hay publicaciones para este dia.",
 		"calendar.to_publish":                 "por publicar (%d)",
