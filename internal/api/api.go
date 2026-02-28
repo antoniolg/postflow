@@ -3591,32 +3591,71 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         align-self: stretch;
         overflow: visible;
         border-right: 0;
-        border-bottom: 1px solid #191e29;
-        padding: 12px 12px 10px;
-        position: sticky;
-        top: 0;
-        z-index: 20;
-        backdrop-filter: blur(6px);
+        border-bottom: 0;
+        border-top: 1px solid #242424;
+        padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        top: auto;
+        z-index: 40;
+        background: rgba(26, 26, 26, 0.96);
+        backdrop-filter: blur(10px);
       }
       .logo {
-        margin-bottom: 10px;
-        padding: 0 2px;
+        display: none;
       }
       .nav {
         flex: initial;
         flex-direction: row;
         overflow-x: auto;
-        padding-bottom: 2px;
+        overflow-y: hidden;
+        gap: 6px;
+        padding-bottom: 0;
+        scrollbar-width: none;
+      }
+      .nav::-webkit-scrollbar {
+        display: none;
       }
       .nav-item-settings {
         margin-top: 0;
       }
       .nav-item {
         white-space: nowrap;
-        flex: 0 0 auto;
+        flex: 1 0 auto;
+        min-width: 72px;
+        padding: 8px 8px;
+        border-radius: 12px;
+        justify-content: center;
+        position: relative;
+      }
+      .nav-main {
+        width: 100%;
+        justify-content: center;
+        flex-direction: column;
+        gap: 4px;
+        text-align: center;
+      }
+      .nav-main span {
+        font-size: 10px;
+        line-height: 1;
+      }
+      .nav-icon {
+        width: 15px;
+        height: 15px;
+      }
+      .nav-badge {
+        position: absolute;
+        top: 4px;
+        right: 6px;
+        min-width: 16px;
+        height: 16px;
+        padding: 0 4px;
+        font-size: 10px;
       }
       .main {
-        padding: 16px 12px 18px;
+        padding: 16px 12px calc(88px + env(safe-area-inset-bottom));
       }
       .header {
         flex-direction: row;
