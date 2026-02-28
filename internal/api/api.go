@@ -1025,6 +1025,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		StatusLabel string
 		StatusKey   string
 		TextPreview string
+		Platform    domain.Platform
 	}
 	type dayDetailItem struct {
 		PostID      string
@@ -1133,6 +1134,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 			StatusLabel: statusLabel,
 			StatusKey:   statusKey,
 			TextPreview: text,
+			Platform:    item.Platform,
 		})
 		detailsByDate[key] = append(detailsByDate[key], dayDetailItem{
 			PostID:      item.ID,
@@ -2063,6 +2065,20 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       white-space: nowrap;
       min-width: 0;
       flex: 1 1 auto;
+    }
+    .event-network {
+      flex: 0 0 auto;
+      width: 12px;
+      height: 12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0.92;
+    }
+    .event-network svg {
+      width: 100%;
+      height: 100%;
+      display: block;
     }
     .more {
       font-size: 11px;
@@ -3738,10 +3754,23 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
                 </div>
                 <div class="day-events" data-day-events>
                   {{range .Events}}
-                  <div class="day-event {{.StatusClass}}" data-day-event data-status="{{.StatusKey}}">
+                  <div class="day-event {{.StatusClass}}" data-day-event data-status="{{.StatusKey}}" data-platform="{{.Platform}}">
                     <span class="event-dot" aria-hidden="true"></span>
                     <span class="event-time">{{.TimeLabel}}</span>
                     <span class="event-title">{{previewMarkdown .TextPreview}}</span>
+                    <span class="event-network" aria-hidden="true">
+                      {{if eq .Platform "x"}}
+                      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.9 2h3.6l-7.8 8.9L24 22h-7.2l-5.7-6.8L5.2 22H1.6l8.4-9.6L0 2h7.4l5.2 6.2L18.9 2z"/></svg>
+                      {{else if eq .Platform "linkedin"}}
+                      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6.6 8.8v8.6H3.7V8.8h2.9zm.2-2.7c0 1-.7 1.7-1.7 1.7S3.4 7.1 3.4 6.1 4.1 4.4 5.1 4.4s1.7.7 1.7 1.7zM20.6 12.5v4.9h-2.9v-4.6c0-1.2-.4-2-1.5-2-.8 0-1.2.5-1.4 1-.1.2-.1.5-.1.7v4.9h-2.9s0-7.9 0-8.6h2.9v1.2c.4-.6 1.1-1.5 2.8-1.5 2 0 3.1 1.3 3.1 4z"/></svg>
+                      {{else if eq .Platform "facebook"}}
+                      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M13.7 22v-8h2.7l.4-3.1h-3.1V8.8c0-.9.3-1.5 1.6-1.5h1.7V4.5c-.3 0-1.3-.1-2.4-.1-2.4 0-4 1.4-4 4.2v2.3H8v3.1h2.6v8h3.1z"/></svg>
+                      {{else if eq .Platform "instagram"}}
+                      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7.5 2h9A5.5 5.5 0 0 1 22 7.5v9a5.5 5.5 0 0 1-5.5 5.5h-9A5.5 5.5 0 0 1 2 16.5v-9A5.5 5.5 0 0 1 7.5 2zm0 2A3.5 3.5 0 0 0 4 7.5v9A3.5 3.5 0 0 0 7.5 20h9a3.5 3.5 0 0 0 3.5-3.5v-9A3.5 3.5 0 0 0 16.5 4h-9zm9.8 1.5a1.2 1.2 0 1 1 0 2.4 1.2 1.2 0 0 1 0-2.4zM12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10zm0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>
+                      {{else}}
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg>
+                      {{end}}
+                    </span>
                   </div>
                   {{end}}
                   {{if gt (len .Events) 0}}
