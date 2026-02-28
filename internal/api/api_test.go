@@ -1590,8 +1590,11 @@ func TestCreateViewIncludesComposerPreviewUploadAndNetworks(t *testing.T) {
 	if !strings.Contains(body, "data-account-id=\""+accountID+"\"") {
 		t.Fatalf("expected network chip account binding for unique selection")
 	}
-	if !strings.Contains(body, "id=\"create-account-select\" name=\"account_id\" required data-account-select class=\"is-hidden\"") {
-		t.Fatalf("expected hidden account select backing field for selected network")
+	if !strings.Contains(body, "id=\"create-account-select\" name=\"account_ids\" multiple data-account-select class=\"is-hidden\"") {
+		t.Fatalf("expected hidden multi-account select backing field for selected networks")
+	}
+	if !strings.Contains(body, "id=\"create-primary-account-id\" name=\"account_id\"") {
+		t.Fatalf("expected hidden primary account_id field for compatibility")
 	}
 	if !strings.Contains(body, "class=\"create-header-actions\"") || !strings.Contains(body, "form=\"create-post-form\"") {
 		t.Fatalf("expected create actions in header and connected to composer form")
@@ -1610,6 +1613,9 @@ func TestCreateViewIncludesComposerPreviewUploadAndNetworks(t *testing.T) {
 	}
 	if !strings.Contains(body, "id=\"preview-media\" hidden") {
 		t.Fatalf("expected media preview block to be hidden by default when there is no media")
+	}
+	if !strings.Contains(body, "class=\"char-count-list\"") || !strings.Contains(body, "const selectedPlatformRules = () =>") {
+		t.Fatalf("expected multi-network char count lines in create view")
 	}
 	if !strings.Contains(body, ".composer-text-wrap textarea {") || !strings.Contains(body, "width: 100%;") {
 		t.Fatalf("expected create textarea to span full composer width")
@@ -1684,6 +1690,107 @@ func TestCreatePostFromFormSupportsMediaIDs(t *testing.T) {
 	}
 	if len(drafts[0].Media) != 1 || drafts[0].Media[0].ID != createdMedia.ID {
 		t.Fatalf("expected draft to include submitted media id")
+	}
+}
+
+func TestCreatePostFromFormSupportsMultipleAccounts(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	primaryID := testAccountID(t, store)
+	secondary, err := store.UpsertAccount(t.Context(), db.UpsertAccountParams{
+		Platform:          domain.PlatformLinkedIn,
+		DisplayName:       "LinkedIn Secondary",
+		ExternalAccountID: "li-secondary",
+		AuthMethod:        domain.AuthMethodStatic,
+		Status:            domain.AccountStatusConnected,
+	})
+	if err != nil {
+		t.Fatalf("create secondary account: %v", err)
+	}
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	form := url.Values{}
+	form.Set("account_id", primaryID)
+	form.Add("account_ids", primaryID)
+	form.Add("account_ids", secondary.ID)
+	form.Set("text", "multi-account post")
+	form.Set("intent", "draft")
+
+	req := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewBufferString(form.Encode()))
+	req.Header.Set("content-type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303 from form submit, got %d", w.Code)
+	}
+
+	drafts, err := store.ListDrafts(t.Context())
+	if err != nil {
+		t.Fatalf("list drafts: %v", err)
+	}
+	if len(drafts) != 2 {
+		t.Fatalf("expected 2 drafts for two selected accounts, got %d", len(drafts))
+	}
+	seen := make(map[string]bool)
+	for _, item := range drafts {
+		seen[item.AccountID] = true
+	}
+	if !seen[primaryID] || !seen[secondary.ID] {
+		t.Fatalf("expected drafts for both selected accounts")
+	}
+}
+
+func TestCreatePostFromFormMultipleAccountsFailsAllWhenOneAccountInvalid(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	primaryID := testAccountID(t, store)
+	disconnected, err := store.UpsertAccount(t.Context(), db.UpsertAccountParams{
+		Platform:          domain.PlatformLinkedIn,
+		DisplayName:       "LinkedIn Disconnected",
+		ExternalAccountID: "li-disconnected",
+		AuthMethod:        domain.AuthMethodStatic,
+		Status:            domain.AccountStatusDisconnected,
+	})
+	if err != nil {
+		t.Fatalf("create disconnected account: %v", err)
+	}
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	form := url.Values{}
+	form.Set("account_id", primaryID)
+	form.Add("account_ids", primaryID)
+	form.Add("account_ids", disconnected.ID)
+	form.Set("text", "must fail all")
+	form.Set("intent", "draft")
+
+	req := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewBufferString(form.Encode()))
+	req.Header.Set("content-type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303 from form submit, got %d", w.Code)
+	}
+
+	drafts, err := store.ListDrafts(t.Context())
+	if err != nil {
+		t.Fatalf("list drafts: %v", err)
+	}
+	if len(drafts) != 0 {
+		t.Fatalf("expected fail-all behavior with zero drafts created, got %d", len(drafts))
 	}
 }
 
