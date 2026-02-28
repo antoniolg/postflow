@@ -114,6 +114,66 @@ func TestFacebookPublishWithImageAttachment(t *testing.T) {
 	}
 }
 
+func TestFacebookPublishWithVideoAttachment(t *testing.T) {
+	var gotVideoUpload bool
+	var gotFeedPost bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1.0/page_1/videos":
+			gotVideoUpload = true
+			if err := r.ParseMultipartForm(10 << 20); err != nil {
+				t.Fatalf("parse multipart: %v", err)
+			}
+			if token := strings.TrimSpace(r.FormValue("access_token")); token != "token-1" {
+				t.Fatalf("unexpected video upload token %q", token)
+			}
+			_, _ = w.Write([]byte(`{"id":"video_1"}`))
+		case "/v1.0/page_1/feed":
+			gotFeedPost = true
+			_, _ = w.Write([]byte(`{"id":"fb_post_1"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	mediaPath := filepath.Join(t.TempDir(), "video.mp4")
+	if err := os.WriteFile(mediaPath, []byte("fake-video"), 0o644); err != nil {
+		t.Fatalf("write media: %v", err)
+	}
+	provider := NewFacebookProvider(MetaProviderConfig{
+		GraphURL:   server.URL,
+		APIVersion: "v1.0",
+	})
+	externalID, err := provider.Publish(context.Background(), domain.SocialAccount{
+		Platform:          domain.PlatformFacebook,
+		ExternalAccountID: "page_1",
+	}, Credentials{
+		AccessToken: "token-1",
+	}, domain.Post{
+		Text: "hello fb video",
+		Media: []domain.Media{{
+			ID:           "med_v_1",
+			Kind:         "video",
+			OriginalName: "video.mp4",
+			StoragePath:  mediaPath,
+			MimeType:     "video/mp4",
+		}},
+	})
+	if err != nil {
+		t.Fatalf("publish: %v", err)
+	}
+	if externalID != "video_1" {
+		t.Fatalf("unexpected external id %q", externalID)
+	}
+	if !gotVideoUpload {
+		t.Fatalf("expected video upload call")
+	}
+	if gotFeedPost {
+		t.Fatalf("did not expect feed post call for video publish")
+	}
+}
+
 func TestInstagramPublishUsesMediaURLBuilder(t *testing.T) {
 	var createdWithURL string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -160,5 +220,59 @@ func TestInstagramPublishUsesMediaURLBuilder(t *testing.T) {
 	}
 	if createdWithURL != expectedURL {
 		t.Fatalf("expected image_url %q, got %q", expectedURL, createdWithURL)
+	}
+}
+
+func TestInstagramPublishVideoUsesMediaURLBuilder(t *testing.T) {
+	var createdWithURL string
+	var createdMediaType string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1.0/ig_1/media":
+			body, _ := io.ReadAll(r.Body)
+			values, _ := url.ParseQuery(string(body))
+			createdWithURL = strings.TrimSpace(values.Get("video_url"))
+			createdMediaType = strings.TrimSpace(values.Get("media_type"))
+			_, _ = w.Write([]byte(`{"id":"ig_container_1"}`))
+		case "/v1.0/ig_1/media_publish":
+			_, _ = w.Write([]byte(`{"id":"ig_post_1"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	expectedURL := "https://cdn.example.com/med_ig_v_1.mp4"
+	provider := NewInstagramProvider(MetaProviderConfig{
+		GraphURL:   server.URL,
+		APIVersion: "v1.0",
+		MediaURLBuilder: func(media domain.Media) (string, error) {
+			return fmt.Sprintf("https://cdn.example.com/%s.mp4", strings.TrimSpace(media.ID)), nil
+		},
+	})
+	externalID, err := provider.Publish(context.Background(), domain.SocialAccount{
+		Platform:          domain.PlatformInstagram,
+		ExternalAccountID: "ig_1",
+	}, Credentials{
+		AccessToken: "token-1",
+	}, domain.Post{
+		Text: "hello ig video",
+		Media: []domain.Media{{
+			ID:          "med_ig_v_1",
+			StoragePath: "/tmp/not-public.mp4",
+			MimeType:    "video/mp4",
+		}},
+	})
+	if err != nil {
+		t.Fatalf("publish: %v", err)
+	}
+	if externalID != "ig_post_1" {
+		t.Fatalf("unexpected external id %q", externalID)
+	}
+	if createdWithURL != expectedURL {
+		t.Fatalf("expected video_url %q, got %q", expectedURL, createdWithURL)
+	}
+	if createdMediaType != "REELS" {
+		t.Fatalf("expected media_type REELS, got %q", createdMediaType)
 	}
 }

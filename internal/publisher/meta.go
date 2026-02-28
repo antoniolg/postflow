@@ -70,25 +70,39 @@ func (p *InstagramProvider) Platform() domain.Platform {
 
 func (p *FacebookProvider) ValidateDraft(_ context.Context, _ domain.SocialAccount, draft Draft) ([]string, error) {
 	if len(draft.Media) > 10 {
-		return nil, fmt.Errorf("facebook supports up to 10 image attachments per post")
+		return nil, fmt.Errorf("facebook supports up to 10 media attachments per post")
 	}
+	imageCount := 0
+	videoCount := 0
 	for _, item := range draft.Media {
-		if !isImageMedia(item) {
-			return nil, fmt.Errorf("facebook only supports image media in this release")
+		if isImageMedia(item) {
+			imageCount++
+			continue
 		}
+		if isVideoMedia(item) {
+			videoCount++
+			continue
+		}
+		return nil, fmt.Errorf("facebook requires image or video media")
+	}
+	if videoCount > 1 {
+		return nil, fmt.Errorf("facebook supports a single video per post in this release")
+	}
+	if videoCount > 0 && imageCount > 0 {
+		return nil, fmt.Errorf("facebook does not support mixing images and video in this release")
 	}
 	return nil, nil
 }
 
 func (p *InstagramProvider) ValidateDraft(_ context.Context, _ domain.SocialAccount, draft Draft) ([]string, error) {
 	if len(draft.Media) == 0 {
-		return nil, fmt.Errorf("instagram publish requires one image")
+		return nil, fmt.Errorf("instagram publish requires one media item")
 	}
 	if len(draft.Media) > 1 {
-		return nil, fmt.Errorf("instagram supports a single image per post in this release")
+		return nil, fmt.Errorf("instagram supports a single image or video per post in this release")
 	}
-	if !isImageMedia(draft.Media[0]) {
-		return nil, fmt.Errorf("instagram requires image media")
+	if !isImageMedia(draft.Media[0]) && !isVideoMedia(draft.Media[0]) {
+		return nil, fmt.Errorf("instagram requires image or video media")
 	}
 	return nil, nil
 }
@@ -106,12 +120,43 @@ func (p *FacebookProvider) Publish(ctx context.Context, account domain.SocialAcc
 		return "", fmt.Errorf("facebook access token missing")
 	}
 	if len(post.Media) > 10 {
-		return "", fmt.Errorf("facebook supports up to 10 image attachments per post")
+		return "", fmt.Errorf("facebook supports up to 10 media attachments per post")
+	}
+	imageCount := 0
+	videoCount := 0
+	for _, item := range post.Media {
+		if isImageMedia(item) {
+			imageCount++
+			continue
+		}
+		if isVideoMedia(item) {
+			videoCount++
+			continue
+		}
+		return "", fmt.Errorf("facebook requires image or video media")
+	}
+	if videoCount > 1 {
+		return "", fmt.Errorf("facebook supports a single video per post in this release")
+	}
+	if videoCount > 0 && imageCount > 0 {
+		return "", fmt.Errorf("facebook does not support mixing images and video in this release")
+	}
+	if videoCount == 1 {
+		for _, media := range post.Media {
+			if !isVideoMedia(media) {
+				continue
+			}
+			videoID, err := p.uploadFacebookVideo(ctx, pageID, strings.TrimSpace(credentials.AccessToken), strings.TrimSpace(postText), media)
+			if err != nil {
+				return "", err
+			}
+			return videoID, nil
+		}
 	}
 	attachmentIDs := make([]string, 0, len(post.Media))
 	for _, media := range post.Media {
 		if !isImageMedia(media) {
-			return "", fmt.Errorf("facebook only supports image media in this release")
+			return "", fmt.Errorf("facebook requires image media for multi-attachment posts")
 		}
 		photoID, err := p.uploadFacebookPhoto(ctx, pageID, strings.TrimSpace(credentials.AccessToken), media)
 		if err != nil {
@@ -168,30 +213,40 @@ func (p *InstagramProvider) Publish(ctx context.Context, account domain.SocialAc
 		return "", fmt.Errorf("instagram requires at least one media item")
 	}
 	if len(post.Media) > 1 {
-		return "", fmt.Errorf("instagram supports a single image per post in this release")
+		return "", fmt.Errorf("instagram supports a single image or video per post in this release")
 	}
-	if !isImageMedia(post.Media[0]) {
-		return "", fmt.Errorf("instagram requires image media")
+	if !isImageMedia(post.Media[0]) && !isVideoMedia(post.Media[0]) {
+		return "", fmt.Errorf("instagram requires image or video media")
 	}
-	imageURL := strings.TrimSpace(credentials.Extra["image_url"])
-	if imageURL == "" {
+	isVideo := isVideoMedia(post.Media[0])
+	mediaURLKey := "image_url"
+	mediaLabel := "image"
+	if isVideo {
+		mediaURLKey = "video_url"
+		mediaLabel = "video"
+	}
+	mediaURL := strings.TrimSpace(credentials.Extra[mediaURLKey])
+	if mediaURL == "" {
 		candidate := strings.TrimSpace(post.Media[0].StoragePath)
 		if strings.HasPrefix(strings.ToLower(candidate), "http://") || strings.HasPrefix(strings.ToLower(candidate), "https://") {
-			imageURL = candidate
+			mediaURL = candidate
 		}
 	}
-	if imageURL == "" && p.cfg.MediaURLBuilder != nil {
+	if mediaURL == "" && p.cfg.MediaURLBuilder != nil {
 		var err error
-		imageURL, err = p.cfg.MediaURLBuilder(post.Media[0])
+		mediaURL, err = p.cfg.MediaURLBuilder(post.Media[0])
 		if err != nil {
 			return "", err
 		}
 	}
-	if imageURL == "" {
-		return "", fmt.Errorf("instagram requires a public image URL; media %s at %s is not public", post.Media[0].ID, filepath.Base(post.Media[0].StoragePath))
+	if mediaURL == "" {
+		return "", fmt.Errorf("instagram requires a public %s URL; media %s at %s is not public", mediaLabel, post.Media[0].ID, filepath.Base(post.Media[0].StoragePath))
 	}
 	createValues := url.Values{}
-	createValues.Set("image_url", imageURL)
+	createValues.Set(mediaURLKey, mediaURL)
+	if isVideo {
+		createValues.Set("media_type", "REELS")
+	}
 	createValues.Set("caption", strings.TrimSpace(postText))
 	createValues.Set("access_token", strings.TrimSpace(credentials.AccessToken))
 	createURL := fmt.Sprintf("%s/%s/%s/media", strings.TrimRight(p.cfg.GraphURL, "/"), p.cfg.APIVersion, igUserID)
@@ -579,6 +634,76 @@ func (p *FacebookProvider) uploadFacebookPhoto(ctx context.Context, pageID, acce
 	return strings.TrimSpace(out.ID), nil
 }
 
+func (p *FacebookProvider) uploadFacebookVideo(ctx context.Context, pageID, accessToken, message string, media domain.Media) (string, error) {
+	storage := strings.TrimSpace(media.StoragePath)
+	if storage == "" {
+		return "", fmt.Errorf("facebook video media %s has empty storage path", strings.TrimSpace(media.ID))
+	}
+	lowerStorage := strings.ToLower(storage)
+	var req *http.Request
+	var err error
+	endpoint := fmt.Sprintf("%s/%s/%s/videos", strings.TrimRight(p.cfg.GraphURL, "/"), p.cfg.APIVersion, strings.TrimSpace(pageID))
+	if strings.HasPrefix(lowerStorage, "http://") || strings.HasPrefix(lowerStorage, "https://") {
+		values := url.Values{}
+		values.Set("file_url", storage)
+		if strings.TrimSpace(message) != "" {
+			values.Set("description", strings.TrimSpace(message))
+		}
+		values.Set("access_token", strings.TrimSpace(accessToken))
+		req, err = http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(values.Encode()))
+		if err != nil {
+			return "", err
+		}
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	} else {
+		file, openErr := os.Open(storage)
+		if openErr != nil {
+			return "", openErr
+		}
+		defer file.Close()
+		var body bytes.Buffer
+		writer := multipart.NewWriter(&body)
+		_ = writer.WriteField("access_token", strings.TrimSpace(accessToken))
+		if strings.TrimSpace(message) != "" {
+			_ = writer.WriteField("description", strings.TrimSpace(message))
+		}
+		part, createErr := writer.CreateFormFile("source", firstNonEmpty(strings.TrimSpace(media.OriginalName), filepath.Base(storage)))
+		if createErr != nil {
+			return "", createErr
+		}
+		if _, copyErr := io.Copy(part, file); copyErr != nil {
+			return "", copyErr
+		}
+		if closeErr := writer.Close(); closeErr != nil {
+			return "", closeErr
+		}
+		req, err = http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body.Bytes()))
+		if err != nil {
+			return "", err
+		}
+		req.Header.Set("Content-Type", writer.FormDataContentType())
+	}
+	resp, err := p.client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+	if resp.StatusCode >= 300 {
+		return "", fmt.Errorf("facebook video upload failed: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(raw)))
+	}
+	var out struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(out.ID) == "" {
+		return "", fmt.Errorf("facebook video upload response missing id")
+	}
+	return strings.TrimSpace(out.ID), nil
+}
+
 func isImageMedia(media domain.Media) bool {
 	mimeType := strings.ToLower(strings.TrimSpace(media.MimeType))
 	if strings.HasPrefix(mimeType, "image/") {
@@ -593,6 +718,22 @@ func isImageMedia(media domain.Media) bool {
 	}
 	detected := mime.TypeByExtension(ext)
 	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(detected)), "image/")
+}
+
+func isVideoMedia(media domain.Media) bool {
+	mimeType := strings.ToLower(strings.TrimSpace(media.MimeType))
+	if strings.HasPrefix(mimeType, "video/") {
+		return true
+	}
+	ext := strings.ToLower(strings.TrimSpace(filepath.Ext(media.OriginalName)))
+	if ext == "" {
+		ext = strings.ToLower(strings.TrimSpace(filepath.Ext(media.StoragePath)))
+	}
+	if ext == "" {
+		return false
+	}
+	detected := mime.TypeByExtension(ext)
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(detected)), "video/")
 }
 
 func firstNonEmpty(values ...string) string {

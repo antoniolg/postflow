@@ -48,12 +48,26 @@ func (p *LinkedInProvider) Platform() domain.Platform {
 
 func (p *LinkedInProvider) ValidateDraft(_ context.Context, _ domain.SocialAccount, draft Draft) ([]string, error) {
 	if len(draft.Media) > 9 {
-		return nil, fmt.Errorf("linkedin supports up to 9 images per post")
+		return nil, fmt.Errorf("linkedin supports up to 9 image attachments per post")
 	}
+	imageCount := 0
+	videoCount := 0
 	for _, media := range draft.Media {
-		if !isImageMedia(media) {
-			return nil, fmt.Errorf("linkedin only supports image media in this release")
+		if isImageMedia(media) {
+			imageCount++
+			continue
 		}
+		if isVideoMedia(media) {
+			videoCount++
+			continue
+		}
+		return nil, fmt.Errorf("linkedin requires image or video media")
+	}
+	if videoCount > 1 {
+		return nil, fmt.Errorf("linkedin supports a single video per post in this release")
+	}
+	if videoCount > 0 && imageCount > 0 {
+		return nil, fmt.Errorf("linkedin does not support mixing images and video in this release")
 	}
 	return nil, nil
 }
@@ -69,11 +83,31 @@ func (p *LinkedInProvider) Publish(ctx context.Context, account domain.SocialAcc
 		return "", fmt.Errorf("linkedin external account id is required")
 	}
 	assetURNs := make([]string, 0, len(post.Media))
+	videoCount := 0
 	for _, media := range post.Media {
-		if !isImageMedia(media) {
-			return "", fmt.Errorf("linkedin only supports image media in this release")
+		if isVideoMedia(media) {
+			videoCount++
 		}
-		assetURN, err := p.uploadImageAsset(ctx, memberID, token, media)
+	}
+	if videoCount > 1 {
+		return "", fmt.Errorf("linkedin supports a single video per post in this release")
+	}
+	if videoCount > 0 && len(post.Media) > 1 {
+		return "", fmt.Errorf("linkedin does not support mixing images and video in this release")
+	}
+	for _, media := range post.Media {
+		var (
+			assetURN string
+			err      error
+		)
+		switch {
+		case isImageMedia(media):
+			assetURN, err = p.uploadAsset(ctx, memberID, token, media, "urn:li:digitalmediaRecipe:feedshare-image")
+		case isVideoMedia(media):
+			assetURN, err = p.uploadAsset(ctx, memberID, token, media, "urn:li:digitalmediaRecipe:feedshare-video")
+		default:
+			return "", fmt.Errorf("linkedin requires image or video media")
+		}
 		if err != nil {
 			return "", err
 		}
@@ -83,6 +117,9 @@ func (p *LinkedInProvider) Publish(ctx context.Context, account domain.SocialAcc
 	mediaPayload := make([]map[string]any, 0, len(assetURNs))
 	if len(assetURNs) > 0 {
 		shareCategory = "IMAGE"
+		if videoCount > 0 {
+			shareCategory = "VIDEO"
+		}
 		for _, urn := range assetURNs {
 			mediaPayload = append(mediaPayload, map[string]any{
 				"status": "READY",
@@ -137,12 +174,12 @@ func (p *LinkedInProvider) Publish(ctx context.Context, account domain.SocialAcc
 	return strings.TrimSpace(out.ID), nil
 }
 
-func (p *LinkedInProvider) uploadImageAsset(ctx context.Context, memberID, accessToken string, media domain.Media) (string, error) {
+func (p *LinkedInProvider) uploadAsset(ctx context.Context, memberID, accessToken string, media domain.Media, recipe string) (string, error) {
 	ownerURN := "urn:li:person:" + strings.TrimSpace(memberID)
 	registerPayload := map[string]any{
 		"registerUploadRequest": map[string]any{
 			"owner":   ownerURN,
-			"recipes": []string{"urn:li:digitalmediaRecipe:feedshare-image"},
+			"recipes": []string{strings.TrimSpace(recipe)},
 			"serviceRelationships": []map[string]string{{
 				"relationshipType": "OWNER",
 				"identifier":       "urn:li:userGeneratedContent",
