@@ -8,9 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/antoniolg/publisher/internal/db"
+	postsapp "github.com/antoniolg/publisher/internal/application/posts"
 	"github.com/antoniolg/publisher/internal/domain"
-	"github.com/antoniolg/publisher/internal/publisher"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -258,17 +257,6 @@ func (s Server) mcpCreatePostTool(ctx context.Context, _ *mcp.CallToolRequest, i
 	if strings.TrimSpace(in.AccountID) == "" {
 		return nil, mcpCreatePostOutput{}, fmt.Errorf("account_id is required")
 	}
-	account, err := s.resolveTargetAccount(ctx, in.AccountID)
-	if err != nil {
-		return nil, mcpCreatePostOutput{}, fmt.Errorf("account not found")
-	}
-	if account.Status != domain.AccountStatusConnected {
-		return nil, mcpCreatePostOutput{}, fmt.Errorf("account is not connected")
-	}
-	provider, ok := s.providerRegistry().Get(account.Platform)
-	if !ok {
-		return nil, mcpCreatePostOutput{}, fmt.Errorf("provider is not configured for account platform")
-	}
 
 	text := strings.TrimSpace(in.Text)
 	if text == "" {
@@ -285,46 +273,31 @@ func (s Server) mcpCreatePostTool(ctx context.Context, _ *mcp.CallToolRequest, i
 	}
 
 	mediaIDs := cleanMCPMediaIDs(in.MediaIDs)
-	mediaItems, err := s.Store.GetMediaByIDs(ctx, mediaIDs)
-	if err != nil {
-		return nil, mcpCreatePostOutput{}, err
-	}
 
-	maxAttempts := in.MaxAttempts
-	if maxAttempts <= 0 {
-		maxAttempts = s.DefaultMaxRetries
-		if maxAttempts <= 0 {
-			maxAttempts = 3
-		}
+	createService := postsapp.CreateService{
+		Store:             s.Store,
+		Registry:          s.providerRegistry(),
+		DefaultMaxRetries: s.DefaultMaxRetries,
 	}
-
-	idempotencyKey := strings.TrimSpace(in.IdempotencyKey)
-	if len(idempotencyKey) > 128 {
-		return nil, mcpCreatePostOutput{}, fmt.Errorf("idempotency key too long (max 128 chars)")
-	}
-
-	if _, err := provider.ValidateDraft(ctx, account, publisher.Draft{Text: text, Media: mediaItems}); err != nil {
-		return nil, mcpCreatePostOutput{}, err
-	}
-	result, err := s.Store.CreatePost(ctx, db.CreatePostParams{
-		Post: domain.Post{
-			AccountID:   account.ID,
-			Platform:    account.Platform,
-			Text:        text,
-			Status:      defaultStatusForScheduledAt(scheduledAt),
-			ScheduledAt: scheduledAt,
-			MaxAttempts: maxAttempts,
-		},
+	createOut, err := createService.Create(ctx, postsapp.CreateInput{
+		AccountIDs:     []string{in.AccountID},
+		Text:           text,
+		ScheduledAt:    scheduledAt,
 		MediaIDs:       mediaIDs,
-		IdempotencyKey: idempotencyKey,
+		MaxAttempts:    in.MaxAttempts,
+		IdempotencyKey: strings.TrimSpace(in.IdempotencyKey),
 	})
 	if err != nil {
 		return nil, mcpCreatePostOutput{}, err
 	}
+	if len(createOut.Items) != 1 {
+		return nil, mcpCreatePostOutput{}, fmt.Errorf("expected single create result, got %d", len(createOut.Items))
+	}
+	item := createOut.Items[0]
 
 	return nil, mcpCreatePostOutput{
-		Created: result.Created,
-		Post:    toMCPPostSummary(result.Post),
+		Created: item.Created,
+		Post:    toMCPPostSummary(item.Post),
 	}, nil
 }
 

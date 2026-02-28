@@ -3,9 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	postsapp "github.com/antoniolg/publisher/internal/application/posts"
 	"github.com/antoniolg/publisher/internal/db"
 	"github.com/antoniolg/publisher/internal/domain"
 	"github.com/antoniolg/publisher/internal/publisher"
@@ -143,7 +142,7 @@ func (s Server) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	accountIDs := normalizeRequestedAccountIDs(req.AccountID, req.AccountIDs)
+	accountIDs := postsapp.NormalizeAccountIDs(req.AccountID, req.AccountIDs)
 	if len(accountIDs) == 0 {
 		if fromForm {
 			http.Redirect(w, r, createViewURL("", req.Text, req.ScheduledAt, req.ReturnTo, "account_id is required", ""), http.StatusSeeOther)
@@ -198,210 +197,81 @@ func (s Server) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	mediaItems, err := s.Store.GetMediaByIDs(r.Context(), req.MediaIDs)
-	if err != nil {
-		if fromForm {
-			http.Redirect(w, r, createViewURL("", req.Text, req.ScheduledAt, req.ReturnTo, err.Error(), ""), http.StatusSeeOther)
-			return
-		}
-		writeError(w, http.StatusBadRequest, err)
-		return
-	}
-
-	maxAttempts := req.MaxAttempts
-	if maxAttempts <= 0 {
-		maxAttempts = s.DefaultMaxRetries
-		if maxAttempts <= 0 {
-			maxAttempts = 3
-		}
-	}
-
 	idempotencyKey := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
-	if len(idempotencyKey) > 128 {
+	createService := postsapp.CreateService{
+		Store:             s.Store,
+		Registry:          s.providerRegistry(),
+		DefaultMaxRetries: s.DefaultMaxRetries,
+	}
+	createOut, err := createService.Create(r.Context(), postsapp.CreateInput{
+		AccountIDs:     accountIDs,
+		Text:           text,
+		ScheduledAt:    scheduledAt,
+		MediaIDs:       req.MediaIDs,
+		MaxAttempts:    req.MaxAttempts,
+		IdempotencyKey: idempotencyKey,
+	})
+	if err != nil {
+		status, message := mapCreatePostError(err, fromForm)
 		if fromForm {
-			http.Redirect(w, r, createViewURL("", req.Text, req.ScheduledAt, req.ReturnTo, "idempotency key too long (max 128 chars)", ""), http.StatusSeeOther)
+			http.Redirect(w, r, createViewURL("", req.Text, req.ScheduledAt, req.ReturnTo, message, ""), http.StatusSeeOther)
 			return
 		}
-		writeError(w, http.StatusBadRequest, errors.New("Idempotency-Key too long (max 128 chars)"))
+		writeError(w, status, errors.New(message))
 		return
-	}
-
-	targetAccounts := make([]domain.SocialAccount, 0, len(accountIDs))
-	for _, accountID := range accountIDs {
-		account, resolveErr := s.resolveTargetAccount(r.Context(), accountID)
-		if resolveErr != nil {
-			if fromForm {
-				http.Redirect(w, r, createViewURL("", req.Text, req.ScheduledAt, req.ReturnTo, "account not found", ""), http.StatusSeeOther)
-				return
-			}
-			writeError(w, http.StatusBadRequest, errors.New("account not found"))
-			return
-		}
-		if account.Status != domain.AccountStatusConnected {
-			if fromForm {
-				http.Redirect(w, r, createViewURL("", req.Text, req.ScheduledAt, req.ReturnTo, "account is not connected", ""), http.StatusSeeOther)
-				return
-			}
-			writeError(w, http.StatusBadRequest, errors.New("account is not connected"))
-			return
-		}
-		provider, ok := s.providerRegistry().Get(account.Platform)
-		if !ok {
-			if fromForm {
-				http.Redirect(w, r, createViewURL("", req.Text, req.ScheduledAt, req.ReturnTo, "provider is not configured for account platform", ""), http.StatusSeeOther)
-				return
-			}
-			writeError(w, http.StatusBadRequest, errors.New("provider is not configured for account platform"))
-			return
-		}
-		if _, validateErr := provider.ValidateDraft(r.Context(), account, publisher.Draft{Text: text, Media: mediaItems}); validateErr != nil {
-			if fromForm {
-				http.Redirect(w, r, createViewURL("", req.Text, req.ScheduledAt, req.ReturnTo, validateErr.Error(), ""), http.StatusSeeOther)
-				return
-			}
-			writeError(w, http.StatusBadRequest, validateErr)
-			return
-		}
-		targetAccounts = append(targetAccounts, account)
-	}
-
-	results := make([]db.CreatePostResult, 0, len(targetAccounts))
-	createdIDs := make([]string, 0, len(targetAccounts))
-	for _, account := range targetAccounts {
-		result, createErr := s.Store.CreatePost(r.Context(), db.CreatePostParams{
-			Post: domain.Post{
-				AccountID:   account.ID,
-				Platform:    account.Platform,
-				Text:        text,
-				Status:      defaultStatusForScheduledAt(scheduledAt),
-				ScheduledAt: scheduledAt,
-				MaxAttempts: maxAttempts,
-			},
-			MediaIDs:       req.MediaIDs,
-			IdempotencyKey: scopedIdempotencyKey(idempotencyKey, account.ID),
-		})
-		if createErr != nil {
-			rollbackErr := s.rollbackCreatedPosts(r.Context(), createdIDs)
-			if rollbackErr != nil {
-				createErr = fmt.Errorf("%w (rollback failed: %v)", createErr, rollbackErr)
-			}
-			if fromForm {
-				http.Redirect(w, r, createViewURL("", req.Text, req.ScheduledAt, req.ReturnTo, createErr.Error(), ""), http.StatusSeeOther)
-				return
-			}
-			writeError(w, http.StatusInternalServerError, createErr)
-			return
-		}
-		if result.Created {
-			createdIDs = append(createdIDs, result.Post.ID)
-		}
-		results = append(results, result)
-	}
-
-	createdCount := 0
-	for _, result := range results {
-		if result.Created {
-			createdCount++
-		}
 	}
 
 	if fromForm {
 		successMsg := "post updated"
-		if len(results) > 1 {
-			if createdCount > 0 {
-				successMsg = fmt.Sprintf("%d posts created", createdCount)
+		if len(createOut.Items) > 1 {
+			if createOut.CreatedCount > 0 {
+				successMsg = fmt.Sprintf("%d posts created", createOut.CreatedCount)
 			} else {
 				successMsg = "posts updated"
 			}
-		} else if createdCount > 0 {
+		} else if createOut.CreatedCount > 0 {
 			successMsg = "post created"
 		}
 		http.Redirect(w, r, createViewURL("", "", "", req.ReturnTo, "", successMsg), http.StatusSeeOther)
 		return
 	}
 
-	if len(results) == 1 {
-		if results[0].Created {
-			writeJSON(w, http.StatusCreated, results[0].Post)
+	if len(createOut.Items) == 1 {
+		if createOut.Items[0].Created {
+			writeJSON(w, http.StatusCreated, createOut.Items[0].Post)
 			return
 		}
-		writeJSON(w, http.StatusOK, results[0].Post)
+		writeJSON(w, http.StatusOK, createOut.Items[0].Post)
 		return
 	}
 
-	items := make([]domain.Post, 0, len(results))
-	for _, result := range results {
-		items = append(items, result.Post)
+	items := make([]domain.Post, 0, len(createOut.Items))
+	for _, item := range createOut.Items {
+		items = append(items, item.Post)
 	}
-	if createdCount > 0 {
+	if createOut.CreatedCount > 0 {
 		writeJSON(w, http.StatusCreated, map[string]any{
 			"items":         items,
-			"created_count": createdCount,
+			"created_count": createOut.CreatedCount,
 			"total":         len(items),
 		})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"items":         items,
-		"created_count": createdCount,
+		"created_count": createOut.CreatedCount,
 		"total":         len(items),
 	})
 }
 
-func (s Server) rollbackCreatedPosts(ctx context.Context, postIDs []string) error {
-	var rollbackErrors []string
-	for _, postID := range postIDs {
-		if err := s.Store.DeletePostEditable(ctx, strings.TrimSpace(postID)); err != nil {
-			rollbackErrors = append(rollbackErrors, strings.TrimSpace(postID)+": "+err.Error())
-		}
+func mapCreatePostError(err error, fromForm bool) (int, string) {
+	if errors.Is(err, postsapp.ErrIdempotencyKeyTooLong) && !fromForm {
+		return http.StatusBadRequest, "Idempotency-Key too long (max 128 chars)"
 	}
-	if len(rollbackErrors) > 0 {
-		return errors.New(strings.Join(rollbackErrors, "; "))
+	if postsapp.IsValidationError(err) {
+		return http.StatusBadRequest, err.Error()
 	}
-	return nil
-}
-
-func normalizeRequestedAccountIDs(primary string, many []string) []string {
-	seen := make(map[string]struct{})
-	out := make([]string, 0, len(many)+1)
-	add := func(raw string) {
-		id := strings.TrimSpace(raw)
-		if id == "" {
-			return
-		}
-		if _, ok := seen[id]; ok {
-			return
-		}
-		seen[id] = struct{}{}
-		out = append(out, id)
-	}
-	for _, id := range many {
-		add(id)
-	}
-	add(primary)
-	return out
-}
-
-func scopedIdempotencyKey(base, accountID string) string {
-	base = strings.TrimSpace(base)
-	accountID = strings.TrimSpace(accountID)
-	if base == "" || accountID == "" {
-		return base
-	}
-	scoped := base + ":" + accountID
-	if len(scoped) <= 128 {
-		return scoped
-	}
-	digest := sha256.Sum256([]byte(scoped))
-	suffix := hex.EncodeToString(digest[:8])
-	prefixLen := 128 - 1 - len(suffix)
-	if prefixLen < 1 {
-		return suffix
-	}
-	if len(base) > prefixLen {
-		base = base[:prefixLen]
-	}
-	return base + ":" + suffix
+	return http.StatusInternalServerError, err.Error()
 }
 
 func (s Server) handleScheduleJSON(w http.ResponseWriter, r *http.Request) {
@@ -7066,7 +6936,7 @@ func parseCreatePostRequest(r *http.Request) (createPostRequest, bool, error) {
 			}
 			normalizedIDs = append(normalizedIDs, id)
 		}
-		req.AccountIDs = normalizeRequestedAccountIDs("", normalizedIDs)
+		req.AccountIDs = postsapp.NormalizeAccountIDs("", normalizedIDs)
 		req.AccountID = strings.TrimSpace(req.AccountID)
 		if len(req.AccountIDs) == 0 && req.AccountID != "" {
 			req.AccountIDs = []string{req.AccountID}
@@ -7093,7 +6963,7 @@ func parseCreatePostRequest(r *http.Request) (createPostRequest, bool, error) {
 		}
 		req.AccountIDs = append(req.AccountIDs, id)
 	}
-	req.AccountIDs = normalizeRequestedAccountIDs("", req.AccountIDs)
+	req.AccountIDs = postsapp.NormalizeAccountIDs("", req.AccountIDs)
 	if len(req.AccountIDs) == 0 && req.AccountID != "" {
 		req.AccountIDs = []string{req.AccountID}
 	}
