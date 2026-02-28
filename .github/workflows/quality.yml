@@ -47,7 +47,7 @@ jobs:
           git diff --exit-code go.mod go.sum
 
       - name: Lint (golangci-lint)
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v7
         with:
           version: v2.9.0
           args: --config .golangci.yml --timeout=5m
@@ -70,4 +70,3 @@ jobs:
 
       - name: Vulnerability scan
         run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
-
