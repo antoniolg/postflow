@@ -1390,6 +1390,9 @@ func TestDefaultViewIsCalendar(t *testing.T) {
 	if !strings.Contains(body, "@media (max-width: 980px)") || !strings.Contains(body, "height: auto;") {
 		t.Fatalf("expected mobile sidebar override to disable fixed viewport height")
 	}
+	if !strings.Contains(body, "body[data-view=\"calendar\"] .calendar-layout {\n        width: 100%;\n        padding-top: 0;\n        grid-template-columns: minmax(0, 1fr);") {
+		t.Fatalf("expected mobile calendar layout override to force single-column full-width grid")
+	}
 	if !strings.Contains(body, "body[data-view=\"calendar\"] .calendar-layout") {
 		t.Fatalf("expected calendar-specific centered layout rule")
 	}

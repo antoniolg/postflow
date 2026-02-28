@@ -3792,6 +3792,12 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         grid-template-columns: 1fr;
         gap: 10px;
       }
+      body[data-view="calendar"] .calendar-layout {
+        width: 100%;
+        padding-top: 0;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 10px;
+      }
       .header-right {
         flex-wrap: nowrap;
         gap: 8px;
@@ -3825,70 +3831,76 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       body[data-view="calendar"] .calendar-grid-scroll {
         display: block;
         overflow: visible;
+        background: #2a2a2a;
       }
       body[data-view="calendar"] .week-row {
+        display: grid;
+        grid-template-columns: repeat(7, minmax(0, 1fr));
         flex: initial;
         min-height: initial;
         min-width: 0;
         gap: 2px;
       }
       body[data-view="calendar"] .weekday-row {
+        display: grid;
+        grid-template-columns: repeat(7, minmax(0, 1fr));
         min-width: 0;
         gap: 2px;
       }
       body[data-view="calendar"] .weekday {
-        font-size: 9px;
-        padding: 2px 0;
+        font-size: 10px;
+        padding: 4px 0;
       }
       body[data-view="calendar"] .day-cell {
-        min-height: 52px;
+        min-height: 80px;
         height: auto;
         min-width: 0;
-        padding: 2px;
-        border-radius: 4px;
+        padding: 4px;
+        border-radius: 0;
       }
       body[data-view="calendar"] .day-link {
-        min-height: 48px;
-        height: 48px;
-        display: block;
-        position: relative;
+        min-height: 72px;
+        height: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        position: static;
       }
       body[data-view="calendar"] .day-head {
         margin: 0;
-        justify-content: center;
+        justify-content: space-between;
       }
       body[data-view="calendar"] .day-num {
-        font-size: 11px;
+        font-size: 12px;
       }
       body[data-view="calendar"] .today-badge {
         display: none;
       }
       body[data-view="calendar"] .day-count {
-        position: absolute;
-        top: 2px;
-        right: 2px;
-        min-width: 14px;
-        padding: 0 4px;
+        position: static;
+        min-width: 16px;
+        padding: 1px 5px;
         font-size: 9px;
+        margin-left: auto;
       }
       body[data-view="calendar"] .day-events {
-        position: absolute;
-        left: 2px;
-        right: 2px;
-        bottom: 2px;
-        flex: initial;
-        min-height: initial;
+        position: static;
+        left: auto;
+        right: auto;
+        bottom: auto;
+        flex: 1;
+        min-height: 0;
         gap: 2px;
       }
       body[data-view="calendar"] .day-event {
-        font-size: 8px;
-        padding: 1px 3px;
+        font-size: 9px;
+        padding: 2px 4px;
       }
       body[data-view="calendar"] .day-event .event-time,
       body[data-view="calendar"] .day-event .event-network {
         display: none;
       }
-      body[data-view="calendar"] .day-events .day-event:nth-child(n+2) {
+      body[data-view="calendar"] .day-events .day-event:nth-child(n+3) {
         display: none;
       }
       body[data-view="calendar"] .day-events .more {
