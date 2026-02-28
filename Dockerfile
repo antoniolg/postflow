@@ -29,7 +29,20 @@ USER app
 ENV PORT=8080 \
     DATABASE_PATH=/srv/data/publisher.db \
     DATA_DIR=/srv/data/media \
-    LOG_LEVEL=info
+    LOG_LEVEL=info \
+    PUBLISHER_DRIVER=mock \
+    PUBLISHER_MASTER_KEY= \
+    PUBLIC_BASE_URL= \
+    LINKEDIN_CLIENT_ID= \
+    LINKEDIN_CLIENT_SECRET= \
+    META_APP_ID= \
+    META_APP_SECRET= \
+    X_API_BASE_URL=https://api.twitter.com \
+    X_UPLOAD_BASE_URL=https://upload.twitter.com \
+    X_API_KEY= \
+    X_API_SECRET= \
+    X_ACCESS_TOKEN= \
+    X_ACCESS_TOKEN_SECRET=
 
 EXPOSE 8080
 ENTRYPOINT ["/usr/local/bin/publisher"]
