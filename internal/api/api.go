@@ -3741,7 +3741,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
                   <div class="day-event {{.StatusClass}}" data-day-event data-status="{{.StatusKey}}">
                     <span class="event-dot" aria-hidden="true"></span>
                     <span class="event-time">{{.TimeLabel}}</span>
-                    <span class="event-title">{{.TextPreview}}</span>
+                    <span class="event-title">{{previewMarkdown .TextPreview}}</span>
                   </div>
                   {{end}}
                   {{if gt (len .Events) 0}}
@@ -3772,7 +3772,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
               <span class="day-item-time">{{.TimeLabel}}</span>
               <span class="day-item-platform">{{.Platform}}</span>
             </div>
-            <div class="day-item-text">{{.Text}}</div>
+            <div class="day-item-text">{{previewMarkdown .Text}}</div>
             <div class="day-item-actions">
               {{if .Deletable}}
               <form method="post" action="/posts/{{.PostID}}/delete" onsubmit="return confirm('{{t "calendar.delete_publication_confirm"}}');">
@@ -3795,7 +3795,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
               <span class="day-item-time">{{.TimeLabel}}</span>
               <span class="day-item-platform">{{.Platform}}</span>
             </div>
-            <div class="day-item-text">{{.Text}}</div>
+            <div class="day-item-text">{{previewMarkdown .Text}}</div>
           </article>
           {{end}}
           {{end}}
@@ -3811,7 +3811,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
         <article class="card scheduled card-editable" data-edit-url="/?view=create&edit_id={{.ID}}&return_to={{urlquery $.CurrentViewURL}}">
           <div class="card-left">
             <div class="content">
-              <div class="text">{{.Text}}</div>
+              <div class="text">{{previewMarkdown .Text}}</div>
               <div class="meta">
                 <span class="meta-accent">{{if .ScheduledAt.IsZero}}{{t "common.no_date"}}{{else}}{{.ScheduledAt.Format "2006-01-02 15:04 MST"}}{{end}}</span>
                 <span>{{.Platform}}</span>
@@ -3832,7 +3832,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	        <article class="card draft card-editable" data-status="draft" data-edit-url="/?view=create&edit_id={{.ID}}&return_to={{urlquery $.CurrentViewURL}}">
           <div class="card-left">
             <div class="content">
-              <div class="text">{{.Text}}</div>
+              <div class="text">{{previewMarkdown .Text}}</div>
               <div class="meta">
                 <span class="meta-soft">{{t "drafts.no_date_assigned"}}</span>
                 <span>{{.Platform}}</span>
@@ -3874,7 +3874,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
               <input class="failed-checkbox" type="checkbox" value="{{.DeadLetterID}}" data-failed-checkbox aria-label="{{t "failed.select_publication" .PostID}}" />
             </div>
             <div class="content">
-              <div class="text">{{.Text}}</div>
+              <div class="text">{{previewMarkdown .Text}}</div>
               <div class="meta">
                 <span class="meta-soft">{{.ScheduledAtLabel}}</span>
                 <span>{{.Platform}}</span>
