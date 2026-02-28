@@ -1,0 +1,120 @@
+package api
+
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/antoniolg/publisher/internal/db"
+	"github.com/antoniolg/publisher/internal/domain"
+	"github.com/antoniolg/publisher/internal/publisher"
+)
+
+type oauthReplayTestProvider struct {
+	callbackCalls int
+}
+
+func (p *oauthReplayTestProvider) Platform() domain.Platform {
+	return domain.PlatformLinkedIn
+}
+
+func (p *oauthReplayTestProvider) ValidateDraft(_ context.Context, _ domain.SocialAccount, _ publisher.Draft) ([]string, error) {
+	return nil, nil
+}
+
+func (p *oauthReplayTestProvider) Publish(_ context.Context, _ domain.SocialAccount, _ publisher.Credentials, _ domain.Post) (string, error) {
+	return "ok", nil
+}
+
+func (p *oauthReplayTestProvider) RefreshIfNeeded(_ context.Context, _ domain.SocialAccount, credentials publisher.Credentials) (publisher.Credentials, bool, error) {
+	return credentials, false, nil
+}
+
+func (p *oauthReplayTestProvider) StartOAuth(_ context.Context, in publisher.OAuthStartInput) (publisher.OAuthStartOutput, error) {
+	return publisher.OAuthStartOutput{AuthURL: "https://example.com/oauth?state=" + url.QueryEscape(in.State)}, nil
+}
+
+func (p *oauthReplayTestProvider) HandleOAuthCallback(_ context.Context, _ publisher.OAuthCallbackInput) ([]publisher.ConnectedAccount, error) {
+	p.callbackCalls++
+	return []publisher.ConnectedAccount{
+		{
+			Platform:          domain.PlatformLinkedIn,
+			DisplayName:       "LinkedIn Test",
+			ExternalAccountID: "linkedin_test_id",
+			Credentials: publisher.Credentials{
+				AccessToken: "token",
+				TokenType:   "Bearer",
+			},
+		},
+	}, nil
+}
+
+func TestOAuthCallbackReplayInHTMLFlowReturnsSuccess(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	provider := &oauthReplayTestProvider{}
+	srv := Server{
+		Store:             store,
+		DataDir:           tempDir,
+		DefaultMaxRetries: 3,
+		Registry:          publisher.NewProviderRegistry(provider),
+		PublicBaseURL:     "https://postflow.example",
+	}
+	h := srv.Handler()
+
+	state := "state_replay_" + strings.ReplaceAll(t.Name(), "/", "_")
+	_, err = store.CreateOAuthState(t.Context(), domain.OauthState{
+		Platform:     domain.PlatformLinkedIn,
+		State:        state,
+		CodeVerifier: "verifier",
+		ExpiresAt:    time.Now().UTC().Add(5 * time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("create oauth state: %v", err)
+	}
+
+	callbackURL := "/oauth/linkedin/callback?state=" + url.QueryEscape(state) + "&code=auth_code"
+
+	req1 := httptest.NewRequest(http.MethodGet, callbackURL, nil)
+	req1.Header.Set("Accept", "text/html")
+	w1 := httptest.NewRecorder()
+	h.ServeHTTP(w1, req1)
+	if w1.Code != http.StatusSeeOther {
+		t.Fatalf("expected first callback to redirect, got %d", w1.Code)
+	}
+	location1 := w1.Header().Get("Location")
+	if !strings.Contains(location1, "accounts_success=") {
+		t.Fatalf("expected success redirect in first callback, got %q", location1)
+	}
+	if provider.callbackCalls != 1 {
+		t.Fatalf("expected provider callback to be called once, got %d", provider.callbackCalls)
+	}
+
+	req2 := httptest.NewRequest(http.MethodGet, callbackURL, nil)
+	req2.Header.Set("Accept", "text/html")
+	w2 := httptest.NewRecorder()
+	h.ServeHTTP(w2, req2)
+	if w2.Code != http.StatusSeeOther {
+		t.Fatalf("expected replay callback to redirect, got %d", w2.Code)
+	}
+	location2 := w2.Header().Get("Location")
+	if strings.Contains(location2, "accounts_error=") {
+		t.Fatalf("expected replay callback to avoid invalid state error, got %q", location2)
+	}
+	if !strings.Contains(location2, "accounts_success=oauth+callback+already+processed") {
+		t.Fatalf("expected replay callback success message, got %q", location2)
+	}
+	if provider.callbackCalls != 1 {
+		t.Fatalf("expected provider callback to remain at 1 call, got %d", provider.callbackCalls)
+	}
+}

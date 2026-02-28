@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/antoniolg/publisher/internal/db"
@@ -352,6 +354,12 @@ func (s Server) handleOAuthStart(w http.ResponseWriter, r *http.Request) {
 	}
 	state := mustID("state")
 	codeVerifier := mustID("verifier")
+	slog.Info("oauth start requested",
+		"platform", platform,
+		"state", oauthStateLabel(state),
+		"return_to", returnTo,
+		"is_html", isHTML,
+	)
 	recorded, err := s.Store.CreateOAuthState(r.Context(), domain.OauthState{
 		Platform:     platform,
 		State:        state,
@@ -415,6 +423,12 @@ func (s Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	stateRaw := strings.TrimSpace(r.URL.Query().Get("state"))
 	code := strings.TrimSpace(r.URL.Query().Get("code"))
+	slog.Info("oauth callback received",
+		"platform", platform,
+		"state", oauthStateLabel(stateRaw),
+		"code_present", code != "",
+		"is_html", isHTML,
+	)
 	if code == "" {
 		if errDesc := strings.TrimSpace(r.URL.Query().Get("error_description")); errDesc != "" {
 			if isHTML {
@@ -434,6 +448,25 @@ func (s Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	recorded, err := s.Store.ConsumeOAuthState(r.Context(), stateRaw)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
+			if wasRecentlyCompletedOAuthState(stateRaw) {
+				slog.Warn("oauth callback replay detected",
+					"platform", platform,
+					"state", oauthStateLabel(stateRaw),
+				)
+				if isHTML {
+					http.Redirect(w, r, withQueryValue(returnTo, "accounts_success", "oauth callback already processed"), http.StatusSeeOther)
+					return
+				}
+				writeJSON(w, http.StatusOK, map[string]any{
+					"platform": platform,
+					"status":   "already_processed",
+				})
+				return
+			}
+			slog.Warn("oauth callback state not found",
+				"platform", platform,
+				"state", oauthStateLabel(stateRaw),
+			)
 			if isHTML {
 				http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", "invalid oauth state"), http.StatusSeeOther)
 				return
@@ -489,6 +522,7 @@ func (s Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		}
 		created = append(created, account)
 	}
+	rememberCompletedOAuthState(recorded.State)
 	if isHTML {
 		msg := fmt.Sprintf("%d accounts connected", len(created))
 		if len(created) == 1 {
@@ -579,6 +613,57 @@ func mustID(prefix string) string {
 }
 
 const settingsViewURL = "/?view=settings"
+
+var recentCompletedOAuthStates sync.Map
+
+func rememberCompletedOAuthState(state string) {
+	state = strings.TrimSpace(state)
+	if state == "" {
+		return
+	}
+	now := time.Now().UTC()
+	expireAt := now.Add(2 * time.Minute)
+	recentCompletedOAuthStates.Store(state, expireAt)
+	recentCompletedOAuthStates.Range(func(key, value any) bool {
+		storedExpireAt, ok := value.(time.Time)
+		if !ok || !storedExpireAt.After(now) {
+			recentCompletedOAuthStates.Delete(key)
+		}
+		return true
+	})
+}
+
+func wasRecentlyCompletedOAuthState(state string) bool {
+	state = strings.TrimSpace(state)
+	if state == "" {
+		return false
+	}
+	raw, ok := recentCompletedOAuthStates.Load(state)
+	if !ok {
+		return false
+	}
+	expireAt, ok := raw.(time.Time)
+	if !ok {
+		recentCompletedOAuthStates.Delete(state)
+		return false
+	}
+	if !expireAt.After(time.Now().UTC()) {
+		recentCompletedOAuthStates.Delete(state)
+		return false
+	}
+	return true
+}
+
+func oauthStateLabel(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "empty"
+	}
+	if len(raw) <= 12 {
+		return raw
+	}
+	return raw[:6] + "..." + raw[len(raw)-4:]
+}
 
 func accountReturnTo(r *http.Request) string {
 	returnTo := sanitizeReturnTo(strings.TrimSpace(r.FormValue("return_to")))
