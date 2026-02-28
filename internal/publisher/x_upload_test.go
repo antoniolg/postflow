@@ -83,4 +83,3 @@ func TestUploadChunkedUsesGETForStatusCommand(t *testing.T) {
 		t.Fatalf("STATUS method = %q, want %q", statusMethod, http.MethodGet)
 	}
 }
-

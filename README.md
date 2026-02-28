@@ -42,6 +42,22 @@ go run ./cmd/publisher-cli dlq list --limit 50
 go run ./cmd/publisher-cli dlq requeue --id dlq_xxx
 ```
 
+## Quality Gate (CI)
+
+Se ejecuta automáticamente en:
+- cada `pull_request`
+- cada push a `main`
+
+Checks incluidos:
+- `gofmt` (fail si hay ficheros sin formatear)
+- `go mod tidy` (fail si cambia `go.mod/go.sum`)
+- `golangci-lint` (config en `.golangci.yml`)
+- `go build ./...`
+- `go test ./...`
+- `go test -race ./...`
+- cobertura total mínima (`50%`)
+- `govulncheck`
+
 ## Configuración
 
 Variables principales:
