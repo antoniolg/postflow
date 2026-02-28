@@ -146,6 +146,10 @@ type processingInfo struct {
 }
 
 func (c *XClient) uploadCommand(ctx context.Context, params map[string]string) (uploadResponse, error) {
+	return c.uploadCommandWithMethod(ctx, http.MethodPost, params)
+}
+
+func (c *XClient) uploadCommandWithMethod(ctx context.Context, method string, params map[string]string) (uploadResponse, error) {
 	u, err := url.Parse(c.uploadBase + "/1.1/media/upload.json")
 	if err != nil {
 		return uploadResponse{}, err
@@ -156,7 +160,7 @@ func (c *XClient) uploadCommand(ctx context.Context, params map[string]string) (
 	}
 	u.RawQuery = q.Encode()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), nil)
+	req, err := http.NewRequestWithContext(ctx, method, u.String(), nil)
 	if err != nil {
 		return uploadResponse{}, err
 	}
@@ -249,7 +253,7 @@ func (c *XClient) waitForProcessing(ctx context.Context, mediaID string, info *p
 				return ctx.Err()
 			case <-time.After(time.Duration(wait) * time.Second):
 			}
-			statusResp, err := c.uploadCommand(ctx, map[string]string{"command": "STATUS", "media_id": mediaID})
+			statusResp, err := c.uploadCommandWithMethod(ctx, http.MethodGet, map[string]string{"command": "STATUS", "media_id": mediaID})
 			if err != nil {
 				return err
 			}
