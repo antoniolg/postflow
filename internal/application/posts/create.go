@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/antoniolg/publisher/internal/application/ports"
 	"github.com/antoniolg/publisher/internal/db"
 	"github.com/antoniolg/publisher/internal/domain"
 	"github.com/antoniolg/publisher/internal/publisher"
@@ -31,13 +32,9 @@ type Store interface {
 	DeletePostEditable(ctx context.Context, id string) error
 }
 
-type ProviderRegistry interface {
-	Get(platform domain.Platform) (publisher.Provider, bool)
-}
-
 type CreateService struct {
 	Store             Store
-	Registry          ProviderRegistry
+	Registry          ports.ProviderRegistry
 	DefaultMaxRetries int
 }
 

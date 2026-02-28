@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/antoniolg/publisher/internal/application/ports"
 	"github.com/antoniolg/publisher/internal/domain"
 	"github.com/antoniolg/publisher/internal/publisher"
 )
@@ -19,19 +20,10 @@ type Store interface {
 	UpdateAccountStatus(ctx context.Context, id string, status domain.AccountStatus, lastErr *string) error
 }
 
-type ProviderRegistry interface {
-	Get(platform domain.Platform) (publisher.Provider, bool)
-}
-
-type CredentialsStore interface {
-	LoadCredentials(ctx context.Context, accountID string) (publisher.Credentials, error)
-	SaveCredentials(ctx context.Context, accountID string, credentials publisher.Credentials) error
-}
-
 type Runner struct {
 	Store        Store
-	Registry     ProviderRegistry
-	Credentials  CredentialsStore
+	Registry     ports.ProviderRegistry
+	Credentials  ports.CredentialsStore
 	RetryBackoff time.Duration
 	Interval     time.Duration
 	Logger       *slog.Logger

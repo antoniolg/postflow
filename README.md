@@ -58,6 +58,12 @@ Checks incluidos:
 - cobertura total mínima (`50%`)
 - `govulncheck`
 
+## Arquitectura
+
+Documentación de referencia:
+- `docs/architecture.md` (visión global y reglas de capas)
+- `docs/adr/0001-modular-monolith-application-layer.md` (decisión de arquitectura adoptada)
+
 ## Configuración
 
 Variables principales:
