@@ -183,8 +183,8 @@ func TestCreateAndSettingsViewsRenderMediaManagementSections(t *testing.T) {
 	if !strings.Contains(createBody, `id="create-media-library"`) {
 		t.Fatalf("expected create media library section")
 	}
-	if !strings.Contains(createBody, `data-media-attach="`+createdMedia.ID+`"`) {
-		t.Fatalf("expected create media library to include attach action for uploaded media")
+	if !strings.Contains(createBody, `data-media-open="`+createdMedia.ID+`"`) {
+		t.Fatalf("expected create media library to include open action button for uploaded media")
 	}
 
 	settingsReq := httptest.NewRequest(http.MethodGet, "/?view=settings", nil)

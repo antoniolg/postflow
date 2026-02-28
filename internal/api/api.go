@@ -2969,6 +2969,10 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     .create-media-card.in-use {
       opacity: 0.9;
     }
+    .create-media-card.attached {
+      border-color: rgba(0, 212, 170, 0.55);
+      box-shadow: inset 0 0 0 1px rgba(0, 212, 170, 0.25);
+    }
     .create-media-card .media-library-thumb {
       width: 100%;
       height: 100%;
@@ -3002,11 +3006,6 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       background: rgba(31, 31, 31, 0.88);
       border: 1px solid rgba(120, 120, 120, 0.35);
       color: #d0d0d0;
-    }
-    .create-media-icon-btn.attached {
-      background: rgba(0, 212, 170, 0.22);
-      border-color: rgba(0, 212, 170, 0.35);
-      color: #8be7d7;
     }
     .create-media-overlay-actions .btn-danger.create-media-icon-btn {
       color: #ffb7bf;
@@ -3314,10 +3313,6 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       justify-content: center;
       cursor: pointer;
     }
-    .media-library-actions [data-media-attach].attached {
-      background: rgba(0, 212, 170, 0.2);
-      color: #8be7d7;
-    }
     .media-pill-used {
       background: #2d2d2d;
       color: #a8a8a8;
@@ -3415,8 +3410,15 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       object-fit: cover;
       display: block;
     }
+    .preview-media video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
     .preview-media[hidden],
-    .preview-media img[hidden] {
+    .preview-media img[hidden],
+    .preview-media video[hidden] {
       display: none;
     }
     .preview-media-empty {
@@ -3992,8 +3994,8 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
                           {{if .IsImage}}<img src="{{.PreviewURL}}" alt="{{.OriginalName}}" loading="lazy" />{{else if .IsVideo}}<video src="{{.PreviewURL}}" muted preload="metadata" playsinline></video><span class="settings-media-video-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="8 6 19 12 8 18"/></svg></span>{{else}}<span class="settings-media-file-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg></span>{{end}}
                         </div>
                         <div class="create-media-overlay-actions">
-	                          <button type="button" class="btn-secondary settings-account-icon-btn create-media-icon-btn" data-media-attach="{{.ID}}" aria-label="{{t "create.attach_media"}}" title="{{t "create.attach_to_post"}}">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+	                          <button type="button" class="btn-secondary settings-account-icon-btn create-media-icon-btn" data-media-open="{{.ID}}" aria-label="{{t "settings.open_media"}}" title="{{t "settings.open_media"}}">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>
                           </button>
                           {{if .InUse}}
 	                          <span class="pill media-pill-used">{{t "common.used_count" .UsageCount}}</span>
@@ -4037,6 +4039,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		              <div class="preview-text" id="preview-text">{{if .CreateText}}{{previewMarkdown .CreateText}}{{else}}{{t "create.preview_default"}}{{end}}</div>
 	              <div class="preview-media" id="preview-media" hidden>
 	                <img id="preview-media-image" alt="{{t "create.media_preview"}}" hidden />
+	                <video id="preview-media-video" muted loop autoplay playsinline preload="metadata" hidden></video>
 	                <div class="preview-media-empty" id="preview-media-empty">{{t "create.preview_no_media"}}</div>
 	              </div>
 	              <div class="preview-footer">{{t "create.just_now"}}</div>
@@ -5002,6 +5005,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
   const uploadNotice = document.getElementById("create-upload-notice");
   const previewMedia = document.getElementById("preview-media");
   const previewImage = document.getElementById("preview-media-image");
+  const previewVideo = document.getElementById("preview-media-video");
   const previewEmpty = document.getElementById("preview-media-empty");
   const createContentBox = form.querySelector(".create-field-content .composer-text-wrap");
   const previewBodyWrap = document.querySelector(".preview-body");
@@ -5016,6 +5020,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       !(uploadNotice instanceof HTMLElement) ||
       !(previewMedia instanceof HTMLElement) ||
       !(previewImage instanceof HTMLImageElement) ||
+      !(previewVideo instanceof HTMLVideoElement) ||
       !(previewEmpty instanceof HTMLElement)) {
     return;
   }
@@ -5040,10 +5045,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     charsWithLimit: {{printf "%q" (t "create.chars_with_limit")}},
     charsUnknown: {{printf "%q" (t "create.chars_unknown")}},
     previewDefault: {{printf "%q" (t "create.preview_default")}},
-    attachMedia: {{printf "%q" (t "create.attach_media")}},
-    removeMediaFromPost: {{printf "%q" (t "create.remove_media_from_post")}},
-    attachToPost: {{printf "%q" (t "create.attach_to_post")}},
-    removeFromPost: {{printf "%q" (t "create.remove_from_post")}},
+    openMedia: {{printf "%q" (t "settings.open_media")}},
     usedLabel: {{printf "%q" (t "common.used")}},
     mediaItemLabel: {{printf "%q" (t "create.media_item")}},
     removeMedia: {{printf "%q" (t "create.remove_media")}},
@@ -5290,16 +5292,32 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
   };
 
   const updatePreviewMedia = () => {
-    const firstImage = attachments.find((item) => item.previewUrl);
-    if (firstImage && firstImage.previewUrl) {
-      previewImage.src = firstImage.previewUrl;
-      previewImage.hidden = false;
+    const firstMedia = attachments.find((item) => item.previewUrl);
+    if (firstMedia && firstMedia.previewUrl) {
+      const mime = String(firstMedia.mime || "").toLowerCase();
+      const isVideo = mime.startsWith("video/");
+      if (isVideo) {
+        previewVideo.src = firstMedia.previewUrl;
+        previewVideo.hidden = false;
+        previewVideo.play().catch(() => {});
+        previewImage.removeAttribute("src");
+        previewImage.hidden = true;
+      } else {
+        previewImage.src = firstMedia.previewUrl;
+        previewImage.hidden = false;
+        previewVideo.pause();
+        previewVideo.removeAttribute("src");
+        previewVideo.hidden = true;
+      }
       previewEmpty.hidden = true;
       previewMedia.hidden = false;
       return;
     }
     previewImage.removeAttribute("src");
     previewImage.hidden = true;
+    previewVideo.pause();
+    previewVideo.removeAttribute("src");
+    previewVideo.hidden = true;
     previewEmpty.hidden = true;
     previewMedia.hidden = true;
   };
@@ -5343,36 +5361,25 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
   };
 
   const isAttachedMedia = (id) => attachments.some((item) => item.id === id);
-  const attachIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>';
-  const detachIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 17H7a5 5 0 010-10h2"/><path d="M15 7h2a5 5 0 010 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/></svg>';
+  const openIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>';
   const deleteIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
   const closeIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
   const playIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="8 6 19 12 8 18"/></svg>';
   const fileIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>';
 
-  const setAttachButtonState = (button, attached) => {
-    if (!(button instanceof HTMLButtonElement)) {
-      return;
-    }
-    button.classList.toggle("attached", attached);
-    button.innerHTML = attached ? detachIcon : attachIcon;
-    button.setAttribute("aria-label", attached ? i18n.removeMediaFromPost : i18n.attachMedia);
-    button.setAttribute("title", attached ? i18n.removeFromPost : i18n.attachToPost);
-  };
-
-  const syncLibraryAttachButtons = () => {
+  const syncLibraryAttachState = () => {
     if (!(mediaLibrary instanceof HTMLElement)) {
       return;
     }
-    mediaLibrary.querySelectorAll("[data-media-attach]").forEach((node) => {
-      if (!(node instanceof HTMLButtonElement)) {
+    mediaLibrary.querySelectorAll("[data-media-library-item]").forEach((node) => {
+      if (!(node instanceof HTMLElement)) {
         return;
       }
-      const id = (node.getAttribute("data-media-attach") || "").trim();
+      const id = (node.dataset.mediaId || "").trim();
       if (!id) {
         return;
       }
-      setAttachButtonState(node, isAttachedMedia(id));
+      node.classList.toggle("attached", isAttachedMedia(id));
     });
   };
 
@@ -5483,12 +5490,14 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 
     const actions = document.createElement("div");
     actions.className = "create-media-overlay-actions";
-    const attach = document.createElement("button");
-    attach.type = "button";
-    attach.className = "btn-secondary settings-account-icon-btn create-media-icon-btn";
-    attach.setAttribute("data-media-attach", item.id);
-    setAttachButtonState(attach, isAttachedMedia(item.id));
-    actions.appendChild(attach);
+    const open = document.createElement("button");
+    open.type = "button";
+    open.className = "btn-secondary settings-account-icon-btn create-media-icon-btn";
+    open.setAttribute("data-media-open", item.id);
+    open.innerHTML = openIcon;
+    open.setAttribute("aria-label", i18n.openMedia);
+    open.setAttribute("title", i18n.openMedia);
+    actions.appendChild(open);
 
     if (inUse) {
       const used = document.createElement("span");
@@ -5509,7 +5518,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     row.appendChild(thumb);
     row.appendChild(actions);
     mediaLibrary.prepend(row);
-    syncLibraryAttachButtons();
+    syncLibraryAttachState();
   };
 
   const destroyPreviewURL = (item) => {
@@ -5527,7 +5536,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       mediaList.hidden = true;
       setNotice("");
       updatePreviewMedia();
-      syncLibraryAttachButtons();
+      syncLibraryAttachState();
       return;
     }
 
@@ -5557,7 +5566,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     });
     setNotice(formatTemplate(i18n.mediaUploaded, attachments.length, maxMedia), "success");
     updatePreviewMedia();
-    syncLibraryAttachButtons();
+    syncLibraryAttachState();
   };
 
   const isSupportedMediaFile = (file) => file instanceof File && (file.type.startsWith("image/") || file.type.startsWith("video/"));
@@ -5748,27 +5757,20 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
       return;
     }
 
-    const attachButton = target.closest("[data-media-attach]");
-    const attachID = attachButton instanceof HTMLButtonElement ? (attachButton.getAttribute("data-media-attach") || "").trim() : "";
-    if (attachID) {
-      if (isAttachedMedia(attachID)) {
-        removeAttachmentByID(attachID);
-        syncHiddenMediaInputs();
-        renderMediaList();
+    const openButton = target.closest("[data-media-open]");
+    const openID = openButton instanceof HTMLButtonElement ? (openButton.getAttribute("data-media-open") || "").trim() : "";
+    if (openID) {
+      const itemNode = openButton.closest("[data-media-library-item]");
+      if (!(itemNode instanceof HTMLElement)) {
         return;
       }
-      if (attachments.length >= maxMedia) {
-        setNotice(formatTemplate(i18n.maxFiles, maxMedia), "error");
+      const previewURL = (itemNode.dataset.mediaPreview || "").trim();
+      if (!previewURL) {
         return;
       }
-      const itemNode = target.closest("[data-media-library-item]");
-      const libraryItem = parseLibraryNode(itemNode);
-      if (!libraryItem) {
-        return;
-      }
-      attachments.push(libraryItem);
-      syncHiddenMediaInputs();
-      renderMediaList();
+      try {
+        window.open(previewURL, "_blank", "noopener,noreferrer");
+      } catch (_) {}
       return;
     }
 
@@ -5796,7 +5798,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
           syncHiddenMediaInputs();
           renderMediaList();
         } else {
-          syncLibraryAttachButtons();
+          syncLibraryAttachState();
         }
         setNotice(i18n.mediaDeleted, "success");
       } catch (err) {
@@ -5812,13 +5814,20 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
     if (!(itemNode instanceof HTMLElement)) {
       return;
     }
-    const previewURL = (itemNode.dataset.mediaPreview || "").trim();
-    if (!previewURL) {
+    if (attachments.length >= maxMedia) {
+      setNotice(formatTemplate(i18n.maxFiles, maxMedia), "error");
       return;
     }
-    try {
-      window.open(previewURL, "_blank", "noopener,noreferrer");
-    } catch (_) {}
+    const libraryItem = parseLibraryNode(itemNode);
+    if (!libraryItem) {
+      return;
+    }
+    if (isAttachedMedia(libraryItem.id)) {
+      return;
+    }
+    attachments.push(libraryItem);
+    syncHiddenMediaInputs();
+    renderMediaList();
   });
 
   if (accountSelect instanceof HTMLSelectElement && accountSelect.value.trim() === "" && accountSelect.options.length > 0) {
