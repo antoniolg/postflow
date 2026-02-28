@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	dlqapp "github.com/antoniolg/publisher/internal/application/dlq"
 	postsapp "github.com/antoniolg/publisher/internal/application/posts"
 	"github.com/antoniolg/publisher/internal/db"
 	"github.com/antoniolg/publisher/internal/domain"
@@ -500,7 +501,7 @@ func (s Server) handleEditPost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s Server) handleListDLQ(w http.ResponseWriter, r *http.Request) {
-	limit := 100
+	limit := dlqapp.DefaultListLimit
 	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
 		var parsed int
 		_, err := fmt.Sscanf(raw, "%d", &parsed)
@@ -508,13 +509,11 @@ func (s Server) handleListDLQ(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, errors.New("limit must be a positive integer"))
 			return
 		}
-		if parsed > 500 {
-			parsed = 500
-		}
-		limit = parsed
+		limit = dlqapp.ClampListLimit(parsed)
 	}
 
-	items, err := s.Store.ListDeadLetters(r.Context(), limit)
+	svc := dlqapp.Service{Store: s.Store}
+	items, err := svc.List(r.Context(), limit)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
@@ -546,7 +545,9 @@ func (s Server) handleRequeueDLQ(w http.ResponseWriter, r *http.Request) {
 	id = strings.TrimSuffix(id, "/")
 	contentType := strings.ToLower(r.Header.Get("content-type"))
 	fromForm := strings.Contains(contentType, "application/x-www-form-urlencoded") || strings.Contains(contentType, "multipart/form-data")
-	if id == "" {
+	svc := dlqapp.Service{Store: s.Store}
+	post, err := svc.Requeue(r.Context(), id)
+	if errors.Is(err, dlqapp.ErrDeadLetterIDRequired) {
 		if fromForm {
 			http.Redirect(w, r, "/?view=failed&failed_error=invalid+dead+letter+id", http.StatusSeeOther)
 			return
@@ -554,8 +555,6 @@ func (s Server) handleRequeueDLQ(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, errors.New("invalid dead letter id"))
 		return
 	}
-
-	post, err := s.Store.RequeueDeadLetter(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			if fromForm {
@@ -601,7 +600,9 @@ func (s Server) handleDeleteDLQ(w http.ResponseWriter, r *http.Request) {
 	id = strings.TrimSuffix(id, "/")
 	contentType := strings.ToLower(r.Header.Get("content-type"))
 	fromForm := strings.Contains(contentType, "application/x-www-form-urlencoded") || strings.Contains(contentType, "multipart/form-data")
-	if id == "" {
+	svc := dlqapp.Service{Store: s.Store}
+	err := svc.Delete(r.Context(), id)
+	if errors.Is(err, dlqapp.ErrDeadLetterIDRequired) {
 		if fromForm {
 			http.Redirect(w, r, "/?view=failed&failed_error=invalid+dead+letter+id", http.StatusSeeOther)
 			return
@@ -609,8 +610,7 @@ func (s Server) handleDeleteDLQ(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, errors.New("invalid dead letter id"))
 		return
 	}
-
-	if err := s.Store.DeleteDeadLetter(r.Context(), id); err != nil {
+	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			if fromForm {
 				http.Redirect(w, r, "/?view=failed&failed_error=dead+letter+not+found", http.StatusSeeOther)
@@ -667,20 +667,9 @@ func (s Server) handleBulkRequeueDLQ(w http.ResponseWriter, r *http.Request) {
 		ids = body.IDs
 	}
 
-	cleaned := make([]string, 0, len(ids))
-	seen := map[string]struct{}{}
-	for _, id := range ids {
-		id = strings.TrimSpace(id)
-		if id == "" {
-			continue
-		}
-		if _, ok := seen[id]; ok {
-			continue
-		}
-		seen[id] = struct{}{}
-		cleaned = append(cleaned, id)
-	}
-	if len(cleaned) == 0 {
+	svc := dlqapp.Service{Store: s.Store}
+	result, err := svc.BulkRequeue(r.Context(), ids)
+	if errors.Is(err, dlqapp.ErrIDsRequired) {
 		if fromForm {
 			http.Redirect(w, r, "/?view=failed&failed_error=no+items+selected", http.StatusSeeOther)
 			return
@@ -688,31 +677,29 @@ func (s Server) handleBulkRequeueDLQ(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, errors.New("ids are required"))
 		return
 	}
-
-	success := 0
-	failed := 0
-	for _, id := range cleaned {
-		if _, err := s.Store.RequeueDeadLetter(r.Context(), id); err != nil {
-			failed++
-			continue
+	if err != nil {
+		if fromForm {
+			http.Redirect(w, r, "/?view=failed&failed_error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+			return
 		}
-		success++
+		writeError(w, http.StatusInternalServerError, err)
+		return
 	}
 
 	if fromForm {
 		q := url.Values{}
 		q.Set("view", "failed")
-		q.Set("failed_success", fmt.Sprintf("requeued %d", success))
-		if failed > 0 {
-			q.Set("failed_error", fmt.Sprintf("failed %d", failed))
+		q.Set("failed_success", fmt.Sprintf("requeued %d", result.Success))
+		if result.Failed > 0 {
+			q.Set("failed_error", fmt.Sprintf("failed %d", result.Failed))
 		}
 		http.Redirect(w, r, "/?"+q.Encode(), http.StatusSeeOther)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"selected": len(cleaned),
-		"success":  success,
-		"failed":   failed,
+		"selected": result.Selected,
+		"success":  result.Success,
+		"failed":   result.Failed,
 	})
 }
 
@@ -738,20 +725,9 @@ func (s Server) handleBulkDeleteDLQ(w http.ResponseWriter, r *http.Request) {
 		ids = body.IDs
 	}
 
-	cleaned := make([]string, 0, len(ids))
-	seen := map[string]struct{}{}
-	for _, id := range ids {
-		id = strings.TrimSpace(id)
-		if id == "" {
-			continue
-		}
-		if _, ok := seen[id]; ok {
-			continue
-		}
-		seen[id] = struct{}{}
-		cleaned = append(cleaned, id)
-	}
-	if len(cleaned) == 0 {
+	svc := dlqapp.Service{Store: s.Store}
+	result, err := svc.BulkDelete(r.Context(), ids)
+	if errors.Is(err, dlqapp.ErrIDsRequired) {
 		if fromForm {
 			http.Redirect(w, r, "/?view=failed&failed_error=no+items+selected", http.StatusSeeOther)
 			return
@@ -759,31 +735,29 @@ func (s Server) handleBulkDeleteDLQ(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, errors.New("ids are required"))
 		return
 	}
-
-	success := 0
-	failed := 0
-	for _, id := range cleaned {
-		if err := s.Store.DeleteDeadLetter(r.Context(), id); err != nil {
-			failed++
-			continue
+	if err != nil {
+		if fromForm {
+			http.Redirect(w, r, "/?view=failed&failed_error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+			return
 		}
-		success++
+		writeError(w, http.StatusInternalServerError, err)
+		return
 	}
 
 	if fromForm {
 		q := url.Values{}
 		q.Set("view", "failed")
-		q.Set("failed_success", fmt.Sprintf("deleted %d", success))
-		if failed > 0 {
-			q.Set("failed_error", fmt.Sprintf("failed %d", failed))
+		q.Set("failed_success", fmt.Sprintf("deleted %d", result.Success))
+		if result.Failed > 0 {
+			q.Set("failed_error", fmt.Sprintf("failed %d", result.Failed))
 		}
 		http.Redirect(w, r, "/?"+q.Encode(), http.StatusSeeOther)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"selected": len(cleaned),
-		"success":  success,
-		"failed":   failed,
+		"selected": result.Selected,
+		"success":  result.Success,
+		"failed":   result.Failed,
 	})
 }
 

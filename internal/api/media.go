@@ -7,18 +7,15 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
+	mediaapp "github.com/antoniolg/publisher/internal/application/media"
 	"github.com/antoniolg/publisher/internal/db"
 	"github.com/antoniolg/publisher/internal/domain"
 )
 
-const (
-	defaultMediaListLimit = 200
-	maxMediaListLimit     = 500
-)
+const defaultMediaListLimit = mediaapp.DefaultListLimit
 
 type mediaListItem struct {
 	ID           string `json:"id"`
@@ -34,16 +31,6 @@ type mediaListItem struct {
 	IsImage      bool   `json:"is_image"`
 	IsVideo      bool   `json:"is_video"`
 	PreviewURL   string `json:"preview_url"`
-}
-
-func clampMediaListLimit(limit int) int {
-	if limit <= 0 {
-		return defaultMediaListLimit
-	}
-	if limit > maxMediaListLimit {
-		return maxMediaListLimit
-	}
-	return limit
 }
 
 func mediaContentURL(id string) string {
@@ -99,7 +86,8 @@ func toMediaListItemWithUsage(media domain.Media, usageCount int, loc *time.Loca
 }
 
 func (s Server) listMediaItems(ctx context.Context, limit int, loc *time.Location) ([]mediaListItem, error) {
-	raw, err := s.Store.ListMedia(ctx, clampMediaListLimit(limit))
+	svc := mediaapp.Service{Store: s.Store}
+	raw, err := svc.List(ctx, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -111,15 +99,10 @@ func (s Server) listMediaItems(ctx context.Context, limit int, loc *time.Locatio
 }
 
 func (s Server) deleteMediaByID(ctx context.Context, mediaID string, loc *time.Location) (mediaListItem, error) {
-	deleted, err := s.Store.DeleteMediaIfUnused(ctx, strings.TrimSpace(mediaID))
+	svc := mediaapp.Service{Store: s.Store}
+	deleted, err := svc.Delete(ctx, mediaID)
 	if err != nil {
 		return mediaListItem{}, err
-	}
-	if path := strings.TrimSpace(deleted.StoragePath); path != "" {
-		removeErr := os.Remove(path)
-		if removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
-			// Keep the DB delete as source of truth; file cleanup can be retried later.
-		}
 	}
 	return toMediaListItemWithUsage(deleted, 0, loc), nil
 }
@@ -179,6 +162,8 @@ func (s Server) handleMediaContent(w http.ResponseWriter, r *http.Request) {
 
 func mediaDeleteErrorStatus(err error) int {
 	switch {
+	case errors.Is(err, mediaapp.ErrMediaIDRequired):
+		return http.StatusBadRequest
 	case errors.Is(err, sql.ErrNoRows):
 		return http.StatusNotFound
 	case errors.Is(err, db.ErrMediaInUse):
@@ -190,6 +175,8 @@ func mediaDeleteErrorStatus(err error) int {
 
 func mediaDeleteErrorMessage(err error) string {
 	switch {
+	case errors.Is(err, mediaapp.ErrMediaIDRequired):
+		return "media id is required"
 	case errors.Is(err, sql.ErrNoRows):
 		return "media not found"
 	case errors.Is(err, db.ErrMediaInUse):
