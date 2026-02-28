@@ -226,6 +226,7 @@ func TestInstagramPublishUsesMediaURLBuilder(t *testing.T) {
 func TestInstagramPublishVideoUsesMediaURLBuilder(t *testing.T) {
 	var createdWithURL string
 	var createdMediaType string
+	var checkedContainerStatus bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/v1.0/ig_1/media":
@@ -234,6 +235,9 @@ func TestInstagramPublishVideoUsesMediaURLBuilder(t *testing.T) {
 			createdWithURL = strings.TrimSpace(values.Get("video_url"))
 			createdMediaType = strings.TrimSpace(values.Get("media_type"))
 			_, _ = w.Write([]byte(`{"id":"ig_container_1"}`))
+		case "/v1.0/ig_container_1":
+			checkedContainerStatus = true
+			_, _ = w.Write([]byte(`{"status_code":"FINISHED"}`))
 		case "/v1.0/ig_1/media_publish":
 			_, _ = w.Write([]byte(`{"id":"ig_post_1"}`))
 		default:
@@ -274,5 +278,8 @@ func TestInstagramPublishVideoUsesMediaURLBuilder(t *testing.T) {
 	}
 	if createdMediaType != "REELS" {
 		t.Fatalf("expected media_type REELS, got %q", createdMediaType)
+	}
+	if !checkedContainerStatus {
+		t.Fatalf("expected container status check before publish")
 	}
 }

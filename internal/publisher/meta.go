@@ -19,12 +19,14 @@ import (
 )
 
 type MetaProviderConfig struct {
-	AppID           string
-	AppSecret       string
-	GraphURL        string
-	DialogURL       string
-	APIVersion      string
-	MediaURLBuilder func(media domain.Media) (string, error)
+	AppID                 string
+	AppSecret             string
+	GraphURL              string
+	DialogURL             string
+	APIVersion            string
+	MediaURLBuilder       func(media domain.Media) (string, error)
+	ContainerPollInterval time.Duration
+	ContainerReadyTimeout time.Duration
 }
 
 type FacebookProvider struct {
@@ -46,6 +48,12 @@ func normalizeMetaConfig(cfg MetaProviderConfig) MetaProviderConfig {
 	}
 	if strings.TrimSpace(cfg.APIVersion) == "" {
 		cfg.APIVersion = "v22.0"
+	}
+	if cfg.ContainerPollInterval <= 0 {
+		cfg.ContainerPollInterval = 5 * time.Second
+	}
+	if cfg.ContainerReadyTimeout <= 0 {
+		cfg.ContainerReadyTimeout = 10 * time.Minute
 	}
 	return cfg
 }
@@ -273,6 +281,11 @@ func (p *InstagramProvider) Publish(ctx context.Context, account domain.SocialAc
 	if strings.TrimSpace(container.ID) == "" {
 		return "", fmt.Errorf("instagram create media missing container id")
 	}
+	if isVideo {
+		if err := p.waitForInstagramContainerReady(ctx, strings.TrimSpace(container.ID), strings.TrimSpace(credentials.AccessToken)); err != nil {
+			return "", err
+		}
+	}
 
 	publishValues := url.Values{}
 	publishValues.Set("creation_id", strings.TrimSpace(container.ID))
@@ -302,6 +315,67 @@ func (p *InstagramProvider) Publish(ctx context.Context, account domain.SocialAc
 		return "", fmt.Errorf("instagram publish response missing id")
 	}
 	return strings.TrimSpace(publishOut.ID), nil
+}
+
+func (p *InstagramProvider) waitForInstagramContainerReady(ctx context.Context, containerID, accessToken string) error {
+	containerID = strings.TrimSpace(containerID)
+	if containerID == "" {
+		return fmt.Errorf("instagram container id is required")
+	}
+	accessToken = strings.TrimSpace(accessToken)
+	if accessToken == "" {
+		return fmt.Errorf("instagram access token missing")
+	}
+	deadline := time.Now().UTC().Add(p.cfg.ContainerReadyTimeout)
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		values := url.Values{}
+		values.Set("fields", "status_code,status")
+		values.Set("access_token", accessToken)
+		statusURL := fmt.Sprintf("%s/%s/%s?%s", strings.TrimRight(p.cfg.GraphURL, "/"), p.cfg.APIVersion, containerID, values.Encode())
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, statusURL, nil)
+		if err != nil {
+			return err
+		}
+		resp, err := p.client.Do(req)
+		if err != nil {
+			return err
+		}
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+		resp.Body.Close()
+		if resp.StatusCode >= 300 {
+			return fmt.Errorf("instagram container status failed: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
+		}
+		var out struct {
+			StatusCode string `json:"status_code"`
+			Status     string `json:"status"`
+		}
+		if err := json.Unmarshal(body, &out); err != nil {
+			return err
+		}
+		statusCode := strings.ToUpper(strings.TrimSpace(out.StatusCode))
+		status := strings.ToUpper(strings.TrimSpace(out.Status))
+		switch {
+		case statusCode == "FINISHED":
+			return nil
+		case statusCode == "ERROR" || statusCode == "EXPIRED" || status == "ERROR" || status == "EXPIRED":
+			return fmt.Errorf("instagram container not publishable: status_code=%s status=%s", statusCode, status)
+		case statusCode == "" && status == "":
+			return fmt.Errorf("instagram container status missing")
+		}
+		if time.Now().UTC().After(deadline) {
+			return fmt.Errorf("instagram container was not ready before timeout: status_code=%s status=%s", statusCode, status)
+		}
+		timer := time.NewTimer(p.cfg.ContainerPollInterval)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
+	}
 }
 
 func (p *FacebookProvider) RefreshIfNeeded(ctx context.Context, _ domain.SocialAccount, credentials Credentials) (Credentials, bool, error) {
