@@ -78,14 +78,20 @@ func newParityEnv(t *testing.T) *parityEnv {
 
 func (e *parityEnv) runCLI(args ...string) []byte {
 	e.t.Helper()
-	full := append([]string{"--base-url", e.baseURL, "--api-token", e.token, "--json"}, args...)
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	code := cli.Run(context.Background(), full, &stdout, &stderr)
+	code, stdout, stderr := e.runCLIResult(args...)
 	if code != 0 {
-		e.t.Fatalf("cli exited %d\nargs=%v\nstderr=%s\nstdout=%s", code, full, stderr.String(), stdout.String())
+		e.t.Fatalf("cli exited %d\nargs=%v\nstderr=%s\nstdout=%s", code, args, stderr, stdout)
 	}
-	return bytes.TrimSpace(stdout.Bytes())
+	return bytes.TrimSpace([]byte(stdout))
+}
+
+func (e *parityEnv) runCLIResult(args ...string) (code int, stdout string, stderr string) {
+	e.t.Helper()
+	full := append([]string{"--base-url", e.baseURL, "--api-token", e.token, "--json"}, args...)
+	var out bytes.Buffer
+	var errOut bytes.Buffer
+	code = cli.Run(context.Background(), full, &out, &errOut)
+	return code, out.String(), errOut.String()
 }
 
 func (e *parityEnv) seedFailedDeadLetter(text string) string {

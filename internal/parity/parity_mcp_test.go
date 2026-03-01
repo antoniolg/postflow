@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -74,6 +75,52 @@ func (e *parityEnv) mcpCallTool(name string, args map[string]any) map[string]any
 		e.t.Fatalf("mcp call %s missing structuredContent", name)
 	}
 	return out.Result.StructuredContent
+}
+
+func (e *parityEnv) mcpCallToolError(name string, args map[string]any) string {
+	e.t.Helper()
+	e.nextReq++
+	payload := map[string]any{
+		"jsonrpc": "2.0",
+		"id":      e.nextReq,
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name":      name,
+			"arguments": args,
+		},
+	}
+	raw, status, _ := e.mcpPost(payload)
+	if status != http.StatusOK {
+		return strings.TrimSpace(fmt.Sprintf("http status %d: %s", status, string(raw)))
+	}
+	var out struct {
+		Error *struct {
+			Message string `json:"message"`
+		} `json:"error"`
+		Result struct {
+			IsError           bool           `json:"isError"`
+			StructuredContent map[string]any `json:"structuredContent"`
+			Content           []struct {
+				Text string `json:"text"`
+			} `json:"content"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return strings.TrimSpace(err.Error())
+	}
+	if out.Error != nil {
+		return strings.TrimSpace(out.Error.Message)
+	}
+	if out.Result.IsError {
+		if len(out.Result.Content) > 0 && strings.TrimSpace(out.Result.Content[0].Text) != "" {
+			return strings.TrimSpace(out.Result.Content[0].Text)
+		}
+		if msg := stringValue(out.Result.StructuredContent, "error"); strings.TrimSpace(msg) != "" {
+			return strings.TrimSpace(msg)
+		}
+		return "tool returned isError=true"
+	}
+	return ""
 }
 
 func (e *parityEnv) mcpScheduleListIDs(from, to string) []string {

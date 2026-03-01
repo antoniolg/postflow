@@ -58,6 +58,11 @@ Checks incluidos:
 - cobertura total mínima (`50%`)
 - `govulncheck`
 
+Paridad de superficies (LLM-first):
+- `internal/parity` incluye contratos black-box ejecutables para `API`, `MCP` y `CLI`.
+- Se valida la paridad en caminos de éxito y error para capacidades compartidas.
+- Los tests generan además una matriz JSON de capacidades (artefacto machine-readable en tiempo de test).
+
 ## Arquitectura
 
 Documentación de referencia:
