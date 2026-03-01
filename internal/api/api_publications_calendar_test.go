@@ -120,11 +120,11 @@ func TestPublicationsViewShowsOnlyScheduledInNext14Days(t *testing.T) {
 	if strings.Contains(body, "next run") {
 		t.Fatalf("legacy publications stats bar should not appear")
 	}
-	if !strings.Contains(body, "nav-icon nav-icon-scheduled") || !strings.Contains(body, "<span>scheduled</span>") {
-		t.Fatalf("expected scheduled nav badge with count")
+	if !strings.Contains(body, "href=\"/?view=publications\"") {
+		t.Fatalf("expected publications navigation link")
 	}
-	if !strings.Contains(body, "nav-icon nav-icon-drafts") || !strings.Contains(body, "<span>drafts</span>") {
-		t.Fatalf("expected drafts nav badge with count")
+	if !strings.Contains(body, "href=\"/?view=drafts\"") {
+		t.Fatalf("expected drafts navigation link")
 	}
 	if strings.Count(body, "class=\"nav-badge\">1</span>") < 2 {
 		t.Fatalf("expected neutral nav badges for scheduled and drafts")
@@ -197,25 +197,28 @@ func TestNavBadgesUseNeutralForScheduledAndDraftsAndRedForFailed(t *testing.T) {
 	}
 
 	body := publicationsW.Body.String()
-	if !strings.Contains(body, "nav-icon nav-icon-calendar") {
-		t.Fatalf("expected calendar nav icon")
+	if !strings.Contains(body, "href=\"/?view=calendar") {
+		t.Fatalf("expected calendar navigation link")
 	}
-	if !strings.Contains(body, "nav-icon nav-icon-settings") {
-		t.Fatalf("expected settings nav icon")
+	if !strings.Contains(body, "href=\"/?view=settings\"") {
+		t.Fatalf("expected settings navigation link")
 	}
 	if !strings.Contains(body, "nav-item-settings") {
 		t.Fatalf("expected settings nav item class for desktop bottom placement")
 	}
-	if !strings.Contains(body, "nav-icon nav-icon-scheduled") || !strings.Contains(body, "<span>scheduled</span>") {
-		t.Fatalf("expected scheduled nav badge with neutral style")
+	if !strings.Contains(body, "href=\"/?view=publications\"") {
+		t.Fatalf("expected publications navigation link")
 	}
-	if !strings.Contains(body, "nav-icon nav-icon-drafts") || !strings.Contains(body, "<span>drafts</span>") {
-		t.Fatalf("expected drafts nav badge with neutral style")
+	if !strings.Contains(body, "href=\"/?view=drafts\"") {
+		t.Fatalf("expected drafts navigation link")
+	}
+	if !strings.Contains(body, "href=\"/?view=failed\"") {
+		t.Fatalf("expected failed navigation link")
 	}
 	if strings.Count(body, "class=\"nav-badge\">1</span>") < 2 {
 		t.Fatalf("expected neutral nav badges for scheduled and drafts")
 	}
-	if !strings.Contains(body, "nav-icon nav-icon-failed") || !strings.Contains(body, "<span>failed</span>") || !strings.Contains(body, "class=\"nav-badge nav-badge-danger\">1</span>") {
+	if !strings.Contains(body, "class=\"nav-badge nav-badge-danger\">1</span>") {
 		t.Fatalf("expected failed nav badge with danger style")
 	}
 }

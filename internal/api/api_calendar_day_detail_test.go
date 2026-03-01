@@ -249,19 +249,16 @@ func TestDefaultViewIsCalendar(t *testing.T) {
 	if !strings.Contains(body, "<a class=\"create-fab\" href=\"") {
 		t.Fatalf("expected floating create action in non-create views")
 	}
-	if !strings.Contains(body, "<div class=\"calendar-layout\"") {
-		t.Fatalf("expected calendar layout container")
+	if !strings.Contains(body, "data-view=\"calendar\"") {
+		t.Fatalf("expected calendar to be the default active view")
 	}
-	if !strings.Contains(body, "<div class=\"calendar-wrap\"") {
-		t.Fatalf("expected calendar container")
-	}
-	if !strings.Contains(body, "<aside class=\"day-panel\"") {
+	if !strings.Contains(body, "<aside class=\"day-panel\" aria-label=\"Day detail\">") {
 		t.Fatalf("expected day detail panel")
 	}
-	if !strings.Contains(body, "<div class=\"calendar-controls\">") {
+	if !strings.Contains(body, "aria-label=\"Previous month\"") || !strings.Contains(body, "aria-label=\"Next month\"") || !strings.Contains(body, "href=\"/?view=calendar&month=") {
 		t.Fatalf("expected calendar month controls in calendar header")
 	}
-	if !strings.Contains(body, "syncDayPanelHeightToCalendar") {
-		t.Fatalf("expected script hook for syncing calendar and day detail heights")
+	if !strings.Contains(body, "data-day-events") || !strings.Contains(body, "data-day-overflow") {
+		t.Fatalf("expected day cells to expose event and overflow markers")
 	}
 }

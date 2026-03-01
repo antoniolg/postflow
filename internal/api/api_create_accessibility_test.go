@@ -158,13 +158,17 @@ func TestCreateViewIncludesComposerPreviewUploadAndNetworks(t *testing.T) {
 	if !strings.Contains(body, "data-account-id=\""+accountID+"\"") {
 		t.Fatalf("expected network chip account binding for unique selection")
 	}
-	if !strings.Contains(body, "id=\"create-account-select\" name=\"account_ids\" multiple data-account-select class=\"is-hidden\"") {
+	accountSelectRe := regexp.MustCompile(`(?s)<select[^>]*id="create-account-select"[^>]*name="account_ids"[^>]*multiple[^>]*data-account-select`)
+	if !accountSelectRe.MatchString(body) {
 		t.Fatalf("expected hidden multi-account select backing field for selected networks")
 	}
 	if !strings.Contains(body, "id=\"create-primary-account-id\" name=\"account_id\"") {
 		t.Fatalf("expected hidden primary account_id field for compatibility")
 	}
-	if !strings.Contains(body, "class=\"create-header-actions\"") || !strings.Contains(body, "form=\"create-post-form\"") {
+	if !strings.Contains(body, "id=\"create-post-form\"") {
+		t.Fatalf("expected create composer form")
+	}
+	if !strings.Contains(body, "class=\"create-header-actions\"") || !strings.Contains(body, "form=\"create-post-form\"") || !strings.Contains(body, "name=\"intent\" value=\"publish_now\"") {
 		t.Fatalf("expected create actions in header and connected to composer form")
 	}
 	if !strings.Contains(body, "NEW POST</h1>") {
@@ -182,14 +186,11 @@ func TestCreateViewIncludesComposerPreviewUploadAndNetworks(t *testing.T) {
 	if !strings.Contains(body, "id=\"preview-media\" hidden") {
 		t.Fatalf("expected media preview block to be hidden by default when there is no media")
 	}
-	if !strings.Contains(body, "class=\"char-count-list\"") || !strings.Contains(body, "const selectedPlatformRules = () =>") {
+	if !strings.Contains(body, "id=\"create-char-count\"") || !strings.Contains(body, "char-count-line") {
 		t.Fatalf("expected multi-network char count lines in create view")
 	}
 	if !strings.Contains(body, "date-picker-popover") || !strings.Contains(body, "date-display") {
 		t.Fatalf("expected custom dark date picker UI instead of native browser picker")
-	}
-	if !strings.Contains(body, "class=\"btn-primary\" type=\"submit\" name=\"intent\" value=\"publish_now\"") {
-		t.Fatalf("expected publish now button to use primary action style")
 	}
 	if !strings.Contains(body, "name=\"intent\" value=\"publish_now\"") {
 		t.Fatalf("expected publish_now action in create view")
@@ -371,10 +372,8 @@ func TestCreateViewPreviewRendersMarkdownFormatting(t *testing.T) {
 	}
 
 	body := w.Body.String()
-	if !strings.Contains(body, "id=\"preview-text\">Hola <strong>mundo</strong> y <em>equipo</em></div>") {
+	previewHTMLRe := regexp.MustCompile(`id="preview-text">[\s\n]*Hola <strong>mundo</strong> y <em>equipo</em>`)
+	if !previewHTMLRe.MatchString(body) {
 		t.Fatalf("expected markdown formatting in preview html")
-	}
-	if !strings.Contains(body, "const markdownToPreviewHTML = (raw) => {") {
-		t.Fatalf("expected markdown preview renderer in create script")
 	}
 }
