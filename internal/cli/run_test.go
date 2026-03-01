@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -171,5 +173,208 @@ func TestRunInvalidCommand(t *testing.T) {
 	code := Run(context.Background(), []string{"unknown"}, &stdout, &stderr)
 	if code != 2 {
 		t.Fatalf("expected exit 2, got %d", code)
+	}
+}
+
+func TestRunPostsValidateSuccess(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("expected POST, got %s", r.Method)
+		}
+		if r.URL.Path != "/posts/validate" {
+			t.Fatalf("unexpected path %s", r.URL.Path)
+		}
+		var payload map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode payload: %v", err)
+		}
+		if payload["account_id"] != "acc_val_1" {
+			t.Fatalf("unexpected account_id payload %v", payload["account_id"])
+		}
+		if payload["text"] != "validate me" {
+			t.Fatalf("unexpected text payload %v", payload["text"])
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"valid":    true,
+			"warnings": []string{},
+		})
+	}))
+	defer server.Close()
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := Run(context.Background(), []string{
+		"--base-url", server.URL,
+		"posts", "validate",
+		"--account-id", "acc_val_1",
+		"--text", "validate me",
+		"--scheduled-at", "2026-03-01T10:00:00Z",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("expected validate exit 0, got %d, stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "valid: true") {
+		t.Fatalf("expected validate success output, got %s", stdout.String())
+	}
+}
+
+func TestRunPostsValidateFailureShowsAPIError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/posts/validate" {
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]any{"error": "account not found"})
+	}))
+	defer server.Close()
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := Run(context.Background(), []string{
+		"--base-url", server.URL,
+		"posts", "validate",
+		"--account-id", "acc_missing",
+		"--text", "validate me",
+	}, &stdout, &stderr)
+	if code != 1 {
+		t.Fatalf("expected validate failure exit 1, got %d", code)
+	}
+	if !strings.Contains(stderr.String(), "POST /posts/validate: status 400: account not found") {
+		t.Fatalf("expected validate failure message, got %s", stderr.String())
+	}
+}
+
+func TestRunMediaUploadMissingFile(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := Run(context.Background(), []string{
+		"--base-url", "http://127.0.0.1:1",
+		"media", "upload",
+		"--file", "/tmp/this-file-should-not-exist.publisher",
+	}, &stdout, &stderr)
+	if code != 1 {
+		t.Fatalf("expected upload missing-file exit 1, got %d", code)
+	}
+	if !strings.Contains(strings.ToLower(stderr.String()), "open file:") {
+		t.Fatalf("expected missing-file error message, got %s", stderr.String())
+	}
+}
+
+func TestRunMediaUploadHTTPErrorJSON(t *testing.T) {
+	filePath := filepath.Join(t.TempDir(), "clip.mp4")
+	if err := os.WriteFile(filePath, []byte("fake-bytes"), 0o644); err != nil {
+		t.Fatalf("write media file: %v", err)
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/media" {
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		w.WriteHeader(http.StatusRequestEntityTooLarge)
+		_ = json.NewEncoder(w).Encode(map[string]any{"error": "file too large"})
+	}))
+	defer server.Close()
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := Run(context.Background(), []string{
+		"--base-url", server.URL,
+		"media", "upload",
+		"--file", filePath,
+		"--kind", "video",
+	}, &stdout, &stderr)
+	if code != 1 {
+		t.Fatalf("expected upload json-error exit 1, got %d", code)
+	}
+	if !strings.Contains(stderr.String(), "POST /media: status 413: file too large") {
+		t.Fatalf("expected upload json-error message, got %s", stderr.String())
+	}
+}
+
+func TestRunMediaUploadHTTPErrorFallbacks(t *testing.T) {
+	filePath := filepath.Join(t.TempDir(), "clip.mp4")
+	if err := os.WriteFile(filePath, []byte("fake-bytes"), 0o644); err != nil {
+		t.Fatalf("write media file: %v", err)
+	}
+
+	tests := []struct {
+		name         string
+		status       int
+		body         string
+		expectedText string
+	}{
+		{
+			name:         "plain text body",
+			status:       http.StatusBadGateway,
+			body:         "upstream media service failed",
+			expectedText: "POST /media: status 502: upstream media service failed",
+		},
+		{
+			name:         "empty body",
+			status:       http.StatusServiceUnavailable,
+			body:         "",
+			expectedText: "POST /media: status 503: Service Unavailable",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost || r.URL.Path != "/media" {
+					t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+				}
+				w.WriteHeader(tc.status)
+				if tc.body != "" {
+					_, _ = w.Write([]byte(tc.body))
+				}
+			}))
+			defer server.Close()
+
+			var stdout bytes.Buffer
+			var stderr bytes.Buffer
+			code := Run(context.Background(), []string{
+				"--base-url", server.URL,
+				"media", "upload",
+				"--file", filePath,
+				"--kind", "video",
+			}, &stdout, &stderr)
+			if code != 1 {
+				t.Fatalf("expected upload fallback exit 1, got %d", code)
+			}
+			if !strings.Contains(stderr.String(), tc.expectedText) {
+				t.Fatalf("expected upload fallback message %q, got %s", tc.expectedText, stderr.String())
+			}
+		})
+	}
+}
+
+func TestRunMediaUploadInvalidJSONResponse(t *testing.T) {
+	filePath := filepath.Join(t.TempDir(), "clip.mp4")
+	if err := os.WriteFile(filePath, []byte("fake-bytes"), 0o644); err != nil {
+		t.Fatalf("write media file: %v", err)
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/media" {
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte("{not-json"))
+	}))
+	defer server.Close()
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := Run(context.Background(), []string{
+		"--base-url", server.URL,
+		"media", "upload",
+		"--file", filePath,
+		"--kind", "video",
+	}, &stdout, &stderr)
+	if code != 1 {
+		t.Fatalf("expected upload invalid-json exit 1, got %d", code)
+	}
+	if !strings.Contains(strings.ToLower(stderr.String()), "decode response body") {
+		t.Fatalf("expected invalid-json decode error, got %s", stderr.String())
 	}
 }
