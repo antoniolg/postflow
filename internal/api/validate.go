@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -27,52 +28,48 @@ type normalizedPost struct {
 	MaxAttempts int      `json:"max_attempts"`
 }
 
-func (s Server) handleValidatePost(w http.ResponseWriter, r *http.Request) {
-	var req createPostRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, fmt.Errorf("invalid json body: %w", err))
-		return
-	}
+type validatePostInput struct {
+	AccountID   string
+	Text        string
+	ScheduledAt string
+	MediaIDs    []string
+	MaxAttempts int
+}
+
+func (s Server) validatePost(ctx context.Context, req validatePostInput) (validatePostResponse, error) {
 	if strings.TrimSpace(req.AccountID) == "" {
-		writeError(w, http.StatusBadRequest, errors.New("account_id is required"))
-		return
+		return validatePostResponse{}, errors.New("account_id is required")
 	}
 
-	account, err := s.resolveTargetAccount(r.Context(), req.AccountID)
+	account, err := s.resolveTargetAccount(ctx, req.AccountID)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, errors.New("account not found"))
-		return
+		return validatePostResponse{}, errors.New("account not found")
 	}
 	if account.Status != domain.AccountStatusConnected {
-		writeError(w, http.StatusBadRequest, errors.New("account is not connected"))
-		return
+		return validatePostResponse{}, errors.New("account is not connected")
 	}
 	provider, ok := s.providerRegistry().Get(account.Platform)
 	if !ok {
-		writeError(w, http.StatusBadRequest, errors.New("provider is not configured for account platform"))
-		return
+		return validatePostResponse{}, errors.New("provider is not configured for account platform")
 	}
 
 	text := strings.TrimSpace(req.Text)
 	if text == "" {
-		writeError(w, http.StatusBadRequest, errors.New("text is required"))
-		return
+		return validatePostResponse{}, errors.New("text is required")
 	}
 
 	var scheduledAt time.Time
 	if strings.TrimSpace(req.ScheduledAt) != "" {
 		parsed, err := time.Parse(time.RFC3339, req.ScheduledAt)
 		if err != nil {
-			writeError(w, http.StatusBadRequest, fmt.Errorf("scheduled_at must be RFC3339: %w", err))
-			return
+			return validatePostResponse{}, fmt.Errorf("scheduled_at must be RFC3339: %w", err)
 		}
 		scheduledAt = parsed
 	}
 
-	mediaItems, err := s.Store.GetMediaByIDs(r.Context(), req.MediaIDs)
+	mediaItems, err := s.Store.GetMediaByIDs(ctx, req.MediaIDs)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
+		return validatePostResponse{}, err
 	}
 
 	maxAttempts := req.MaxAttempts
@@ -83,16 +80,9 @@ func (s Server) handleValidatePost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	idempotencyKey := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
-	if len(idempotencyKey) > 128 {
-		writeError(w, http.StatusBadRequest, errors.New("Idempotency-Key too long (max 128 chars)"))
-		return
-	}
-
-	warnings, err := provider.ValidateDraft(r.Context(), account, publisher.Draft{Text: text, Media: mediaItems})
+	warnings, err := provider.ValidateDraft(ctx, account, publisher.Draft{Text: text, Media: mediaItems})
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
+		return validatePostResponse{}, err
 	}
 	if scheduledAt.IsZero() {
 		warnings = append(warnings, "draft mode: no scheduled_at provided")
@@ -106,7 +96,7 @@ func (s Server) handleValidatePost(w http.ResponseWriter, r *http.Request) {
 		normalizedScheduledAt = scheduledAt.UTC().Format(time.RFC3339)
 	}
 
-	writeJSON(w, http.StatusOK, validatePostResponse{
+	return validatePostResponse{
 		Valid: true,
 		Normalized: normalizedPost{
 			AccountID:   account.ID,
@@ -117,5 +107,30 @@ func (s Server) handleValidatePost(w http.ResponseWriter, r *http.Request) {
 			MaxAttempts: maxAttempts,
 		},
 		Warnings: warnings,
+	}, nil
+}
+
+func (s Server) handleValidatePost(w http.ResponseWriter, r *http.Request) {
+	var req createPostRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("invalid json body: %w", err))
+		return
+	}
+	idempotencyKey := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
+	if len(idempotencyKey) > 128 {
+		writeError(w, http.StatusBadRequest, errors.New("Idempotency-Key too long (max 128 chars)"))
+		return
+	}
+	out, err := s.validatePost(r.Context(), validatePostInput{
+		AccountID:   req.AccountID,
+		Text:        req.Text,
+		ScheduledAt: req.ScheduledAt,
+		MediaIDs:    req.MediaIDs,
+		MaxAttempts: req.MaxAttempts,
 	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
 }

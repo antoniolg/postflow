@@ -3,11 +3,13 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
+	dlqapp "github.com/antoniolg/publisher/internal/application/dlq"
 	postsapp "github.com/antoniolg/publisher/internal/application/posts"
 	"github.com/antoniolg/publisher/internal/domain"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -60,6 +62,15 @@ func (s Server) newMCPHandler() http.Handler {
 	}, s.mcpCreatePostTool)
 
 	mcp.AddTool(server, &mcp.Tool{
+		Name:        "publisher_validate_post",
+		Description: "Validate a post payload without creating it.",
+		Annotations: &mcp.ToolAnnotations{
+			ReadOnlyHint:   true,
+			IdempotentHint: true,
+		},
+	}, s.mcpValidatePostTool)
+
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "publisher_upload_media",
 		Description: "Upload media and return media_id. Provide either content_base64 or file_path.",
 		Annotations: &mcp.ToolAnnotations{
@@ -83,6 +94,22 @@ func (s Server) newMCPHandler() http.Handler {
 			IdempotentHint: false,
 		},
 	}, s.mcpDeleteMediaTool)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "publisher_requeue_failed",
+		Description: "Requeue one failed dead-letter post back to scheduled.",
+		Annotations: &mcp.ToolAnnotations{
+			IdempotentHint: false,
+		},
+	}, s.mcpRequeueFailedTool)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "publisher_delete_failed",
+		Description: "Delete one failed dead-letter post entry.",
+		Annotations: &mcp.ToolAnnotations{
+			IdempotentHint: false,
+		},
+	}, s.mcpDeleteFailedTool)
 
 	base := mcp.NewStreamableHTTPHandler(func(_ *http.Request) *mcp.Server {
 		return server
@@ -122,6 +149,14 @@ type mcpCreatePostInput struct {
 	MediaIDs       []string `json:"media_ids,omitempty" jsonschema:"Existing media IDs to attach."`
 	MaxAttempts    int      `json:"max_attempts,omitempty" jsonschema:"Max publish retries. Default from server config."`
 	IdempotencyKey string   `json:"idempotency_key,omitempty" jsonschema:"Optional idempotency key (max 128 chars)."`
+}
+
+type mcpValidatePostInput struct {
+	AccountID   string   `json:"account_id" jsonschema:"Target connected account ID."`
+	Text        string   `json:"text" jsonschema:"Post text content."`
+	ScheduledAt string   `json:"scheduled_at,omitempty" jsonschema:"RFC3339 value. Empty means draft."`
+	MediaIDs    []string `json:"media_ids,omitempty" jsonschema:"Existing media IDs to validate."`
+	MaxAttempts int      `json:"max_attempts,omitempty" jsonschema:"Max publish retries. Default from server config."`
 }
 
 type mcpPostSummary struct {
@@ -171,6 +206,26 @@ type mcpListFailedOutput struct {
 type mcpCreatePostOutput struct {
 	Created bool           `json:"created"`
 	Post    mcpPostSummary `json:"post"`
+}
+
+type mcpValidatePostOutput struct {
+	Valid      bool           `json:"valid"`
+	Normalized normalizedPost `json:"normalized"`
+	Warnings   []string       `json:"warnings"`
+}
+
+type mcpFailedMutationInput struct {
+	DeadLetterID string `json:"dead_letter_id" jsonschema:"Dead letter ID."`
+}
+
+type mcpRequeueFailedOutput struct {
+	DeadLetterID string         `json:"dead_letter_id"`
+	Post         mcpPostSummary `json:"post"`
+}
+
+type mcpDeleteFailedOutput struct {
+	DeadLetterID string `json:"dead_letter_id"`
+	Deleted      bool   `json:"deleted"`
 }
 
 func (s Server) mcpListScheduleTool(ctx context.Context, _ *mcp.CallToolRequest, in mcpListScheduleInput) (*mcp.CallToolResult, mcpListScheduleOutput, error) {
@@ -298,6 +353,55 @@ func (s Server) mcpCreatePostTool(ctx context.Context, _ *mcp.CallToolRequest, i
 	return nil, mcpCreatePostOutput{
 		Created: item.Created,
 		Post:    toMCPPostSummary(item.Post),
+	}, nil
+}
+
+func (s Server) mcpValidatePostTool(ctx context.Context, _ *mcp.CallToolRequest, in mcpValidatePostInput) (*mcp.CallToolResult, mcpValidatePostOutput, error) {
+	out, err := s.validatePost(ctx, validatePostInput{
+		AccountID:   strings.TrimSpace(in.AccountID),
+		Text:        strings.TrimSpace(in.Text),
+		ScheduledAt: strings.TrimSpace(in.ScheduledAt),
+		MediaIDs:    cleanMCPMediaIDs(in.MediaIDs),
+		MaxAttempts: in.MaxAttempts,
+	})
+	if err != nil {
+		return nil, mcpValidatePostOutput{}, err
+	}
+	return nil, mcpValidatePostOutput{
+		Valid:      out.Valid,
+		Normalized: out.Normalized,
+		Warnings:   out.Warnings,
+	}, nil
+}
+
+func (s Server) mcpRequeueFailedTool(ctx context.Context, _ *mcp.CallToolRequest, in mcpFailedMutationInput) (*mcp.CallToolResult, mcpRequeueFailedOutput, error) {
+	deadLetterID := strings.TrimSpace(in.DeadLetterID)
+	if deadLetterID == "" {
+		return nil, mcpRequeueFailedOutput{}, errors.New("dead_letter_id is required")
+	}
+	svc := dlqapp.Service{Store: s.Store}
+	post, err := svc.Requeue(ctx, deadLetterID)
+	if err != nil {
+		return nil, mcpRequeueFailedOutput{}, err
+	}
+	return nil, mcpRequeueFailedOutput{
+		DeadLetterID: deadLetterID,
+		Post:         toMCPPostSummary(post),
+	}, nil
+}
+
+func (s Server) mcpDeleteFailedTool(ctx context.Context, _ *mcp.CallToolRequest, in mcpFailedMutationInput) (*mcp.CallToolResult, mcpDeleteFailedOutput, error) {
+	deadLetterID := strings.TrimSpace(in.DeadLetterID)
+	if deadLetterID == "" {
+		return nil, mcpDeleteFailedOutput{}, errors.New("dead_letter_id is required")
+	}
+	svc := dlqapp.Service{Store: s.Store}
+	if err := svc.Delete(ctx, deadLetterID); err != nil {
+		return nil, mcpDeleteFailedOutput{}, err
+	}
+	return nil, mcpDeleteFailedOutput{
+		DeadLetterID: deadLetterID,
+		Deleted:      true,
 	}, nil
 }
 

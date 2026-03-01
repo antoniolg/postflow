@@ -49,6 +49,21 @@ type deadLetterDTO struct {
 	LastError string `json:"last_error"`
 }
 
+type mediaListResponse struct {
+	Count int        `json:"count"`
+	Items []mediaDTO `json:"items"`
+}
+
+type mediaDTO struct {
+	ID           string `json:"id"`
+	Kind         string `json:"kind"`
+	OriginalName string `json:"original_name"`
+	MimeType     string `json:"mime_type"`
+	SizeBytes    int64  `json:"size_bytes"`
+	UsageCount   int    `json:"usage_count"`
+	InUse        bool   `json:"in_use"`
+}
+
 type stringListFlag []string
 
 func (s *stringListFlag) String() string { return strings.Join(*s, ",") }
@@ -84,6 +99,8 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return runPosts(ctx, client, cfg, rest[1:], stdout, stderr)
 	case "dlq":
 		return runDLQ(ctx, client, cfg, rest[1:], stdout, stderr)
+	case "media":
+		return runMedia(ctx, client, cfg, rest[1:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "unknown command: %s\n\n", rest[0])
 		printHelp(stderr)
@@ -286,7 +303,7 @@ func runPostsValidate(ctx context.Context, client *APIClient, cfg config, args [
 
 func runDLQ(ctx context.Context, client *APIClient, cfg config, args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(stderr, "usage: publisher-cli dlq <list|requeue> [flags]")
+		fmt.Fprintln(stderr, "usage: publisher-cli dlq <list|requeue|delete> [flags]")
 		return 2
 	}
 	switch args[0] {
@@ -333,8 +350,105 @@ func runDLQ(ctx context.Context, client *APIClient, cfg config, args []string, s
 			fmt.Fprintf(stdout, "requeued: %v\n", out["dead_letter_id"])
 		})
 		return 0
+	case "delete":
+		fs := flag.NewFlagSet("dlq delete", flag.ContinueOnError)
+		fs.SetOutput(stderr)
+		id := fs.String("id", "", "Dead letter ID")
+		if err := fs.Parse(args[1:]); err != nil {
+			return 2
+		}
+		if strings.TrimSpace(*id) == "" {
+			fmt.Fprintln(stderr, "--id is required")
+			return 2
+		}
+		var out map[string]any
+		if err := client.Post(ctx, "/dlq/"+strings.TrimSpace(*id)+"/delete", nil, &out); err != nil {
+			fmt.Fprintln(stderr, err.Error())
+			return 1
+		}
+		printOutput(stdout, cfg.asJSON, out, func() {
+			fmt.Fprintf(stdout, "deleted: %v\n", out["dead_letter_id"])
+		})
+		return 0
 	default:
 		fmt.Fprintf(stderr, "unknown dlq subcommand: %s\n", args[0])
+		return 2
+	}
+}
+
+func runMedia(ctx context.Context, client *APIClient, cfg config, args []string, stdout, stderr io.Writer) int {
+	if len(args) == 0 {
+		fmt.Fprintln(stderr, "usage: publisher-cli media <list|upload|delete> [flags]")
+		return 2
+	}
+	switch args[0] {
+	case "list":
+		fs := flag.NewFlagSet("media list", flag.ContinueOnError)
+		fs.SetOutput(stderr)
+		limit := fs.Int("limit", 100, "Max number of media items")
+		if err := fs.Parse(args[1:]); err != nil {
+			return 2
+		}
+		query := url.Values{}
+		if *limit > 0 {
+			query.Set("limit", fmt.Sprintf("%d", *limit))
+		}
+		var out mediaListResponse
+		if err := client.Get(ctx, "/media", query, &out); err != nil {
+			fmt.Fprintln(stderr, err.Error())
+			return 1
+		}
+		printOutput(stdout, cfg.asJSON, out, func() {
+			fmt.Fprintf(stdout, "count: %d\n", out.Count)
+			for _, item := range out.Items {
+				fmt.Fprintf(stdout, "- %s kind=%s size=%d in_use=%t\n", item.ID, item.Kind, item.SizeBytes, item.InUse)
+			}
+		})
+		return 0
+	case "upload":
+		fs := flag.NewFlagSet("media upload", flag.ContinueOnError)
+		fs.SetOutput(stderr)
+		filePath := fs.String("file", "", "Path to file")
+		kind := fs.String("kind", "video", "Media kind")
+		if err := fs.Parse(args[1:]); err != nil {
+			return 2
+		}
+		if strings.TrimSpace(*filePath) == "" {
+			fmt.Fprintln(stderr, "--file is required")
+			return 2
+		}
+		fields := map[string]string{"kind": strings.TrimSpace(*kind)}
+		var out map[string]any
+		if err := client.PostMultipartFile(ctx, "/media", "file", strings.TrimSpace(*filePath), fields, &out); err != nil {
+			fmt.Fprintln(stderr, err.Error())
+			return 1
+		}
+		printOutput(stdout, cfg.asJSON, out, func() {
+			fmt.Fprintf(stdout, "uploaded media: %v\n", out["id"])
+		})
+		return 0
+	case "delete":
+		fs := flag.NewFlagSet("media delete", flag.ContinueOnError)
+		fs.SetOutput(stderr)
+		id := fs.String("id", "", "Media ID")
+		if err := fs.Parse(args[1:]); err != nil {
+			return 2
+		}
+		if strings.TrimSpace(*id) == "" {
+			fmt.Fprintln(stderr, "--id is required")
+			return 2
+		}
+		var out map[string]any
+		if err := client.Delete(ctx, "/media/"+strings.TrimSpace(*id), &out); err != nil {
+			fmt.Fprintln(stderr, err.Error())
+			return 1
+		}
+		printOutput(stdout, cfg.asJSON, out, func() {
+			fmt.Fprintf(stdout, "deleted media: %s\n", strings.TrimSpace(*id))
+		})
+		return 0
+	default:
+		fmt.Fprintf(stderr, "unknown media subcommand: %s\n", args[0])
 		return 2
 	}
 }
@@ -387,6 +501,10 @@ Commands:
   posts validate         Validate payload via /posts/validate
   dlq list               List failed dead letters via /dlq
   dlq requeue            Requeue one dead letter via /dlq/{id}/requeue
+  dlq delete             Delete one dead letter via /dlq/{id}/delete
+  media list             List media via /media
+  media upload           Upload media via /media (multipart)
+  media delete           Delete media via /media/{id}
 
 Examples:
   publisher-cli schedule list --from 2026-03-01T00:00:00Z --to 2026-03-31T23:59:59Z

@@ -3,14 +3,17 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/antoniolg/publisher/internal/db"
+	"github.com/antoniolg/publisher/internal/domain"
 )
 
 func TestMCPStreamableHTTPExposesToolsAndCreatesPost(t *testing.T) {
@@ -47,9 +50,12 @@ func TestMCPStreamableHTTPExposesToolsAndCreatesPost(t *testing.T) {
 		"publisher_list_drafts",
 		"publisher_list_failed",
 		"publisher_create_post",
+		"publisher_validate_post",
 		"publisher_upload_media",
 		"publisher_list_media",
 		"publisher_delete_media",
+		"publisher_requeue_failed",
+		"publisher_delete_failed",
 	} {
 		if !strings.Contains(string(listToolsRaw), expected) {
 			t.Fatalf("expected tools/list to include %q", expected)
@@ -95,6 +101,18 @@ func TestMCPStreamableHTTPExposesToolsAndCreatesPost(t *testing.T) {
 		t.Fatalf("expected attached media id %q, got %q", mediaID, drafts[0].Media[0].ID)
 	}
 
+	validateBody := `{"jsonrpc":"2.0","id":4.5,"method":"tools/call","params":{"name":"publisher_validate_post","arguments":{"account_id":"` + account.ID + `","text":"validate from mcp tool"}}}`
+	validateResp, validateRaw := postMCPRequest(t, mcpURL, sessionID, validateBody)
+	if validateResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected validate tools/call status 200, got %d: %s", validateResp.StatusCode, string(validateRaw))
+	}
+	if strings.Contains(string(validateRaw), `"isError":true`) {
+		t.Fatalf("expected validate tool call without isError=true, got: %s", string(validateRaw))
+	}
+	if !strings.Contains(string(validateRaw), `"valid":true`) {
+		t.Fatalf("expected validate tool response to confirm valid payload: %s", string(validateRaw))
+	}
+
 	listMediaBody := `{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"publisher_list_media","arguments":{"limit":50}}}`
 	listMediaResp, listMediaRaw := postMCPRequest(t, mcpURL, sessionID, listMediaBody)
 	if listMediaResp.StatusCode != http.StatusOK {
@@ -130,6 +148,76 @@ func TestMCPStreamableHTTPExposesToolsAndCreatesPost(t *testing.T) {
 	}
 	if !strings.Contains(string(deleteRaw), `"deleted":true`) {
 		t.Fatalf("expected delete tool response to confirm deletion: %s", string(deleteRaw))
+	}
+
+	toFail, err := store.CreatePost(t.Context(), db.CreatePostParams{
+		Post: domain.Post{
+			AccountID:   account.ID,
+			Platform:    account.Platform,
+			Text:        "should fail once",
+			Status:      domain.PostStatusScheduled,
+			ScheduledAt: time.Now().UTC(),
+			MaxAttempts: 1,
+		},
+	})
+	if err != nil {
+		t.Fatalf("create failing post: %v", err)
+	}
+	if err := store.RecordPublishFailure(t.Context(), toFail.Post.ID, errors.New("synthetic failure"), time.Second); err != nil {
+		t.Fatalf("record publish failure: %v", err)
+	}
+	dlqItems, err := store.ListDeadLetters(t.Context(), 10)
+	if err != nil {
+		t.Fatalf("list dead letters: %v", err)
+	}
+	if len(dlqItems) == 0 {
+		t.Fatalf("expected at least one dead letter after failure")
+	}
+	failedID := dlqItems[0].ID
+
+	requeueBody := `{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"publisher_requeue_failed","arguments":{"dead_letter_id":"` + failedID + `"}}}`
+	requeueResp, requeueRaw := postMCPRequest(t, mcpURL, sessionID, requeueBody)
+	if requeueResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected requeue failed status 200, got %d: %s", requeueResp.StatusCode, string(requeueRaw))
+	}
+	if strings.Contains(string(requeueRaw), `"isError":true`) {
+		t.Fatalf("expected requeue failed tool call without isError=true, got: %s", string(requeueRaw))
+	}
+
+	toDelete, err := store.CreatePost(t.Context(), db.CreatePostParams{
+		Post: domain.Post{
+			AccountID:   account.ID,
+			Platform:    account.Platform,
+			Text:        "should fail and delete",
+			Status:      domain.PostStatusScheduled,
+			ScheduledAt: time.Now().UTC(),
+			MaxAttempts: 1,
+		},
+	})
+	if err != nil {
+		t.Fatalf("create second failing post: %v", err)
+	}
+	if err := store.RecordPublishFailure(t.Context(), toDelete.Post.ID, errors.New("synthetic failure 2"), time.Second); err != nil {
+		t.Fatalf("record second publish failure: %v", err)
+	}
+	dlqItems, err = store.ListDeadLetters(t.Context(), 10)
+	if err != nil {
+		t.Fatalf("list dead letters second time: %v", err)
+	}
+	if len(dlqItems) == 0 {
+		t.Fatalf("expected dead letter to delete")
+	}
+	deleteFailedID := dlqItems[0].ID
+	deleteFailedBody := `{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"publisher_delete_failed","arguments":{"dead_letter_id":"` + deleteFailedID + `"}}}`
+	deleteFailedResp, deleteFailedRaw := postMCPRequest(t, mcpURL, sessionID, deleteFailedBody)
+	if deleteFailedResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected delete failed status 200, got %d: %s", deleteFailedResp.StatusCode, string(deleteFailedRaw))
+	}
+	if strings.Contains(string(deleteFailedRaw), `"isError":true`) {
+		t.Fatalf("expected delete failed tool call without isError=true, got: %s", string(deleteFailedRaw))
+	}
+	if !strings.Contains(string(deleteFailedRaw), `"deleted":true`) {
+		t.Fatalf("expected delete failed response with deleted=true, got: %s", string(deleteFailedRaw))
 	}
 }
 

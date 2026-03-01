@@ -99,6 +99,72 @@ func TestRunVersion(t *testing.T) {
 	}
 }
 
+func TestRunMediaListAndDelete(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/media":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"count": 1,
+				"items": []map[string]any{{"id": "med_1", "kind": "image", "size_bytes": 12, "in_use": false}},
+			})
+		case r.Method == http.MethodDelete && r.URL.Path == "/media/med_1":
+			_ = json.NewEncoder(w).Encode(map[string]any{"deleted": true})
+		default:
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := Run(context.Background(), []string{
+		"--base-url", server.URL,
+		"media", "list",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("expected media list exit 0, got %d, stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "count: 1") {
+		t.Fatalf("expected media list output, got %s", stdout.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	code = Run(context.Background(), []string{
+		"--base-url", server.URL,
+		"media", "delete", "--id", "med_1",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("expected media delete exit 0, got %d, stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "deleted media: med_1") {
+		t.Fatalf("expected media delete output, got %s", stdout.String())
+	}
+}
+
+func TestRunDLQDelete(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/dlq/dlq_1/delete" {
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"dead_letter_id": "dlq_1", "deleted": true})
+	}))
+	defer server.Close()
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := Run(context.Background(), []string{
+		"--base-url", server.URL,
+		"dlq", "delete", "--id", "dlq_1",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("expected dlq delete exit 0, got %d, stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "deleted: dlq_1") {
+		t.Fatalf("expected dlq delete output, got %s", stdout.String())
+	}
+}
+
 func TestRunInvalidCommand(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
