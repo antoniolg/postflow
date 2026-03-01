@@ -2,10 +2,12 @@ package publisher
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/antoniolg/publisher/internal/domain"
@@ -19,8 +21,7 @@ func TestUploadChunkedUsesGETForStatusCommand(t *testing.T) {
 			http.Error(w, "not found", http.StatusNotFound)
 			return
 		}
-		command := r.URL.Query().Get("command")
-		switch command {
+		switch r.URL.Query().Get("command") {
 		case "INIT":
 			if r.Method != http.MethodPost {
 				t.Fatalf("INIT method = %s, want POST", r.Method)
@@ -43,36 +44,15 @@ func TestUploadChunkedUsesGETForStatusCommand(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"media_id_string":"mid_123","processing_info":{"state":"succeeded"}}`))
 		default:
-			t.Fatalf("unexpected upload command %q", command)
+			t.Fatalf("unexpected upload command %q", r.URL.Query().Get("command"))
 		}
 	}))
 	defer srv.Close()
 
-	client, err := NewXClient(XConfig{
-		APIBaseURL:        srv.URL,
-		UploadBaseURL:     srv.URL,
-		APIKey:            "key",
-		APIKeySecret:      "secret",
-		AccessToken:       "token",
-		AccessTokenSecret: "token_secret",
-	})
-	if err != nil {
-		t.Fatalf("NewXClient() error = %v", err)
-	}
+	client := mustNewXTestClient(t, srv.URL)
+	media := mustWriteTempMedia(t, "clip.mp4", "video/mp4", []byte("video-bytes-for-test"))
 
-	dir := t.TempDir()
-	videoPath := filepath.Join(dir, "clip.mp4")
-	content := []byte("video-bytes-for-test")
-	if err := os.WriteFile(videoPath, content, 0o644); err != nil {
-		t.Fatalf("write temp video: %v", err)
-	}
-
-	mediaID, err := client.uploadChunked(context.Background(), domain.Media{
-		ID:          "med_test",
-		StoragePath: videoPath,
-		MimeType:    "video/mp4",
-		SizeBytes:   int64(len(content)),
-	})
+	mediaID, err := client.uploadChunked(context.Background(), media)
 	if err != nil {
 		t.Fatalf("uploadChunked() error = %v", err)
 	}
@@ -81,5 +61,252 @@ func TestUploadChunkedUsesGETForStatusCommand(t *testing.T) {
 	}
 	if statusMethod != http.MethodGet {
 		t.Fatalf("STATUS method = %q, want %q", statusMethod, http.MethodGet)
+	}
+}
+
+func TestUploadChunkedReturnsErrorWhenInitMissingMediaID(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/1.1/media/upload.json" {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		if r.URL.Query().Get("command") != "INIT" {
+			t.Fatalf("expected only INIT request, got %q", r.URL.Query().Get("command"))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"media_id_string":""}`))
+	}))
+	defer srv.Close()
+
+	client := mustNewXTestClient(t, srv.URL)
+	media := mustWriteTempMedia(t, "clip.mp4", "video/mp4", []byte("video-bytes-for-test"))
+
+	_, err := client.uploadChunked(context.Background(), media)
+	if err == nil {
+		t.Fatalf("expected init without media id to fail")
+	}
+	if !strings.Contains(err.Error(), "empty media_id_string") {
+		t.Fatalf("expected empty media id error, got %v", err)
+	}
+}
+
+func TestUploadChunkedReturnsErrorOnAppendFailure(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/1.1/media/upload.json" {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		switch r.URL.Query().Get("command") {
+		case "INIT":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"media_id_string":"mid_123"}`))
+		case "APPEND":
+			http.Error(w, `{"error":"bad chunk"}`, http.StatusBadRequest)
+		default:
+			t.Fatalf("unexpected upload command %q", r.URL.Query().Get("command"))
+		}
+	}))
+	defer srv.Close()
+
+	client := mustNewXTestClient(t, srv.URL)
+	media := mustWriteTempMedia(t, "clip.mp4", "video/mp4", []byte("video-bytes-for-test"))
+
+	_, err := client.uploadChunked(context.Background(), media)
+	if err == nil {
+		t.Fatalf("expected append error")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "x upload APPEND failed") || !strings.Contains(msg, "bad chunk") {
+		t.Fatalf("expected append failure details, got %v", err)
+	}
+}
+
+func TestUploadChunkedReturnsErrorOnProcessingFailure(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/1.1/media/upload.json" {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		switch r.URL.Query().Get("command") {
+		case "INIT":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"media_id_string":"mid_123"}`))
+		case "APPEND":
+			w.WriteHeader(http.StatusNoContent)
+		case "FINALIZE":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"media_id_string":"mid_123","processing_info":{"state":"pending","check_after_secs":1}}`))
+		case "STATUS":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"media_id_string":"mid_123","processing_info":{"state":"failed","error":{"name":"InvalidMedia","message":"unsupported codec"}}}`))
+		default:
+			t.Fatalf("unexpected upload command %q", r.URL.Query().Get("command"))
+		}
+	}))
+	defer srv.Close()
+
+	client := mustNewXTestClient(t, srv.URL)
+	media := mustWriteTempMedia(t, "clip.mp4", "video/mp4", []byte("video-bytes-for-test"))
+
+	_, err := client.uploadChunked(context.Background(), media)
+	if err == nil {
+		t.Fatalf("expected processing failure")
+	}
+	if !strings.Contains(err.Error(), "x processing failed: unsupported codec (InvalidMedia)") {
+		t.Fatalf("expected processing failure details, got %v", err)
+	}
+}
+
+func TestUploadChunkedReturnsErrorOnStatusHTTPFailure(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/1.1/media/upload.json" {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		switch r.URL.Query().Get("command") {
+		case "INIT":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"media_id_string":"mid_123"}`))
+		case "APPEND":
+			w.WriteHeader(http.StatusNoContent)
+		case "FINALIZE":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"media_id_string":"mid_123","processing_info":{"state":"pending","check_after_secs":1}}`))
+		case "STATUS":
+			http.Error(w, `{"errors":[{"message":"upstream outage"}]}`, http.StatusBadGateway)
+		default:
+			t.Fatalf("unexpected upload command %q", r.URL.Query().Get("command"))
+		}
+	}))
+	defer srv.Close()
+
+	client := mustNewXTestClient(t, srv.URL)
+	media := mustWriteTempMedia(t, "clip.mp4", "video/mp4", []byte("video-bytes-for-test"))
+
+	_, err := client.uploadChunked(context.Background(), media)
+	if err == nil {
+		t.Fatalf("expected status http failure")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "x upload command STATUS failed") || !strings.Contains(msg, "status=502") {
+		t.Fatalf("expected status command failure details, got %v", err)
+	}
+}
+
+func TestUploadChunkedReturnsErrorOnMalformedFinalizeResponse(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/1.1/media/upload.json" {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		switch r.URL.Query().Get("command") {
+		case "INIT":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"media_id_string":"mid_123"}`))
+		case "APPEND":
+			w.WriteHeader(http.StatusNoContent)
+		case "FINALIZE":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"media_id_string":`))
+		default:
+			t.Fatalf("unexpected upload command %q", r.URL.Query().Get("command"))
+		}
+	}))
+	defer srv.Close()
+
+	client := mustNewXTestClient(t, srv.URL)
+	media := mustWriteTempMedia(t, "clip.mp4", "video/mp4", []byte("video-bytes-for-test"))
+
+	_, err := client.uploadChunked(context.Background(), media)
+	if err == nil {
+		t.Fatalf("expected malformed finalize json error")
+	}
+	if !strings.Contains(err.Error(), "invalid character") && !strings.Contains(err.Error(), "unexpected end of JSON input") {
+		t.Fatalf("expected json decode error, got %v", err)
+	}
+}
+
+func mustNewXTestClient(t *testing.T, baseURL string) *XClient {
+	t.Helper()
+	client, err := NewXClient(XConfig{
+		APIBaseURL:        baseURL,
+		UploadBaseURL:     baseURL,
+		APIKey:            "key",
+		APIKeySecret:      "secret",
+		AccessToken:       "token",
+		AccessTokenSecret: "token_secret",
+	})
+	if err != nil {
+		t.Fatalf("NewXClient() error = %v", err)
+	}
+	return client
+}
+
+func mustWriteTempMedia(t *testing.T, filename, mimeType string, content []byte) domain.Media {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, filename)
+	if err := os.WriteFile(path, content, 0o644); err != nil {
+		t.Fatalf("write temp media: %v", err)
+	}
+	return domain.Media{
+		ID:          "med_test_" + strings.ReplaceAll(filename, ".", "_"),
+		StoragePath: path,
+		MimeType:    mimeType,
+		SizeBytes:   int64(len(content)),
+	}
+}
+
+func TestUploadChunkedCompletesLifecycleWithStatusPolling(t *testing.T) {
+	commands := make([]string, 0, 4)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/1.1/media/upload.json" {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		command := r.URL.Query().Get("command")
+		commands = append(commands, fmt.Sprintf("%s:%s", command, r.Method))
+		switch command {
+		case "INIT":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"media_id_string":"mid_789"}`))
+		case "APPEND":
+			w.WriteHeader(http.StatusNoContent)
+		case "FINALIZE":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"media_id_string":"mid_789","processing_info":{"state":"pending","check_after_secs":1}}`))
+		case "STATUS":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"media_id_string":"mid_789","processing_info":{"state":"succeeded"}}`))
+		default:
+			t.Fatalf("unexpected upload command %q", command)
+		}
+	}))
+	defer srv.Close()
+
+	client := mustNewXTestClient(t, srv.URL)
+	media := mustWriteTempMedia(t, "clip.mp4", "video/mp4", []byte("video-bytes-for-test"))
+
+	mediaID, err := client.uploadChunked(context.Background(), media)
+	if err != nil {
+		t.Fatalf("uploadChunked() error = %v", err)
+	}
+	if mediaID != "mid_789" {
+		t.Fatalf("mediaID = %q, want %q", mediaID, "mid_789")
+	}
+	if len(commands) < 4 {
+		t.Fatalf("expected lifecycle commands INIT/APPEND/FINALIZE/STATUS, got %v", commands)
+	}
+	if commands[0] != "INIT:POST" {
+		t.Fatalf("first command = %q, want INIT:POST", commands[0])
+	}
+	if commands[1] != "APPEND:POST" {
+		t.Fatalf("second command = %q, want APPEND:POST", commands[1])
+	}
+	if commands[2] != "FINALIZE:POST" {
+		t.Fatalf("third command = %q, want FINALIZE:POST", commands[2])
+	}
+	if commands[3] != "STATUS:GET" {
+		t.Fatalf("fourth command = %q, want STATUS:GET", commands[3])
 	}
 }
