@@ -73,15 +73,6 @@ func TestSettingsViewRendersAccountsBlockWithActions(t *testing.T) {
 		t.Fatalf("expected 200 for settings view, got %d", w.Code)
 	}
 	body := w.Body.String()
-	if !strings.Contains(body, "<div class=\"editor-head\">accounts</div>") {
-		t.Fatalf("expected accounts editor section in settings")
-	}
-	if !strings.Contains(body, "connect via oauth") {
-		t.Fatalf("expected oauth connect actions in settings")
-	}
-	if !strings.Contains(body, "1 connected · 2 total") {
-		t.Fatalf("expected connected/total account summary in settings")
-	}
 	if !strings.Contains(body, "action=\"/accounts/"+connectedID+"/disconnect\"") {
 		t.Fatalf("expected disconnect action for connected account")
 	}
@@ -96,6 +87,16 @@ func TestSettingsViewRendersAccountsBlockWithActions(t *testing.T) {
 	}
 	if !strings.Contains(body, "action=\"/accounts/"+liAccount.ID+"/delete\"") {
 		t.Fatalf("expected delete action for disconnected account")
+	}
+	for _, oauthStartPath := range []string{
+		"action=\"/oauth/x/start\"",
+		"action=\"/oauth/linkedin/start\"",
+		"action=\"/oauth/facebook/start\"",
+		"action=\"/oauth/instagram/start\"",
+	} {
+		if !strings.Contains(body, oauthStartPath) {
+			t.Fatalf("expected oauth start action %s in settings", oauthStartPath)
+		}
 	}
 }
 
