@@ -15,6 +15,11 @@ jobs:
     runs-on: ubuntu-latest
     env:
       COVERAGE_MIN: "50"
+      COVERAGE_MIN_WORKER: "80"
+      COVERAGE_MIN_API: "60"
+      COVERAGE_MIN_CLI: "40"
+      COVERAGE_MIN_DB: "55"
+      COVERAGE_MIN_PUBLISHER: "50"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -62,11 +67,7 @@ jobs:
         run: go test -race ./...
 
       - name: Coverage
-        run: |
-          go test ./... -covermode=atomic -coverprofile=coverage.out
-          TOTAL="$(go tool cover -func=coverage.out | awk '/^total:/ {gsub(/%/, "", $3); print $3}')"
-          echo "Total coverage: ${TOTAL}%"
-          awk -v total="$TOTAL" -v min="$COVERAGE_MIN" 'BEGIN { if (total+0 < min+0) { printf("coverage %.1f%% is below minimum %.1f%%\n", total+0, min+0); exit 1 } }'
+        run: ./scripts/check-coverage.sh
 
       - name: Vulnerability scan
         run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...

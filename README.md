@@ -55,8 +55,19 @@ Checks incluidos:
 - `go build ./...`
 - `go test ./...`
 - `go test -race ./...`
-- cobertura total mínima (`50%`)
+- cobertura global mínima (`50%`)
+- cobertura mínima por paquete crítico:
+  - `internal/worker`: `80%`
+  - `internal/api`: `60%`
+  - `internal/cli`: `40%`
+  - `internal/db`: `55%`
+  - `internal/publisher`: `50%`
 - `govulncheck`
+
+Política de actualización de umbrales:
+- Se ajustan con variables de entorno del job CI en `.github/workflows/quality.yml`.
+- Si sube la cobertura estable durante varias PRs, subimos el umbral en pasos pequeños (`+2` a `+5`).
+- Si un refactor estructural provoca ruido temporal, se corrige la batería de tests antes de bajar umbrales.
 
 Paridad de superficies (LLM-first):
 - `internal/parity` incluye contratos black-box ejecutables para `API`, `MCP` y `CLI`.
