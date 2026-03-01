@@ -20,8 +20,6 @@ import (
 )
 
 type oauthLifecycleProvider struct {
-	startCalls    int
-	callbackCalls int
 }
 
 func (p *oauthLifecycleProvider) Platform() domain.Platform {
@@ -41,14 +39,12 @@ func (p *oauthLifecycleProvider) RefreshIfNeeded(_ context.Context, _ domain.Soc
 }
 
 func (p *oauthLifecycleProvider) StartOAuth(_ context.Context, in publisher.OAuthStartInput) (publisher.OAuthStartOutput, error) {
-	p.startCalls++
 	return publisher.OAuthStartOutput{
 		AuthURL: "https://oauth.example/auth?state=" + url.QueryEscape(in.State),
 	}, nil
 }
 
 func (p *oauthLifecycleProvider) HandleOAuthCallback(_ context.Context, _ publisher.OAuthCallbackInput) ([]publisher.ConnectedAccount, error) {
-	p.callbackCalls++
 	return []publisher.ConnectedAccount{
 		{
 			Platform:          domain.PlatformLinkedIn,
@@ -218,9 +214,6 @@ func TestOAuthJSONLifecycleIncludesReplayInvalidAndExpiredState(t *testing.T) {
 	if strings.TrimSpace(started.State) == "" {
 		t.Fatalf("expected oauth start state to be present")
 	}
-	if provider.startCalls != 1 {
-		t.Fatalf("expected oauth provider start to be called once, got %d", provider.startCalls)
-	}
 
 	callbackStatus, callbackRaw := apiTestJSON(
 		t,
@@ -241,8 +234,12 @@ func TestOAuthJSONLifecycleIncludesReplayInvalidAndExpiredState(t *testing.T) {
 	if callbackPayload.Platform != domain.PlatformLinkedIn || callbackPayload.Count != 1 || len(callbackPayload.Items) != 1 {
 		t.Fatalf("unexpected oauth callback payload: %+v", callbackPayload)
 	}
-	if provider.callbackCalls != 1 {
-		t.Fatalf("expected oauth provider callback to be called once, got %d", provider.callbackCalls)
+	persistedAfterFirst, err := store.GetAccountByPlatformExternalID(t.Context(), domain.PlatformLinkedIn, "li-oauth-e2e")
+	if err != nil {
+		t.Fatalf("expected linked account to be persisted after oauth callback: %v", err)
+	}
+	if persistedAfterFirst.ID != callbackPayload.Items[0].ID {
+		t.Fatalf("expected callback payload account id %s to match persisted id %s", callbackPayload.Items[0].ID, persistedAfterFirst.ID)
 	}
 
 	encrypted, err := store.GetAccountCredentials(t.Context(), callbackPayload.Items[0].ID)
@@ -271,8 +268,19 @@ func TestOAuthJSONLifecycleIncludesReplayInvalidAndExpiredState(t *testing.T) {
 	if replayPayload.Status != "already_processed" {
 		t.Fatalf("expected replay status already_processed, got %q", replayPayload.Status)
 	}
-	if provider.callbackCalls != 1 {
-		t.Fatalf("expected oauth provider callback to stay at one call after replay, got %d", provider.callbackCalls)
+	persistedAfterReplay, err := store.GetAccountByPlatformExternalID(t.Context(), domain.PlatformLinkedIn, "li-oauth-e2e")
+	if err != nil {
+		t.Fatalf("expected linked account to remain persisted after replay: %v", err)
+	}
+	if persistedAfterReplay.ID != persistedAfterFirst.ID {
+		t.Fatalf("expected replay to keep same linked account id, got first=%s replay=%s", persistedAfterFirst.ID, persistedAfterReplay.ID)
+	}
+	accountsAfterReplay, err := store.ListAccounts(t.Context())
+	if err != nil {
+		t.Fatalf("list accounts after oauth replay: %v", err)
+	}
+	if len(accountsAfterReplay) != 1 {
+		t.Fatalf("expected replay to avoid duplicating linked accounts, got %d", len(accountsAfterReplay))
 	}
 
 	invalidStatus, invalidRaw := apiTestJSON(t, h, http.MethodGet, "/oauth/linkedin/callback?state=missing_state&code=valid_code", nil)

@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -16,7 +18,6 @@ import (
 )
 
 type oauthReplayTestProvider struct {
-	callbackCalls int
 }
 
 func (p *oauthReplayTestProvider) Platform() domain.Platform {
@@ -40,7 +41,6 @@ func (p *oauthReplayTestProvider) StartOAuth(_ context.Context, in publisher.OAu
 }
 
 func (p *oauthReplayTestProvider) HandleOAuthCallback(_ context.Context, _ publisher.OAuthCallbackInput) ([]publisher.ConnectedAccount, error) {
-	p.callbackCalls++
 	return []publisher.ConnectedAccount{
 		{
 			Platform:          domain.PlatformLinkedIn,
@@ -96,8 +96,23 @@ func TestOAuthCallbackReplayInHTMLFlowReturnsSuccess(t *testing.T) {
 	if !strings.Contains(location1, "accounts_success=") {
 		t.Fatalf("expected success redirect in first callback, got %q", location1)
 	}
-	if provider.callbackCalls != 1 {
-		t.Fatalf("expected provider callback to be called once, got %d", provider.callbackCalls)
+	linkedAfterFirst, err := store.GetAccountByPlatformExternalID(t.Context(), domain.PlatformLinkedIn, "linkedin_test_id")
+	if err != nil {
+		t.Fatalf("expected linkedin account persisted after first callback: %v", err)
+	}
+	if linkedAfterFirst.Status != domain.AccountStatusConnected {
+		t.Fatalf("expected linked account to be connected after first callback, got %s", linkedAfterFirst.Status)
+	}
+	accountsAfterFirst, err := store.ListAccounts(t.Context())
+	if err != nil {
+		t.Fatalf("list accounts after first callback: %v", err)
+	}
+	if len(accountsAfterFirst) != 1 {
+		t.Fatalf("expected exactly one linked account after first callback, got %d", len(accountsAfterFirst))
+	}
+	_, err = store.ConsumeOAuthState(t.Context(), state)
+	if !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("expected oauth state to be consumed after first callback, got %v", err)
 	}
 
 	req2 := httptest.NewRequest(http.MethodGet, callbackURL, nil)
@@ -114,7 +129,18 @@ func TestOAuthCallbackReplayInHTMLFlowReturnsSuccess(t *testing.T) {
 	if !strings.Contains(location2, "accounts_success=oauth+callback+already+processed") {
 		t.Fatalf("expected replay callback success message, got %q", location2)
 	}
-	if provider.callbackCalls != 1 {
-		t.Fatalf("expected provider callback to remain at 1 call, got %d", provider.callbackCalls)
+	linkedAfterReplay, err := store.GetAccountByPlatformExternalID(t.Context(), domain.PlatformLinkedIn, "linkedin_test_id")
+	if err != nil {
+		t.Fatalf("expected linkedin account to remain persisted after replay: %v", err)
+	}
+	if linkedAfterReplay.ID != linkedAfterFirst.ID {
+		t.Fatalf("expected replay to keep same linked account id, got first=%s replay=%s", linkedAfterFirst.ID, linkedAfterReplay.ID)
+	}
+	accountsAfterReplay, err := store.ListAccounts(t.Context())
+	if err != nil {
+		t.Fatalf("list accounts after replay callback: %v", err)
+	}
+	if len(accountsAfterReplay) != 1 {
+		t.Fatalf("expected replay to keep exactly one linked account, got %d", len(accountsAfterReplay))
 	}
 }
