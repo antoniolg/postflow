@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
-  title: Publisher API
+  title: PostFlow API
   version: 0.2.0
-  description: API v2 para publicación multi-red y multi-cuenta por account_id.
+  description: v2 API for multi-network, multi-account publishing via account_id.
 servers:
   - url: http://localhost:8080
 security:
@@ -27,10 +27,10 @@ paths:
 
   /accounts:
     get:
-      summary: Lista cuentas conectadas/registradas
+      summary: List connected/registered accounts
       responses:
         '200':
-          description: Lista de cuentas
+          description: Account list
           content:
             application/json:
               schema:
@@ -45,7 +45,7 @@ paths:
 
   /accounts/static:
     post:
-      summary: Crea o actualiza cuenta estática y guarda credenciales cifradas
+      summary: Create or update a static account and store encrypted credentials
       requestBody:
         required: true
         content:
@@ -54,7 +54,7 @@ paths:
               $ref: '#/components/schemas/CreateStaticAccountRequest'
       responses:
         '201':
-          description: Cuenta creada/actualizada
+          description: Account created/updated
           content:
             application/json:
               schema:
@@ -64,12 +64,12 @@ paths:
 
   /accounts/{id}/disconnect:
     post:
-      summary: Marca una cuenta como desconectada
+      summary: Mark an account as disconnected
       parameters:
         - $ref: '#/components/parameters/AccountID'
       responses:
         '200':
-          description: Cuenta desconectada
+          description: Disconnected account
           content:
             application/json:
               schema:
@@ -85,12 +85,12 @@ paths:
 
   /accounts/{id}:
     delete:
-      summary: Elimina una cuenta desconectada sin posts asociados
+      summary: Delete a disconnected account with no linked posts
       parameters:
         - $ref: '#/components/parameters/AccountID'
       responses:
         '200':
-          description: Cuenta eliminada
+          description: Account deleted
           content:
             application/json:
               schema:
@@ -107,12 +107,12 @@ paths:
 
   /oauth/{platform}/start:
     post:
-      summary: Inicia OAuth para una plataforma
+      summary: Start OAuth for a platform
       parameters:
         - $ref: '#/components/parameters/PlatformPath'
       responses:
         '200':
-          description: URL de autorización
+          description: Authorization URL
           content:
             application/json:
               schema:
@@ -132,7 +132,7 @@ paths:
 
   /oauth/{platform}/callback:
     get:
-      summary: Completa OAuth y crea/actualiza cuenta(s)
+      summary: Complete OAuth and create/update account(s)
       parameters:
         - $ref: '#/components/parameters/PlatformPath'
         - in: query
@@ -147,7 +147,7 @@ paths:
             type: string
       responses:
         '200':
-          description: Cuentas conectadas
+          description: Connected accounts
           content:
             application/json:
               schema:
@@ -166,7 +166,7 @@ paths:
 
   /media:
     post:
-      summary: Sube un archivo multimedia
+      summary: Upload a media file
       requestBody:
         required: true
         content:
@@ -184,7 +184,7 @@ paths:
                   format: binary
       responses:
         '201':
-          description: Media creada
+          description: Media created
           content:
             application/json:
               schema:
@@ -192,7 +192,7 @@ paths:
         '400':
           $ref: '#/components/responses/Error'
     get:
-      summary: Lista media subida
+      summary: List uploaded media
       parameters:
         - in: query
           name: limit
@@ -203,7 +203,7 @@ paths:
             default: 100
       responses:
         '200':
-          description: Lista de media
+          description: Media list
           content:
             application/json:
               schema:
@@ -218,7 +218,7 @@ paths:
 
   /media/{id}:
     delete:
-      summary: Borra media si no está en uso
+      summary: Delete media if not in use
       parameters:
         - in: path
           name: id
@@ -227,7 +227,7 @@ paths:
             type: string
       responses:
         '200':
-          description: Media borrada
+          description: Media deleted
           content:
             application/json:
               schema:
@@ -244,7 +244,7 @@ paths:
 
   /posts:
     post:
-      summary: Crea una publicación draft o scheduled
+      summary: Create a draft or scheduled post
       parameters:
         - in: header
           name: Idempotency-Key
@@ -260,13 +260,13 @@ paths:
               $ref: '#/components/schemas/CreatePostRequest'
       responses:
         '201':
-          description: Post creado
+          description: Post created
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Post'
         '200':
-          description: Repetición idempotente (post existente)
+          description: Idempotent replay (existing post)
           content:
             application/json:
               schema:
@@ -276,7 +276,7 @@ paths:
 
   /posts/validate:
     post:
-      summary: Valida una publicación sin persistirla (dry-run)
+      summary: Validate a post without persisting it (dry-run)
       requestBody:
         required: true
         content:
@@ -285,7 +285,7 @@ paths:
               $ref: '#/components/schemas/CreatePostRequest'
       responses:
         '200':
-          description: Validación correcta
+          description: Validation succeeded
           content:
             application/json:
               schema:
@@ -320,7 +320,7 @@ paths:
 
   /posts/{id}/cancel:
     post:
-      summary: Cancela una publicación scheduled
+      summary: Cancel a scheduled post
       parameters:
         - in: path
           name: id
@@ -329,7 +329,7 @@ paths:
             type: string
       responses:
         '200':
-          description: Post cancelado
+          description: Post canceled
           content:
             application/json:
               schema:
@@ -347,7 +347,7 @@ paths:
 
   /schedule:
     get:
-      summary: Lista publicaciones por rango
+      summary: List posts by range
       parameters:
         - in: query
           name: from
@@ -361,7 +361,7 @@ paths:
             format: date-time
       responses:
         '200':
-          description: Lista de publicaciones
+          description: Post list
           content:
             application/json:
               schema:
@@ -380,7 +380,7 @@ paths:
 
   /dlq:
     get:
-      summary: Lista entradas de dead-letter queue
+      summary: List dead-letter queue entries
       parameters:
         - in: query
           name: limit
@@ -391,7 +391,7 @@ paths:
             default: 100
       responses:
         '200':
-          description: Lista de elementos DLQ
+          description: DLQ item list
           content:
             application/json:
               schema:
@@ -406,7 +406,7 @@ paths:
 
   /dlq/requeue:
     post:
-      summary: Reencola múltiples elementos de DLQ
+      summary: Requeue multiple DLQ entries
       requestBody:
         required: true
         content:
@@ -421,7 +421,7 @@ paths:
                     type: string
       responses:
         '200':
-          description: Resultado de requeue en lote
+          description: Bulk requeue result
           content:
             application/json:
               schema:
@@ -438,7 +438,7 @@ paths:
 
   /dlq/delete:
     post:
-      summary: Elimina múltiples elementos de DLQ y sus posts fallidos
+      summary: Delete multiple DLQ entries and their failed posts
       requestBody:
         required: true
         content:
@@ -453,7 +453,7 @@ paths:
                     type: string
       responses:
         '200':
-          description: Resultado de borrado en lote
+          description: Bulk delete result
           content:
             application/json:
               schema:
@@ -470,7 +470,7 @@ paths:
 
   /dlq/{id}/requeue:
     post:
-      summary: Reencola un post que estaba en DLQ
+      summary: Requeue one post from DLQ
       parameters:
         - in: path
           name: id
@@ -479,7 +479,7 @@ paths:
             type: string
       responses:
         '200':
-          description: Post reencolado
+          description: Post requeued
           content:
             application/json:
               schema:
@@ -496,7 +496,7 @@ paths:
 
   /dlq/{id}/delete:
     post:
-      summary: Elimina una entrada de DLQ y su post fallido
+      summary: Delete one DLQ entry and its failed post
       parameters:
         - in: path
           name: id
@@ -505,7 +505,7 @@ paths:
             type: string
       responses:
         '200':
-          description: Elemento eliminado
+          description: Entry deleted
           content:
             application/json:
               schema:
@@ -549,7 +549,7 @@ components:
 
   responses:
     Error:
-      description: Error de validación o negocio
+      description: Validation or business error
       content:
         application/json:
           schema:
@@ -615,7 +615,7 @@ components:
         scheduled_at:
           type: string
           format: date-time
-          description: Opcional. Vacío crea draft.
+          description: Optional. Empty value creates a draft.
         max_attempts:
           type: integer
           minimum: 1

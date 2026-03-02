@@ -1,45 +1,45 @@
-# Publisher MVP Spec (LLM-first)
+# PostFlow MVP Spec (LLM-first)
 
-## Objetivo
-Servicio mínimo para programar publicaciones en redes, optimizado para recursos bajos y uso por LLMs vía API.
+## Goal
+A minimal service to schedule social posts, optimized for low-resource environments and LLM-driven API usage.
 
-## Alcance v1
-- Plataforma: `x`
-- Subida de media (vídeo/imagen)
-- Programación de publicación (texto + media + fecha)
-- Worker que ejecuta publicaciones pendientes
-- Vista de calendario informativa (solo lectura)
-- Cancelación de publicaciones futuras
-- Reintentos con backoff + DLQ
-- Idempotency key en creación de posts
-- Auth simple por token / Basic Auth
-- Rate limit básico por cliente
+## v1 Scope
+- Platform: `x`
+- Media upload (video/image)
+- Post scheduling (text + media + date)
+- Worker that executes pending posts
+- Informational calendar view (read-only)
+- Future post cancellation
+- Retries with backoff + DLQ
+- Idempotency key on post creation
+- Simple token / Basic Auth
+- Basic per-client rate limiting
 
-## No objetivo v1
-- Editor web completo
-- Multicuenta por red
-- Analítica avanzada
-- Reintentos multinivel / colas distribuidas
+## v1 Non-goals
+- Full web editor
+- Multi-account per network
+- Advanced analytics
+- Multi-level retries / distributed queues
 
-## Requisitos no funcionales
-- Runtime único (proceso único)
-- Persistencia local (SQLite)
-- Memoria baja, CPU estable
-- API explícita y estable para consumo por LLM
+## Non-functional requirements
+- Single runtime (single process)
+- Local persistence (SQLite)
+- Low memory, stable CPU
+- Explicit, stable API for LLM consumption
 
-## Modelo de datos
-- `media`: archivo subido y metadatos
-- `posts`: intención de publicación y estado
-- `post_media`: relación N:M
+## Data model
+- `media`: uploaded file + metadata
+- `posts`: publish intent + status
+- `post_media`: N:M relation
 
-Estados de post:
+Post states:
 - `scheduled`
 - `publishing`
 - `published`
 - `failed`
 - `canceled`
 
-## Endpoints MVP
+## MVP Endpoints
 - `POST /media`
 - `POST /posts`
 - `POST /posts/validate`
@@ -49,15 +49,15 @@ Estados de post:
 - `POST /dlq/{id}/requeue`
 - `POST /dlq/{id}/delete`
 - `GET /healthz`
-- `GET /` (UI read-only)
+- `GET /` (read-only UI)
 
-## Flujo principal
-1. Cliente sube media
-2. Cliente crea post con fecha/hora y `media_ids`
-3. Worker detecta due posts, los publica, marca estado
-4. UI y API muestran el calendario actualizado
+## Main flow
+1. Client uploads media
+2. Client creates post with date/time and `media_ids`
+3. Worker detects due posts, publishes them, updates status
+4. UI and API show the updated calendar
 
-## Roadmap inmediato (v1.1)
-- Upload chunked de media para vídeos largos
-- Auth por token para API
-- Publicación por `POST /2/tweets` con upload multimedia v1.1 compatible
+## Immediate roadmap (v1.1)
+- Chunked media upload for long videos
+- Token auth for API
+- Publish via `POST /2/tweets` with compatible v1.1 media upload

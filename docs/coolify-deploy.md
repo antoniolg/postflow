@@ -31,7 +31,7 @@ Optional recommended:
 
 For real X publishing:
 
-- `PUBLISHER_DRIVER=live` (`x` también funciona como alias legacy)
+- `PUBLISHER_DRIVER=live` (`x` also works as a legacy alias)
 - `X_API_KEY=...`
 - `X_API_SECRET=...`
 - `X_ACCESS_TOKEN=...`

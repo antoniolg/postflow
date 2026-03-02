@@ -1,32 +1,32 @@
 # PostFlow
 
-> ⚠️ **Disclaimer**: PostFlow está actualmente en fase activa de desarrollo. Aún no está suficientemente testeado como para garantizar que todo funcione correctamente en todos los escenarios. Úsalo bajo tu propia discreción y responsabilidad.
+> ⚠️ **Disclaimer**: PostFlow is currently in active development. It is not yet tested enough to guarantee correct behavior in all scenarios. Use it at your own discretion and risk.
 
-Publicador API-first orientado a LLMs con worker ligero, soporte multi-red y multi-cuenta por `account_id`.
+API-first social publisher built for LLM workflows, with a lightweight worker and multi-network, multi-account support via `account_id`.
 
-Estado actual (v2):
-- Redes soportadas: `x`, `linkedin`, `facebook`, `instagram`
-- Modelo: `1 post = 1 account_id`
-- Auth por cuenta: `static` u `oauth`
-- Secretos de app en env + credenciales de cuenta cifradas en SQLite (AES-256-GCM)
-- UI web con scheduler/composer y bloque visual de cuentas dentro de `settings`
+Current status (v2):
+- Supported networks: `x`, `linkedin`, `facebook`, `instagram`
+- Model: `1 post = 1 account_id`
+- Per-account auth: `static` or `oauth`
+- App secrets from env + encrypted account credentials in SQLite (AES-256-GCM)
+- Web UI with scheduler/composer and account management in `settings`
 
 ## Quickstart
 
 ```bash
 cp .env.example .env
-# clave obligatoria (32 bytes en base64)
+# required key (32 bytes in base64)
 openssl rand -base64 32
-# pega el valor en PUBLISHER_MASTER_KEY
+# put the value into PUBLISHER_MASTER_KEY
 
 go run ./cmd/publisher
 ```
 
-Servidor en `http://localhost:8080`.
+Server runs at `http://localhost:8080`.
 
-La app carga variables desde `.env` si existe:
-- Variables exportadas en shell tienen prioridad.
-- Puedes usar otro fichero con `ENV_FILE=/ruta/a/otro.env`.
+The app loads variables from `.env` when present:
+- Shell-exported variables take precedence.
+- You can use another file with `ENV_FILE=/path/to/other.env`.
 
 ## CLI (`publisher-cli`)
 
@@ -34,31 +34,31 @@ La app carga variables desde `.env` si existe:
 go run ./cmd/publisher-cli --help
 ```
 
-Ejemplos:
+Examples:
 
 ```bash
 go run ./cmd/publisher-cli schedule list --from 2026-03-01T00:00:00Z --to 2026-03-31T23:59:59Z
-go run ./cmd/publisher-cli posts create --account-id acc_xxx --text "hola" --scheduled-at 2026-03-10T09:00:00Z
-go run ./cmd/publisher-cli posts validate --account-id acc_xxx --text "hola" --scheduled-at 2026-03-10T09:00:00Z
+go run ./cmd/publisher-cli posts create --account-id acc_xxx --text "hello" --scheduled-at 2026-03-10T09:00:00Z
+go run ./cmd/publisher-cli posts validate --account-id acc_xxx --text "hello" --scheduled-at 2026-03-10T09:00:00Z
 go run ./cmd/publisher-cli dlq list --limit 50
 go run ./cmd/publisher-cli dlq requeue --id dlq_xxx
 ```
 
 ## Quality Gate (CI)
 
-Se ejecuta automáticamente en:
-- cada `pull_request`
-- cada push a `main`
+Runs automatically on:
+- every `pull_request`
+- every push to `main`
 
-Checks incluidos:
-- `gofmt` (fail si hay ficheros sin formatear)
-- `go mod tidy` (fail si cambia `go.mod/go.sum`)
-- `golangci-lint` (config en `.golangci.yml`)
+Included checks:
+- `gofmt` (fails if files are not formatted)
+- `go mod tidy` (fails if `go.mod/go.sum` changes)
+- `golangci-lint` (config in `.golangci.yml`)
 - `go build ./...`
 - `go test ./...`
 - `go test -race ./...`
-- cobertura global mínima (`50%`)
-- cobertura mínima por paquete crítico:
+- minimum global coverage (`50%`)
+- minimum coverage by critical package:
   - `internal/worker`: `80%`
   - `internal/api`: `60%`
   - `internal/cli`: `40%`
@@ -66,56 +66,56 @@ Checks incluidos:
   - `internal/publisher`: `50%`
 - `govulncheck`
 
-Política de actualización de umbrales:
-- Se ajustan con variables de entorno del job CI en `.github/workflows/quality.yml`.
-- Si sube la cobertura estable durante varias PRs, subimos el umbral en pasos pequeños (`+2` a `+5`).
-- Si un refactor estructural provoca ruido temporal, se corrige la batería de tests antes de bajar umbrales.
+Threshold update policy:
+- Thresholds are configured via CI job env vars in `.github/workflows/quality.yml`.
+- If stable coverage improves over multiple PRs, raise thresholds gradually (`+2` to `+5`).
+- If a structural refactor adds temporary noise, fix tests before lowering thresholds.
 
-Paridad de superficies (LLM-first):
-- `internal/parity` incluye contratos black-box ejecutables para `API`, `MCP` y `CLI`.
-- Se valida la paridad en caminos de éxito y error para capacidades compartidas.
-- Los tests generan además una matriz JSON de capacidades (artefacto machine-readable en tiempo de test).
+Surface parity (LLM-first):
+- `internal/parity` includes executable black-box contracts for `API`, `MCP`, and `CLI`.
+- Parity is validated for both success and error paths on shared capabilities.
+- Tests also generate a machine-readable capability matrix artifact.
 
 ## Database Migrations (SQLite, safe)
 
 - Startup runs **versioned, non-destructive migrations** (`schema_migrations` table).
-- No schema reset/drop is performed when the app upgrades.
+- No schema reset/drop is performed on upgrades.
 - If pending migrations are detected on an existing DB, the app creates a local pre-migration snapshot:
   - `<DATABASE_PATH>.bak-YYYYMMDDTHHMMSSZ`
   - plus `-wal` / `-shm` sidecars when present.
 - On migration failure, startup aborts and keeps current data untouched.
 
-## Arquitectura
+## Architecture
 
-Documentación de referencia:
-- `docs/architecture.md` (visión global y reglas de capas)
-- `docs/adr/0001-modular-monolith-application-layer.md` (decisión de arquitectura adoptada)
+Reference docs:
+- `docs/architecture.md` (overall view and layering rules)
+- `docs/adr/0001-modular-monolith-application-layer.md` (adopted architecture decision)
 
-## Configuración
+## Configuration
 
-Variables principales:
+Main variables:
 - `PORT` (default: `8080`)
 - `DATABASE_PATH` (default: `publisher.db`)
 - `DATA_DIR` (default: `data`)
 - `WORKER_INTERVAL_SECONDS` (default: `30`)
 - `RETRY_BACKOFF_SECONDS` (default: `30`)
 - `DEFAULT_MAX_RETRIES` (default: `3`)
-- `RATE_LIMIT_RPM` (default: `120`, `0` para desactivar)
-- `API_TOKEN` (Bearer o `X-API-Key`)
+- `RATE_LIMIT_RPM` (default: `120`, `0` to disable)
+- `API_TOKEN` (Bearer or `X-API-Key`)
 - `UI_BASIC_USER`
 - `UI_BASIC_PASS`
 - `LOG_LEVEL` (`debug|info|warn|error`, default: `info`)
-- `PUBLISHER_DRIVER` (`mock` por defecto, `live` para publicación real; `x` se acepta como alias legacy)
+- `PUBLISHER_DRIVER` (`mock` by default, `live` for real publishing; `x` accepted as legacy alias)
 
-Seguridad/OAuth (v2):
-- `PUBLISHER_MASTER_KEY` (obligatoria, base64 32 bytes)
-- `PUBLIC_BASE_URL` (base URL pública para callbacks OAuth)
+Security/OAuth (v2):
+- `PUBLISHER_MASTER_KEY` (required, base64 32 bytes)
+- `PUBLIC_BASE_URL` (public base URL for OAuth callbacks)
 - `LINKEDIN_CLIENT_ID`
 - `LINKEDIN_CLIENT_SECRET`
 - `META_APP_ID`
 - `META_APP_SECRET`
 
-X (cuenta estática bootstrap `x-default`):
+X (static bootstrap account `x-default`):
 - `X_API_BASE_URL` (default: `https://api.twitter.com`)
 - `X_UPLOAD_BASE_URL` (default: `https://upload.twitter.com`)
 - `X_API_KEY`
@@ -123,15 +123,15 @@ X (cuenta estática bootstrap `x-default`):
 - `X_ACCESS_TOKEN`
 - `X_ACCESS_TOKEN_SECRET`
 
-## API rápida (v2)
+## API quick reference (v2)
 
-### 1) Listar cuentas
+### 1) List accounts
 
 ```bash
 curl -H "Authorization: Bearer $API_TOKEN" http://localhost:8080/accounts
 ```
 
-### 2) Crear cuenta estática
+### 2) Create static account
 
 ```bash
 curl -X POST http://localhost:8080/accounts/static \
@@ -148,7 +148,7 @@ curl -X POST http://localhost:8080/accounts/static \
   }'
 ```
 
-### 3) Iniciar OAuth
+### 3) Start OAuth
 
 ```bash
 curl -X POST http://localhost:8080/oauth/linkedin/start
@@ -156,7 +156,7 @@ curl -X POST http://localhost:8080/oauth/facebook/start
 curl -X POST http://localhost:8080/oauth/instagram/start
 ```
 
-### 4) Subir media
+### 4) Upload media
 
 ```bash
 curl -X POST http://localhost:8080/media \
@@ -164,9 +164,9 @@ curl -X POST http://localhost:8080/media \
   -F file=@./clip.mp4
 ```
 
-### 5) Crear post (draft o scheduled)
+### 5) Create post (draft or scheduled)
 
-Obtén antes un `account_id` válido con `GET /accounts`.
+Get a valid `account_id` first using `GET /accounts`.
 
 ```bash
 curl -X POST http://localhost:8080/posts \
@@ -174,28 +174,28 @@ curl -X POST http://localhost:8080/posts \
   -H 'Idempotency-Key: short-2026-02-25-001' \
   -d '{
     "account_id": "acc_xxx",
-    "text": "Nuevo short",
+    "text": "new short clip",
     "scheduled_at": "2026-02-26T10:00:00Z",
     "media_ids": ["med_xxx"],
     "max_attempts": 3
   }'
 ```
 
-### 6) Validar post (dry-run)
+### 6) Validate post (dry-run)
 
 ```bash
 curl -X POST http://localhost:8080/posts/validate \
   -H 'content-type: application/json' \
   -d '{
     "account_id": "acc_xxx",
-    "text": "Nuevo short",
+    "text": "new short clip",
     "scheduled_at": "2026-02-26T10:00:00Z",
     "media_ids": ["med_xxx"],
     "max_attempts": 3
   }'
 ```
 
-### 7) Operaciones auxiliares
+### 7) Auxiliary operations
 
 ```bash
 curl 'http://localhost:8080/schedule'
@@ -210,9 +210,9 @@ curl -X DELETE http://localhost:8080/accounts/acc_xxx
 
 ## UI
 
-- `GET /`: scheduler/composer (selector obligatorio de cuenta)
-- `GET /accounts`: API JSON para listar cuentas (`text/html` redirige a `/?view=settings`)
-- `GET /?view=settings`: zona horaria UI + bloque de cuentas conectadas + configuración MCP
+- `GET /`: scheduler/composer (account selector is required)
+- `GET /accounts`: JSON API to list accounts (`text/html` redirects to `/?view=settings`)
+- `GET /?view=settings`: UI timezone + connected accounts block + MCP settings
 
 ## MCP (streamable HTTP)
 
@@ -222,22 +222,22 @@ Endpoint:
 http://localhost:8080/mcp
 ```
 
-Tools expuestas:
+Exposed tools:
 - `publisher_list_schedule`
 - `publisher_list_drafts`
 - `publisher_list_failed`
-- `publisher_create_post` (requiere `account_id`)
-- `publisher_upload_media` (sin `platform`)
+- `publisher_create_post` (requires `account_id`)
+- `publisher_upload_media` (without `platform`)
 - `publisher_list_media`
 - `publisher_delete_media`
 
-Ejemplo Claude Code:
+Claude Code example:
 
 ```bash
 claude mcp add -t http publisher http://localhost:8080/mcp --header "Authorization: Bearer <API_TOKEN>"
 ```
 
-Ejemplo Codex:
+Codex example:
 
 ```bash
 codex mcp add publisher --url http://localhost:8080/mcp
