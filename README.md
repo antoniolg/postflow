@@ -1,4 +1,6 @@
-# publisher
+# PostFlow
+
+> ⚠️ **Disclaimer**: PostFlow está actualmente en fase activa de desarrollo. Aún no está suficientemente testeado como para garantizar que todo funcione correctamente en todos los escenarios. Úsalo bajo tu propia discreción y responsabilidad.
 
 Publicador API-first orientado a LLMs con worker ligero, soporte multi-red y multi-cuenta por `account_id`.
 
