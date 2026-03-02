@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"log/slog"
 	"time"
 
 	publishcycle "github.com/antoniolg/publisher/internal/application/publishcycle"
@@ -36,6 +37,13 @@ func (w Worker) Start(ctx context.Context) {
 }
 
 func (w Worker) runOnce(ctx context.Context) {
+	recovered, err := w.Store.RecoverStalePublishingPosts(ctx, 5*time.Minute)
+	if err != nil {
+		slog.Default().Error("worker stale publishing recovery failed", "error", err)
+	} else if recovered > 0 {
+		slog.Default().Warn("worker recovered stale publishing posts", "count", recovered)
+	}
+
 	runner := publishcycle.Runner{
 		Store:        w.Store,
 		Registry:     w.Registry,

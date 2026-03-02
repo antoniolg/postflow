@@ -384,6 +384,93 @@ func (s *Store) ClaimDuePosts(ctx context.Context, limit int) ([]domain.Post, er
 	return claimed, nil
 }
 
+func (s *Store) RecoverStalePublishingPosts(ctx context.Context, staleAfter time.Duration) (int, error) {
+	if staleAfter <= 0 {
+		staleAfter = 5 * time.Minute
+	}
+	now := time.Now().UTC()
+	nowFmt := now.Format(time.RFC3339Nano)
+	cutoff := now.Add(-staleAfter).Format(time.RFC3339Nano)
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	rows, err := tx.QueryContext(ctx, `
+		SELECT id, error
+		FROM posts
+		WHERE status = ?
+		  AND updated_at <= ?
+	`, domain.PostStatusPublishing, cutoff)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+
+	type stuckPost struct {
+		ID    string
+		Error sql.NullString
+	}
+	stuck := make([]stuckPost, 0, 8)
+	for rows.Next() {
+		var item stuckPost
+		if err := rows.Scan(&item.ID, &item.Error); err != nil {
+			return 0, err
+		}
+		stuck = append(stuck, item)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	if len(stuck) == 0 {
+		if err := tx.Commit(); err != nil {
+			return 0, err
+		}
+		return 0, nil
+	}
+
+	recovered := 0
+	for _, item := range stuck {
+		lastErr := strings.TrimSpace(item.Error.String)
+		if lastErr == "" {
+			lastErr = "stale publishing state recovered"
+		}
+
+		result, err := tx.ExecContext(ctx, `
+			UPDATE posts
+			SET status = ?, next_retry_at = NULL, error = ?, updated_at = ?
+			WHERE id = ? AND status = ?
+		`, domain.PostStatusFailed, lastErr, nowFmt, item.ID, domain.PostStatusPublishing)
+		if err != nil {
+			return 0, err
+		}
+		n, _ := result.RowsAffected()
+		if n == 0 {
+			continue
+		}
+		recovered++
+
+		dlqID, err := NewID("dlq")
+		if err != nil {
+			return 0, err
+		}
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO dead_letters (id, post_id, reason, last_error, attempted_at)
+			SELECT ?, ?, ?, ?, ?
+			WHERE NOT EXISTS (SELECT 1 FROM dead_letters WHERE post_id = ?)
+		`, dlqID, item.ID, "stale_publishing_recovered", lastErr, nowFmt, item.ID); err != nil {
+			return 0, err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return recovered, nil
+}
+
 func (s *Store) MarkPublished(ctx context.Context, id, externalID string) error {
 	now := time.Now().UTC()
 	_, err := s.db.ExecContext(ctx, `

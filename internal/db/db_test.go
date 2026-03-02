@@ -209,6 +209,95 @@ func TestReschedulePublishWithoutAttemptKeepsAttempts(t *testing.T) {
 	}
 }
 
+func TestRecoverStalePublishingPosts(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+	account := createTestAccount(t, store, domain.PlatformInstagram)
+
+	stale, err := store.CreatePost(ctx, CreatePostParams{
+		Post: domain.Post{
+			AccountID:   account.ID,
+			Text:        "stale publishing",
+			Status:      domain.PostStatusScheduled,
+			ScheduledAt: time.Now().UTC().Add(-1 * time.Minute),
+			MaxAttempts: 3,
+		},
+	})
+	if err != nil {
+		t.Fatalf("create stale post: %v", err)
+	}
+	fresh, err := store.CreatePost(ctx, CreatePostParams{
+		Post: domain.Post{
+			AccountID:   account.ID,
+			Text:        "fresh publishing",
+			Status:      domain.PostStatusScheduled,
+			ScheduledAt: time.Now().UTC().Add(-1 * time.Minute),
+			MaxAttempts: 3,
+		},
+	})
+	if err != nil {
+		t.Fatalf("create fresh post: %v", err)
+	}
+
+	claimed, err := store.ClaimDuePosts(ctx, 10)
+	if err != nil {
+		t.Fatalf("claim due posts: %v", err)
+	}
+	if len(claimed) != 2 {
+		t.Fatalf("expected 2 claimed posts, got %d", len(claimed))
+	}
+
+	old := time.Now().UTC().Add(-1 * time.Hour).Format(time.RFC3339Nano)
+	if _, err := store.db.ExecContext(ctx, `UPDATE posts SET updated_at = ? WHERE id = ?`, old, stale.Post.ID); err != nil {
+		t.Fatalf("set stale updated_at: %v", err)
+	}
+
+	recovered, err := store.RecoverStalePublishingPosts(ctx, 10*time.Minute)
+	if err != nil {
+		t.Fatalf("recover stale publishing posts: %v", err)
+	}
+	if recovered != 1 {
+		t.Fatalf("expected 1 recovered post, got %d", recovered)
+	}
+
+	stalePost, err := store.GetPost(ctx, stale.Post.ID)
+	if err != nil {
+		t.Fatalf("get stale post after recovery: %v", err)
+	}
+	if stalePost.Status != domain.PostStatusFailed {
+		t.Fatalf("expected stale post to be failed, got %s", stalePost.Status)
+	}
+
+	freshPost, err := store.GetPost(ctx, fresh.Post.ID)
+	if err != nil {
+		t.Fatalf("get fresh post after recovery: %v", err)
+	}
+	if freshPost.Status != domain.PostStatusPublishing {
+		t.Fatalf("expected fresh post to remain publishing, got %s", freshPost.Status)
+	}
+
+	var dlqCount int
+	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM dead_letters WHERE post_id = ?`, stale.Post.ID).Scan(&dlqCount); err != nil {
+		t.Fatalf("count dead letters for stale post: %v", err)
+	}
+	if dlqCount != 1 {
+		t.Fatalf("expected 1 dead letter for stale post, got %d", dlqCount)
+	}
+
+	recoveredAgain, err := store.RecoverStalePublishingPosts(ctx, 10*time.Minute)
+	if err != nil {
+		t.Fatalf("recover stale publishing posts second run: %v", err)
+	}
+	if recoveredAgain != 0 {
+		t.Fatalf("expected no recovered posts on second run, got %d", recoveredAgain)
+	}
+}
+
 func TestCreateDraftDefaultsToDraftStatus(t *testing.T) {
 	store, err := Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
