@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/antoniolg/publisher/internal/db"
 	"github.com/antoniolg/publisher/internal/domain"
@@ -192,6 +193,55 @@ func TestMediaAPIDeleteAllowsPublishedOnlyMedia(t *testing.T) {
 	}
 	if _, err := os.Stat(mediaPath); !os.IsNotExist(err) {
 		t.Fatalf("expected published-only media file to be removed from disk")
+	}
+}
+
+func TestMediaAPIDeleteRejectsFutureScheduledMedia(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	mediaPath := filepath.Join(tempDir, "future-scheduled.png")
+	if err := os.WriteFile(mediaPath, []byte("future"), 0o644); err != nil {
+		t.Fatalf("seed media file: %v", err)
+	}
+	createdMedia, err := store.CreateMedia(t.Context(), domain.Media{
+		Kind:         "image",
+		OriginalName: "future-scheduled.png",
+		StoragePath:  mediaPath,
+		MimeType:     "image/png",
+		SizeBytes:    6,
+	})
+	if err != nil {
+		t.Fatalf("create media: %v", err)
+	}
+	if _, err := store.CreatePost(t.Context(), db.CreatePostParams{
+		Post: domain.Post{
+			AccountID:   createTestAccount(t, store).ID,
+			Text:        "future scheduled post with media",
+			Status:      domain.PostStatusScheduled,
+			ScheduledAt: time.Now().UTC().Add(90 * time.Minute),
+			MaxAttempts: 3,
+		},
+		MediaIDs: []string{createdMedia.ID},
+	}); err != nil {
+		t.Fatalf("create scheduled post: %v", err)
+	}
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	deleteReq := httptest.NewRequest(http.MethodDelete, "/media/"+createdMedia.ID, nil)
+	deleteW := httptest.NewRecorder()
+	h.ServeHTTP(deleteW, deleteReq)
+	if deleteW.Code != http.StatusConflict {
+		t.Fatalf("expected delete status 409 for future scheduled media, got %d: %s", deleteW.Code, deleteW.Body.String())
+	}
+	if _, err := os.Stat(mediaPath); err != nil {
+		t.Fatalf("expected future scheduled file to remain on disk, stat err=%v", err)
 	}
 }
 

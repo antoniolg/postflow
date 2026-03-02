@@ -25,6 +25,7 @@ func (s *Store) ListMedia(ctx context.Context, limit int) ([]MediaWithUsage, err
 	if limit > 500 {
 		limit = 500
 	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
 
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT
@@ -35,7 +36,11 @@ func (s *Store) ListMedia(ctx context.Context, limit int) ([]MediaWithUsage, err
 			m.mime_type,
 			m.size_bytes,
 			m.created_at,
-			SUM(CASE WHEN p.status != ? THEN 1 ELSE 0 END) AS usage_count
+			SUM(CASE
+				WHEN p.status = ?
+					OR (p.status = ? AND p.scheduled_at > ?)
+				THEN 1 ELSE 0
+			END) AS usage_count
 		FROM media m
 		LEFT JOIN post_media pm ON pm.media_id = m.id
 		LEFT JOIN posts p ON p.id = pm.post_id
@@ -49,7 +54,7 @@ func (s *Store) ListMedia(ctx context.Context, limit int) ([]MediaWithUsage, err
 			m.created_at
 		ORDER BY m.created_at DESC
 		LIMIT ?
-	`, domain.PostStatusPublished, limit)
+	`, domain.PostStatusDraft, domain.PostStatusScheduled, now, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -86,6 +91,7 @@ func (s *Store) DeleteMediaIfUnused(ctx context.Context, mediaID string) (domain
 		return domain.Media{}, err
 	}
 	defer tx.Rollback()
+	now := time.Now().UTC().Format(time.RFC3339Nano)
 
 	var media domain.Media
 	var created string
@@ -99,7 +105,11 @@ func (s *Store) DeleteMediaIfUnused(ctx context.Context, mediaID string) (domain
 			m.mime_type,
 			m.size_bytes,
 			m.created_at,
-			SUM(CASE WHEN p.status != ? THEN 1 ELSE 0 END) AS usage_count
+			SUM(CASE
+				WHEN p.status = ?
+					OR (p.status = ? AND p.scheduled_at > ?)
+				THEN 1 ELSE 0
+			END) AS usage_count
 		FROM media m
 		LEFT JOIN post_media pm ON pm.media_id = m.id
 		LEFT JOIN posts p ON p.id = pm.post_id
@@ -112,7 +122,7 @@ func (s *Store) DeleteMediaIfUnused(ctx context.Context, mediaID string) (domain
 			m.mime_type,
 			m.size_bytes,
 			m.created_at
-	`, domain.PostStatusPublished, mediaID).Scan(
+	`, domain.PostStatusDraft, domain.PostStatusScheduled, now, mediaID).Scan(
 		&media.ID,
 		&media.Kind,
 		&media.OriginalName,
@@ -128,7 +138,7 @@ func (s *Store) DeleteMediaIfUnused(ctx context.Context, mediaID string) (domain
 	media.CreatedAt, _ = time.Parse(time.RFC3339Nano, created)
 
 	if usageCount > 0 {
-		return domain.Media{}, fmt.Errorf("%w: used by %d pending posts", ErrMediaInUse, usageCount)
+		return domain.Media{}, fmt.Errorf("%w: used by %d future or draft posts", ErrMediaInUse, usageCount)
 	}
 
 	if _, err := tx.ExecContext(ctx, `DELETE FROM post_media WHERE media_id = ?`, mediaID); err != nil {
@@ -155,6 +165,7 @@ func (s *Store) DeleteMediaUnusedByPendingPosts(ctx context.Context) ([]domain.M
 		return nil, err
 	}
 	defer tx.Rollback()
+	now := time.Now().UTC().Format(time.RFC3339Nano)
 
 	rows, err := tx.QueryContext(ctx, `
 		SELECT
@@ -171,10 +182,13 @@ func (s *Store) DeleteMediaUnusedByPendingPosts(ctx context.Context) ([]domain.M
 			FROM post_media pm
 			INNER JOIN posts p ON p.id = pm.post_id
 			WHERE pm.media_id = m.id
-			  AND p.status != ?
+			  AND (
+				p.status = ?
+				OR (p.status = ? AND p.scheduled_at > ?)
+			  )
 		)
 		ORDER BY m.created_at ASC
-	`, domain.PostStatusPublished)
+	`, domain.PostStatusDraft, domain.PostStatusScheduled, now)
 	if err != nil {
 		return nil, err
 	}

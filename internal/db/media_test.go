@@ -51,6 +51,26 @@ func TestListMediaIncludesUsageCount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create media C: %v", err)
 	}
+	mediaD, err := store.CreateMedia(ctx, domain.Media{
+		Kind:         "image",
+		OriginalName: "d.png",
+		StoragePath:  "/tmp/d.png",
+		MimeType:     "image/png",
+		SizeBytes:    999,
+	})
+	if err != nil {
+		t.Fatalf("create media D: %v", err)
+	}
+	mediaE, err := store.CreateMedia(ctx, domain.Media{
+		Kind:         "image",
+		OriginalName: "e.png",
+		StoragePath:  "/tmp/e.png",
+		MimeType:     "image/png",
+		SizeBytes:    555,
+	})
+	if err != nil {
+		t.Fatalf("create media E: %v", err)
+	}
 
 	_, err = store.CreatePost(ctx, CreatePostParams{
 		Post: domain.Post{
@@ -76,13 +96,38 @@ func TestListMediaIncludesUsageCount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create published post with media: %v", err)
 	}
+	_, err = store.CreatePost(ctx, CreatePostParams{
+		Post: domain.Post{
+			AccountID:   account.ID,
+			Text:        "scheduled future with media",
+			Status:      domain.PostStatusScheduled,
+			ScheduledAt: time.Now().Add(2 * time.Hour),
+			MaxAttempts: 3,
+		},
+		MediaIDs: []string{mediaD.ID},
+	})
+	if err != nil {
+		t.Fatalf("create scheduled future post with media: %v", err)
+	}
+	_, err = store.CreatePost(ctx, CreatePostParams{
+		Post: domain.Post{
+			AccountID:   account.ID,
+			Text:        "failed with media",
+			Status:      domain.PostStatusFailed,
+			MaxAttempts: 3,
+		},
+		MediaIDs: []string{mediaE.ID},
+	})
+	if err != nil {
+		t.Fatalf("create failed post with media: %v", err)
+	}
 
 	items, err := store.ListMedia(ctx, 10)
 	if err != nil {
 		t.Fatalf("list media: %v", err)
 	}
-	if len(items) != 3 {
-		t.Fatalf("expected 3 media items, got %d", len(items))
+	if len(items) != 5 {
+		t.Fatalf("expected 5 media items, got %d", len(items))
 	}
 
 	usageByID := map[string]int{}
@@ -96,7 +141,13 @@ func TestListMediaIncludesUsageCount(t *testing.T) {
 		t.Fatalf("expected usage_count=0 for media B, got %d", got)
 	}
 	if got := usageByID[mediaC.ID]; got != 0 {
-		t.Fatalf("expected usage_count=0 for media C because published-only uses are not pending, got %d", got)
+		t.Fatalf("expected usage_count=0 for media C because published-only uses are not future/draft, got %d", got)
+	}
+	if got := usageByID[mediaD.ID]; got != 1 {
+		t.Fatalf("expected usage_count=1 for media D because future scheduled uses count as in-use, got %d", got)
+	}
+	if got := usageByID[mediaE.ID]; got != 0 {
+		t.Fatalf("expected usage_count=0 for media E because failed uses are not future/draft, got %d", got)
 	}
 }
 
@@ -218,6 +269,48 @@ func TestDeleteMediaIfUnusedAllowsPublishedOnlyReferences(t *testing.T) {
 	}
 }
 
+func TestDeleteMediaIfUnusedRejectsFutureScheduledReferences(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+	created, err := store.CreateMedia(ctx, domain.Media{
+		Kind:         "image",
+		OriginalName: "future-scheduled.png",
+		StoragePath:  "/tmp/future-scheduled.png",
+		MimeType:     "image/png",
+		SizeBytes:    1234,
+	})
+	if err != nil {
+		t.Fatalf("create media: %v", err)
+	}
+
+	_, err = store.CreatePost(ctx, CreatePostParams{
+		Post: domain.Post{
+			AccountID:   createTestAccount(t, store, domain.PlatformX).ID,
+			Text:        "future scheduled with media",
+			Status:      domain.PostStatusScheduled,
+			ScheduledAt: time.Now().Add(3 * time.Hour),
+			MaxAttempts: 3,
+		},
+		MediaIDs: []string{created.ID},
+	})
+	if err != nil {
+		t.Fatalf("create scheduled post: %v", err)
+	}
+
+	_, err = store.DeleteMediaIfUnused(ctx, created.ID)
+	if err == nil {
+		t.Fatalf("expected delete to fail for future scheduled media")
+	}
+	if !errors.Is(err, ErrMediaInUse) {
+		t.Fatalf("expected ErrMediaInUse, got %v", err)
+	}
+}
+
 func TestDeleteMediaUnusedByPendingPosts(t *testing.T) {
 	store, err := Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
@@ -244,7 +337,8 @@ func TestDeleteMediaUnusedByPendingPosts(t *testing.T) {
 	orphan := makeMedia("orphan.png")
 	publishedOnly := makeMedia("published-only.png")
 	draftOnly := makeMedia("draft-only.png")
-	scheduledOnly := makeMedia("scheduled-only.png")
+	scheduledFutureOnly := makeMedia("scheduled-future-only.png")
+	scheduledPastOnly := makeMedia("scheduled-past-only.png")
 	failedOnly := makeMedia("failed-only.png")
 	mixedPublishedAndDraft := makeMedia("mixed.png")
 
@@ -273,13 +367,26 @@ func TestDeleteMediaUnusedByPendingPosts(t *testing.T) {
 	if _, err := store.CreatePost(ctx, CreatePostParams{
 		Post: domain.Post{
 			AccountID:   account.ID,
-			Text:        "scheduled post",
+			Text:        "scheduled future post",
 			Status:      domain.PostStatusScheduled,
+			ScheduledAt: time.Now().Add(4 * time.Hour),
 			MaxAttempts: 3,
 		},
-		MediaIDs: []string{scheduledOnly.ID},
+		MediaIDs: []string{scheduledFutureOnly.ID},
 	}); err != nil {
-		t.Fatalf("create scheduled post: %v", err)
+		t.Fatalf("create scheduled future post: %v", err)
+	}
+	if _, err := store.CreatePost(ctx, CreatePostParams{
+		Post: domain.Post{
+			AccountID:   account.ID,
+			Text:        "scheduled past post",
+			Status:      domain.PostStatusScheduled,
+			ScheduledAt: time.Now().Add(-4 * time.Hour),
+			MaxAttempts: 3,
+		},
+		MediaIDs: []string{scheduledPastOnly.ID},
+	}); err != nil {
+		t.Fatalf("create scheduled past post: %v", err)
 	}
 	if _, err := store.CreatePost(ctx, CreatePostParams{
 		Post: domain.Post{
@@ -297,12 +404,12 @@ func TestDeleteMediaUnusedByPendingPosts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("purge media: %v", err)
 	}
-	if len(deleted) != 2 {
-		t.Fatalf("expected 2 media files to be purged, got %d", len(deleted))
+	if len(deleted) != 4 {
+		t.Fatalf("expected 4 media files to be purged, got %d", len(deleted))
 	}
-	deletedIDs := []string{deleted[0].ID, deleted[1].ID}
+	deletedIDs := []string{deleted[0].ID, deleted[1].ID, deleted[2].ID, deleted[3].ID}
 	slices.Sort(deletedIDs)
-	expectedDeleted := []string{orphan.ID, publishedOnly.ID}
+	expectedDeleted := []string{orphan.ID, publishedOnly.ID, failedOnly.ID, scheduledPastOnly.ID}
 	slices.Sort(expectedDeleted)
 	if !slices.Equal(deletedIDs, expectedDeleted) {
 		t.Fatalf("unexpected purged ids: got=%v want=%v", deletedIDs, expectedDeleted)
@@ -316,12 +423,12 @@ func TestDeleteMediaUnusedByPendingPosts(t *testing.T) {
 	for _, item := range items {
 		remaining[item.Media.ID] = struct{}{}
 	}
-	for _, kept := range []string{draftOnly.ID, scheduledOnly.ID, failedOnly.ID, mixedPublishedAndDraft.ID} {
+	for _, kept := range []string{draftOnly.ID, scheduledFutureOnly.ID, mixedPublishedAndDraft.ID} {
 		if _, ok := remaining[kept]; !ok {
 			t.Fatalf("expected media %s to remain after purge", kept)
 		}
 	}
-	for _, removed := range []string{orphan.ID, publishedOnly.ID} {
+	for _, removed := range []string{orphan.ID, publishedOnly.ID, failedOnly.ID, scheduledPastOnly.ID} {
 		if _, ok := remaining[removed]; ok {
 			t.Fatalf("expected media %s to be removed by purge", removed)
 		}
