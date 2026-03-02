@@ -2,11 +2,32 @@
 
 ## 1) Create the service
 
-1. In Coolify, create a new service from Git repository `antoniolg/publisher`.
+### Option A (recommended): deploy from prebuilt GHCR image
+
+1. In Coolify, create a new service from **Docker Image**.
+2. Image: `ghcr.io/antoniolg/postflow:latest` (or pin a tag like `ghcr.io/antoniolg/postflow:vX.Y.Z`).
+3. Set application internal port to `8080` in Coolify (do not publish host port `8080` via Docker `ports`).
+4. Attach a persistent volume mounted at `/srv/data`.
+5. If the package is private, add registry credentials in Coolify:
+   - Registry: `ghcr.io`
+   - Username: your GitHub user
+   - Password: GitHub PAT with `read:packages`
+
+### Option B: deploy from repository build
+
+1. In Coolify, create a new service from Git repository `antoniolg/postflow`.
 2. Use branch `main` and enable auto-deploy on new commits.
 3. Build using project `Dockerfile`.
 4. Set application internal port to `8080` in Coolify (do not publish host port `8080` via Docker `ports`).
 5. Attach a persistent volume mounted at `/srv/data`.
+
+## 1.1) How GHCR image publishing works
+
+- GitHub Actions publishes Docker images to `ghcr.io/antoniolg/postflow`.
+- Trigger: only when a GitHub Release is published.
+- Tags pushed on each release:
+  - release tag name (for example `v1.2.0`)
+  - `latest`
 
 ## 2) Required environment variables
 

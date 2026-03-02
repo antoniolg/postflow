@@ -76,6 +76,22 @@ Surface parity (LLM-first):
 - Parity is validated for both success and error paths on shared capabilities.
 - Tests also generate a machine-readable capability matrix artifact.
 
+## Release Docker image (GHCR)
+
+Docker image publishing is automated in GitHub Actions and runs only on published releases.
+
+- Workflow: `.github/workflows/release-image.yml`
+- Registry: `ghcr.io`
+- Image: `ghcr.io/antoniolg/postflow`
+- Tags on each release:
+  - `<release-tag>` (for example `v1.2.0`)
+  - `latest`
+
+Coolify can deploy directly from this image without compiling on the server:
+
+- `ghcr.io/antoniolg/postflow:latest` (rolling)
+- `ghcr.io/antoniolg/postflow:vX.Y.Z` (pinned)
+
 ## Database Migrations (SQLite, safe)
 
 - Startup runs **versioned, non-destructive migrations** (`schema_migrations` table).
