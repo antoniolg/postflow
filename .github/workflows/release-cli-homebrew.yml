@@ -196,6 +196,6 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add "Formula/${FORMULA_NAME}.rb"
+          git add -A "Formula/${FORMULA_NAME}.rb" "Formula/postflow-cli.rb"
           git commit -m "${FORMULA_NAME} ${TAG}"
           git push origin main
