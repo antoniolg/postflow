@@ -2757,7 +2757,7 @@
         <div class="create-header-actions">
           <button class="btn-secondary" type="submit" form="create-post-form" name="intent" value="draft"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> {{t "common.save_draft"}}</button>
           <button class="btn-secondary" type="submit" form="create-post-form" name="intent" value="publish_now"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> {{t "common.publish_now"}}</button>
-          <button class="btn-primary" type="submit" form="create-post-form" name="intent" value="schedule"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> {{if .EditingPost}}{{t "common.update_schedule"}}{{else}}{{t "common.publish_now"}}{{end}}</button>
+          <button class="btn-primary" type="submit" form="create-post-form" name="intent" value="schedule"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> {{if .EditingPost}}{{t "common.update_schedule"}}{{else}}{{t "common.schedule"}}{{end}}</button>
         </div>
         {{else if ne .View "calendar"}}
         <a class="create-pill" href="{{.CreateViewURL}}">{{t "common.create_post"}}</a>
@@ -3070,7 +3070,7 @@
 
               <div class="editor-actions composer-submit-actions">
 	                <button class="btn-secondary" type="submit" name="intent" value="draft">{{t "common.save_draft"}}</button>
-	                <button class="btn-primary" type="submit" name="intent" value="schedule">{{if .EditingPost}}{{t "common.update_schedule"}}{{else}}{{t "common.publish_now"}}{{end}}</button>
+                <button class="btn-primary" type="submit" name="intent" value="schedule">{{if .EditingPost}}{{t "common.update_schedule"}}{{else}}{{t "common.schedule"}}{{end}}</button>
 	                <button class="btn-secondary" type="submit" name="intent" value="publish_now">{{t "common.publish_now"}}</button>
               </div>
             </form>
