@@ -814,21 +814,25 @@
       margin-bottom: 4px;
     }
     body[data-view="calendar"] .day-events {
-      align-items: flex-start;
-      gap: 2px;
+      align-items: stretch;
+      gap: 3px;
     }
     body[data-view="calendar"] .day-event {
+      width: 100%;
+      box-sizing: border-box;
       max-width: 100%;
-      font-size: 9px;
-      line-height: 1.15;
-      padding: 2px 4px;
-      border-radius: 4px;
+      min-height: 18px;
+      font-size: 10px;
+      line-height: 1.25;
+      padding: 3px 6px;
+      border-radius: 5px;
     }
     body[data-view="calendar"] .event-network {
-      display: none;
+      display: inline-flex;
+      margin-left: auto;
     }
     body[data-view="calendar"] .event-time {
-      opacity: 0.85;
+      opacity: 0.9;
     }
     body[data-view="calendar"] .day-panel {
       background: #1f1f1f;
@@ -2528,12 +2532,18 @@
         gap: 2px;
       }
       body[data-view="calendar"] .day-event {
+        width: 100%;
         font-size: 9px;
-        padding: 2px 4px;
+        padding: 2px 5px;
       }
-      body[data-view="calendar"] .day-event .event-time,
-      body[data-view="calendar"] .day-event .event-network {
+      body[data-view="calendar"] .day-event .event-time {
         display: none;
+      }
+      body[data-view="calendar"] .day-event .event-network {
+        display: inline-flex;
+        margin-left: auto;
+        width: 10px;
+        height: 10px;
       }
       body[data-view="calendar"] .day-events .day-event:nth-child(n+3) {
         display: none;

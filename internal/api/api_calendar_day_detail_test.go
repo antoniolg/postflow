@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -260,5 +261,13 @@ func TestDefaultViewIsCalendar(t *testing.T) {
 	}
 	if !strings.Contains(body, "data-day-events") || !strings.Contains(body, "data-day-overflow") {
 		t.Fatalf("expected day cells to expose event and overflow markers")
+	}
+	hideNetworkRule := regexp.MustCompile(`(?s)body\[data-view="calendar"\]\s*\.event-network\s*\{[^}]*display\s*:\s*none`)
+	if hideNetworkRule.MatchString(body) {
+		t.Fatalf("did not expect calendar desktop css to hide event network icons")
+	}
+	fullWidthEventRule := regexp.MustCompile(`(?s)body\[data-view="calendar"\]\s*\.day-event\s*\{[^}]*width\s*:\s*100%`)
+	if !fullWidthEventRule.MatchString(body) {
+		t.Fatalf("expected calendar event cards to use full row width")
 	}
 }
