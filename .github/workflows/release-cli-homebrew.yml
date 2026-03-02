@@ -110,12 +110,15 @@ jobs:
           echo "sum_linux_arm64=${SUM_LINUX_ARM64}" >> "${GITHUB_OUTPUT}"
 
       - name: Update Homebrew tap formula
-        if: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN != '' }}
         env:
           TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
+          if [ -z "${TAP_TOKEN:-}" ]; then
+            echo "HOMEBREW_TAP_GITHUB_TOKEN not configured; skipping Homebrew formula update."
+            exit 0
+          fi
           VERSION="${{ steps.vars.outputs.version }}"
           TAG="${{ steps.vars.outputs.tag }}"
           FORMULA_NAME="${FORMULA_NAME}"
@@ -190,8 +193,3 @@ EOF
           git add "Formula/${FORMULA_NAME}.rb"
           git commit -m "${FORMULA_NAME} ${TAG}"
           git push origin main
-
-      - name: Homebrew tap token hint
-        if: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN == '' }}
-        run: |
-          echo "HOMEBREW_TAP_GITHUB_TOKEN not configured; assets were published but Homebrew formula update was skipped."
