@@ -44,6 +44,14 @@ go run ./cmd/publisher-cli dlq list --limit 50
 go run ./cmd/publisher-cli dlq requeue --id dlq_xxx
 ```
 
+Homebrew install (tap):
+
+```bash
+brew tap antoniolg/tap
+brew install antoniolg/tap/postflow-cli
+publisher-cli --help
+```
+
 ## Quality Gate (CI)
 
 Runs automatically on:
@@ -91,6 +99,24 @@ Coolify can deploy directly from this image without compiling on the server:
 
 - `ghcr.io/antoniolg/postflow:latest` (rolling)
 - `ghcr.io/antoniolg/postflow:vX.Y.Z` (pinned)
+
+## Release CLI artifacts + Homebrew tap
+
+CLI release automation runs in `.github/workflows/release-cli-homebrew.yml`:
+
+- Trigger:
+  - on published GitHub release
+  - manual dispatch with a specific tag (`workflow_dispatch`)
+- Uploads release assets:
+  - `postflow-cli_<version>_darwin_amd64.tar.gz`
+  - `postflow-cli_<version>_darwin_arm64.tar.gz`
+  - `postflow-cli_<version>_linux_amd64.tar.gz`
+  - `postflow-cli_<version>_linux_arm64.tar.gz`
+- Updates formula `Formula/postflow-cli.rb` in `antoniolg/homebrew-tap`
+
+Required secret (in `antoniolg/postflow` GitHub repo):
+
+- `HOMEBREW_TAP_GITHUB_TOKEN` with write access to `antoniolg/homebrew-tap`
 
 ## Database Migrations (SQLite, safe)
 
