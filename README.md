@@ -74,6 +74,15 @@ Paridad de superficies (LLM-first):
 - Se valida la paridad en caminos de éxito y error para capacidades compartidas.
 - Los tests generan además una matriz JSON de capacidades (artefacto machine-readable en tiempo de test).
 
+## Database Migrations (SQLite, safe)
+
+- Startup runs **versioned, non-destructive migrations** (`schema_migrations` table).
+- No schema reset/drop is performed when the app upgrades.
+- If pending migrations are detected on an existing DB, the app creates a local pre-migration snapshot:
+  - `<DATABASE_PATH>.bak-YYYYMMDDTHHMMSSZ`
+  - plus `-wal` / `-shm` sidecars when present.
+- On migration failure, startup aborts and keeps current data untouched.
+
 ## Arquitectura
 
 Documentación de referencia:

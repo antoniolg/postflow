@@ -78,6 +78,10 @@ Expected:
 
 Because this app uses SQLite + local media files:
 
+- Schema upgrades run automatically at startup using non-destructive migrations.
+- When there are pending migrations on an existing DB, the app creates a local snapshot first:
+  - `/srv/data/publisher.db.bak-YYYYMMDDTHHMMSSZ` (and `-wal`/`-shm` if present).
+
 - Keep `/srv/data` as persistent volume.
 - Backup both database and media using scripts:
 
