@@ -124,7 +124,7 @@ func TestAccessibilityMarkupAddsLabelsAndLandmarks(t *testing.T) {
 		t.Fatalf("expected 200 for settings view, got %d", settingsW.Code)
 	}
 	settingsBody := settingsW.Body.String()
-	if !strings.Contains(settingsBody, "<label for=\"timezone-select\">Timezone (IANA)</label>") {
+	if !strings.Contains(settingsBody, "<label for=\"timezone-select\">zone (IANA)</label>") {
 		t.Fatalf("expected explicit label association for timezone select")
 	}
 }

@@ -3109,7 +3109,7 @@
 
       {{if eq .View "settings"}}
       <div class="line">{{t "settings.preferences"}}</div>
-      <section class="editor">
+      <section class="editor editor-wide">
         <div class="editor-head">{{t "settings.timezone"}}</div>
         <form class="editor-body" method="post" action="/settings/timezone">
           <input type="hidden" name="return_to" value="{{.CurrentViewURL}}" />
