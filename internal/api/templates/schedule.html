@@ -3016,7 +3016,7 @@
 	                  <div class="composer-label">// {{t "create.post_content"}}</div>
 	                  <textarea id="create-text" name="text" required placeholder="{{t "create.placeholder"}}">{{.CreateText}}</textarea>
 	                  <div class="composer-text-meta">
-	                    <div id="create-char-count" class="char-count-list"><span class="char-count-line">{{t "create.char_count_initial"}}</span></div>
+	                    <div id="create-char-count" class="char-count-list" role="status" aria-live="polite" aria-atomic="true"><span class="char-count-line">{{t "create.char_count_initial"}}</span></div>
 	                    <span class="composer-format-btns">**bold** *italic*</span>
 	                  </div>
 	                </div>
@@ -4104,6 +4104,8 @@
   const i18n = {
     charsWithLimit: {{toJSON (t "create.chars_with_limit")}},
     charsUnknown: {{toJSON (t "create.chars_unknown")}},
+    charsAriaWithLimit: {{toJSON (t "create.char_count_aria_with_limit")}},
+    charsAriaUnknown: {{toJSON (t "create.char_count_aria_unknown")}},
     previewDefault: {{toJSON (t "create.preview_default")}},
     openMedia: {{toJSON (t "settings.open_media")}},
     usedLabel: {{toJSON (t "common.used")}},
@@ -4376,8 +4378,8 @@
         const line = document.createElement("span");
         line.className = "char-count-line";
         const overLimit = count > rule.max;
-        const summary = rule.label + " - " + formatTemplate(i18n.charsWithLimit, count, rule.max);
-        line.innerHTML = '<span class="char-platform-icon" aria-hidden="true">' + platformIconSVG(rule.platform) + '</span><span class="char-platform-text">' + escapeHTML(summary) + '</span>';
+        line.setAttribute("aria-label", formatTemplate(i18n.charsAriaWithLimit, rule.label, count, rule.max));
+        line.innerHTML = '<span class="char-platform-icon" aria-hidden="true">' + platformIconSVG(rule.platform) + '</span><span class="char-platform-text">' + escapeHTML(formatTemplate(i18n.charsWithLimit, count, rule.max)) + '</span>';
         if (overLimit) {
           hasOverLimit = true;
           line.classList.add("char-over");
@@ -4389,6 +4391,7 @@
     }
     const fallback = document.createElement("span");
     fallback.className = "char-count-line";
+    fallback.setAttribute("aria-label", formatTemplate(i18n.charsAriaUnknown, count));
     fallback.textContent = formatTemplate(i18n.charsUnknown, count);
     charCount.appendChild(fallback);
     charCount.classList.remove("char-over");
