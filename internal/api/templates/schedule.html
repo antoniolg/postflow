@@ -2741,7 +2741,6 @@
           {{if and (eq .View "create") .BackURL}}<a class="title-back" href="{{.BackURL}}" aria-label="{{t "common.back"}}">←</a>{{end}}
           <div class="title-copy">
             <h1>{{if eq .View "calendar"}}{{t "header.calendar"}}{{else if eq .View "drafts"}}{{t "header.drafts"}}{{else if eq .View "failed"}}{{t "header.failed"}}{{else if eq .View "create"}}{{t "header.new_post"}}{{else if eq .View "settings"}}{{t "header.settings"}}{{else}}{{t "header.scheduled"}}{{end}}</h1>
-            {{if eq .View "calendar"}}<div class="title-sub">// {{t "calendar.scheduled_overview"}}</div>{{end}}
           </div>
           {{if eq .View "calendar"}}
           <div class="calendar-controls">
