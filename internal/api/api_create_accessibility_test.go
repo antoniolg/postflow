@@ -168,6 +168,9 @@ func TestCreateViewIncludesComposerPreviewUploadAndNetworks(t *testing.T) {
 	if !strings.Contains(body, "id=\"create-post-form\"") {
 		t.Fatalf("expected create composer form")
 	}
+	if !strings.Contains(body, "data-editing-post=\"0\"") {
+		t.Fatalf("expected create form to expose non-editing state")
+	}
 	if !strings.Contains(body, "class=\"create-header-actions\"") || !strings.Contains(body, "form=\"create-post-form\"") || !strings.Contains(body, "name=\"intent\" value=\"publish_now\"") {
 		t.Fatalf("expected create actions in header and connected to composer form")
 	}
@@ -188,6 +191,9 @@ func TestCreateViewIncludesComposerPreviewUploadAndNetworks(t *testing.T) {
 	}
 	if !strings.Contains(body, "id=\"create-char-count\"") || !strings.Contains(body, "char-count-line") {
 		t.Fatalf("expected multi-network char count lines in create view")
+	}
+	if !strings.Contains(body, "postflow.create.selected_account_ids") || !strings.Contains(body, "window.localStorage.setItem") {
+		t.Fatalf("expected create view to persist selected networks in browser storage")
 	}
 	if !strings.Contains(body, "date-picker-popover") || !strings.Contains(body, "date-display") {
 		t.Fatalf("expected custom dark date picker UI instead of native browser picker")

@@ -2959,7 +2959,7 @@
         <section class="composer-main">
           <section class="editor">
 		            <div class="editor-head">{{if .EditingPost}}{{t "create.edit_publication"}}{{else}}{{t "create.new_post"}}{{end}}</div>
-	            <form class="editor-body" id="create-post-form" method="post" action="{{if .EditingPost}}/posts/{{.EditingPost.ID}}/edit{{else}}/posts{{end}}">
+	            <form class="editor-body" id="create-post-form" data-editing-post="{{if .EditingPost}}1{{else}}0{{end}}" method="post" action="{{if .EditingPost}}/posts/{{.EditingPost.ID}}/edit{{else}}/posts{{end}}">
 	              <input type="hidden" name="return_to" value="{{.ReturnTo}}" />
 	              <div id="create-media-hidden"></div>
 	              {{if .CreateError}}<div class="alert error">{{.CreateError}}</div>{{end}}
@@ -4122,6 +4122,73 @@
     waitUploads: {{toJSON (t "create.wait_uploads")}},
     selectNetwork: {{toJSON (t "create.select_network")}}
   };
+  const networkSelectionStorageKey = "postflow.create.selected_account_ids";
+  const isEditingPost = (form.dataset.editingPost || "").trim() === "1";
+
+  const normalizeAccountIDList = (values) => {
+    const out = [];
+    const seen = new Set();
+    values.forEach((rawValue) => {
+      const value = String(rawValue || "").trim();
+      if (value === "" || seen.has(value)) {
+        return;
+      }
+      seen.add(value);
+      out.push(value);
+    });
+    return out;
+  };
+
+  const restorePersistedNetworkSelection = () => {
+    if (isEditingPost || accountSelect.options.length === 0) {
+      return;
+    }
+    let stored = [];
+    try {
+      const raw = window.localStorage.getItem(networkSelectionStorageKey);
+      if (!raw) {
+        return;
+      }
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) {
+        return;
+      }
+      stored = normalizeAccountIDList(parsed);
+    } catch (_) {
+      return;
+    }
+    if (stored.length === 0) {
+      return;
+    }
+    const selectedIDs = new Set(stored);
+    let matched = 0;
+    Array.from(accountSelect.options).forEach((option) => {
+      const id = String(option.value || "").trim();
+      const selected = id !== "" && selectedIDs.has(id);
+      option.selected = selected;
+      if (selected) {
+        matched += 1;
+      }
+    });
+    if (matched === 0 && accountSelect.options.length > 0) {
+      accountSelect.options[0].selected = true;
+    }
+  };
+
+  const persistNetworkSelection = () => {
+    if (isEditingPost) {
+      return;
+    }
+    const selectedIDs = normalizeAccountIDList(
+      selectedAccountOptions().map((option) => option.value)
+    );
+    if (selectedIDs.length === 0) {
+      return;
+    }
+    try {
+      window.localStorage.setItem(networkSelectionStorageKey, JSON.stringify(selectedIDs));
+    } catch (_) {}
+  };
 
   const toDatetimeLocal = (d) => {
     const year = d.getFullYear();
@@ -4943,6 +5010,8 @@
     renderMediaList();
   });
 
+  restorePersistedNetworkSelection();
+
   if (selectedAccountOptions().length === 0 && accountSelect.options.length > 0) {
     accountSelect.options[0].selected = true;
   }
@@ -4987,6 +5056,7 @@
   accountSelect.addEventListener("change", () => {
     syncNetworkSelection();
     updateCharCount();
+    persistNetworkSelection();
   });
 
   textInput.addEventListener("input", () => {
