@@ -196,6 +196,54 @@ func TestMediaAPIDeleteAllowsPublishedOnlyMedia(t *testing.T) {
 	}
 }
 
+func TestMediaAPIDeleteAllowsCanceledOnlyMedia(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	mediaPath := filepath.Join(tempDir, "canceled-only.png")
+	if err := os.WriteFile(mediaPath, []byte("canceled"), 0o644); err != nil {
+		t.Fatalf("seed media file: %v", err)
+	}
+	createdMedia, err := store.CreateMedia(t.Context(), domain.Media{
+		Kind:         "image",
+		OriginalName: "canceled-only.png",
+		StoragePath:  mediaPath,
+		MimeType:     "image/png",
+		SizeBytes:    8,
+	})
+	if err != nil {
+		t.Fatalf("create media: %v", err)
+	}
+	if _, err := store.CreatePost(t.Context(), db.CreatePostParams{
+		Post: domain.Post{
+			AccountID:   createTestAccount(t, store).ID,
+			Text:        "canceled post with media",
+			Status:      domain.PostStatusCanceled,
+			MaxAttempts: 3,
+		},
+		MediaIDs: []string{createdMedia.ID},
+	}); err != nil {
+		t.Fatalf("create canceled post: %v", err)
+	}
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	deleteReq := httptest.NewRequest(http.MethodDelete, "/media/"+createdMedia.ID, nil)
+	deleteW := httptest.NewRecorder()
+	h.ServeHTTP(deleteW, deleteReq)
+	if deleteW.Code != http.StatusOK {
+		t.Fatalf("expected delete status 200 for canceled-only media, got %d: %s", deleteW.Code, deleteW.Body.String())
+	}
+	if _, err := os.Stat(mediaPath); !os.IsNotExist(err) {
+		t.Fatalf("expected canceled-only media file to be removed from disk")
+	}
+}
+
 func TestMediaAPIDeleteRejectsFutureScheduledMedia(t *testing.T) {
 	tempDir := t.TempDir()
 	store, err := db.Open(filepath.Join(tempDir, "test.db"))
@@ -318,7 +366,7 @@ func TestCreateAndSettingsViewsRenderMediaManagementSections(t *testing.T) {
 	}
 }
 
-func TestMediaPurgeFormDeletesOnlyPublishedOrUnusedMedia(t *testing.T) {
+func TestMediaPurgeFormDeletesOnlyPublishedCanceledOrUnusedMedia(t *testing.T) {
 	tempDir := t.TempDir()
 	store, err := db.Open(filepath.Join(tempDir, "test.db"))
 	if err != nil {
@@ -346,7 +394,9 @@ func TestMediaPurgeFormDeletesOnlyPublishedOrUnusedMedia(t *testing.T) {
 
 	orphan := makeMedia("orphan.png")
 	publishedOnly := makeMedia("published-only.png")
+	canceledOnly := makeMedia("canceled-only.png")
 	draftOnly := makeMedia("draft-only.png")
+	failedOnly := makeMedia("failed-only.png")
 	account := createTestAccount(t, store)
 
 	publishedResult, err := store.CreatePost(t.Context(), db.CreatePostParams{
@@ -373,6 +423,28 @@ func TestMediaPurgeFormDeletesOnlyPublishedOrUnusedMedia(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("create draft post: %v", err)
 	}
+	if _, err := store.CreatePost(t.Context(), db.CreatePostParams{
+		Post: domain.Post{
+			AccountID:   account.ID,
+			Text:        "canceled with media",
+			Status:      domain.PostStatusCanceled,
+			MaxAttempts: 3,
+		},
+		MediaIDs: []string{canceledOnly.ID},
+	}); err != nil {
+		t.Fatalf("create canceled post: %v", err)
+	}
+	if _, err := store.CreatePost(t.Context(), db.CreatePostParams{
+		Post: domain.Post{
+			AccountID:   account.ID,
+			Text:        "failed with media",
+			Status:      domain.PostStatusFailed,
+			MaxAttempts: 3,
+		},
+		MediaIDs: []string{failedOnly.ID},
+	}); err != nil {
+		t.Fatalf("create failed post: %v", err)
+	}
 
 	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
 	h := srv.Handler()
@@ -389,25 +461,38 @@ func TestMediaPurgeFormDeletesOnlyPublishedOrUnusedMedia(t *testing.T) {
 	if !strings.Contains(loc, "media_success=") {
 		t.Fatalf("expected purge success redirect, got %q", loc)
 	}
-	if !strings.Contains(loc, "2+media+files+purged") {
-		t.Fatalf("expected purge to report 2 deleted files, got %q", loc)
+	if !strings.Contains(loc, "3+media+files+purged") {
+		t.Fatalf("expected purge to report 3 deleted files, got %q", loc)
 	}
 
 	items, err := store.ListMedia(t.Context(), 20)
 	if err != nil {
 		t.Fatalf("list media after purge: %v", err)
 	}
-	if len(items) != 1 || items[0].Media.ID != draftOnly.ID {
-		t.Fatalf("expected only draft media to remain after purge, got %+v", items)
+	if len(items) != 2 {
+		t.Fatalf("expected 2 media items to remain after purge, got %+v", items)
+	}
+	remaining := map[string]struct{}{}
+	for _, item := range items {
+		remaining[item.Media.ID] = struct{}{}
+	}
+	if _, ok := remaining[draftOnly.ID]; !ok {
+		t.Fatalf("expected draft media to remain after purge")
+	}
+	if _, ok := remaining[failedOnly.ID]; !ok {
+		t.Fatalf("expected failed media to remain after purge")
 	}
 
-	for _, path := range []string{orphan.StoragePath, publishedOnly.StoragePath} {
+	for _, path := range []string{orphan.StoragePath, publishedOnly.StoragePath, canceledOnly.StoragePath} {
 		if _, err := os.Stat(path); !os.IsNotExist(err) {
 			t.Fatalf("expected purged file %s to be deleted, got err=%v", path, err)
 		}
 	}
 	if _, err := os.Stat(draftOnly.StoragePath); err != nil {
 		t.Fatalf("expected draft media file to remain, stat err=%v", err)
+	}
+	if _, err := os.Stat(failedOnly.StoragePath); err != nil {
+		t.Fatalf("expected failed media file to remain, stat err=%v", err)
 	}
 
 	publishedPost, err := store.GetPost(t.Context(), publishedResult.Post.ID)

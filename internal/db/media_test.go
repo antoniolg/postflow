@@ -71,6 +71,16 @@ func TestListMediaIncludesUsageCount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create media E: %v", err)
 	}
+	mediaF, err := store.CreateMedia(ctx, domain.Media{
+		Kind:         "image",
+		OriginalName: "f.png",
+		StoragePath:  "/tmp/f.png",
+		MimeType:     "image/png",
+		SizeBytes:    666,
+	})
+	if err != nil {
+		t.Fatalf("create media F: %v", err)
+	}
 
 	_, err = store.CreatePost(ctx, CreatePostParams{
 		Post: domain.Post{
@@ -121,13 +131,25 @@ func TestListMediaIncludesUsageCount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create failed post with media: %v", err)
 	}
+	_, err = store.CreatePost(ctx, CreatePostParams{
+		Post: domain.Post{
+			AccountID:   account.ID,
+			Text:        "canceled with media",
+			Status:      domain.PostStatusCanceled,
+			MaxAttempts: 3,
+		},
+		MediaIDs: []string{mediaF.ID},
+	})
+	if err != nil {
+		t.Fatalf("create canceled post with media: %v", err)
+	}
 
 	items, err := store.ListMedia(ctx, 10)
 	if err != nil {
 		t.Fatalf("list media: %v", err)
 	}
-	if len(items) != 5 {
-		t.Fatalf("expected 5 media items, got %d", len(items))
+	if len(items) != 6 {
+		t.Fatalf("expected 6 media items, got %d", len(items))
 	}
 
 	usageByID := map[string]int{}
@@ -146,8 +168,11 @@ func TestListMediaIncludesUsageCount(t *testing.T) {
 	if got := usageByID[mediaD.ID]; got != 1 {
 		t.Fatalf("expected usage_count=1 for media D because future scheduled uses count as in-use, got %d", got)
 	}
-	if got := usageByID[mediaE.ID]; got != 0 {
-		t.Fatalf("expected usage_count=0 for media E because failed uses are not future/draft, got %d", got)
+	if got := usageByID[mediaE.ID]; got != 1 {
+		t.Fatalf("expected usage_count=1 for media E because failed uses block deletion, got %d", got)
+	}
+	if got := usageByID[mediaF.ID]; got != 0 {
+		t.Fatalf("expected usage_count=0 for media F because canceled uses do not block deletion, got %d", got)
 	}
 }
 
@@ -269,6 +294,47 @@ func TestDeleteMediaIfUnusedAllowsPublishedOnlyReferences(t *testing.T) {
 	}
 }
 
+func TestDeleteMediaIfUnusedAllowsCanceledOnlyReferences(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+	created, err := store.CreateMedia(ctx, domain.Media{
+		Kind:         "image",
+		OriginalName: "canceled-only.png",
+		StoragePath:  "/tmp/canceled-only.png",
+		MimeType:     "image/png",
+		SizeBytes:    1234,
+	})
+	if err != nil {
+		t.Fatalf("create media: %v", err)
+	}
+
+	_, err = store.CreatePost(ctx, CreatePostParams{
+		Post: domain.Post{
+			AccountID:   createTestAccount(t, store, domain.PlatformX).ID,
+			Text:        "canceled with media",
+			Status:      domain.PostStatusCanceled,
+			MaxAttempts: 3,
+		},
+		MediaIDs: []string{created.ID},
+	})
+	if err != nil {
+		t.Fatalf("create canceled post: %v", err)
+	}
+
+	deleted, err := store.DeleteMediaIfUnused(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("expected canceled-only media to be deletable, got %v", err)
+	}
+	if deleted.ID != created.ID {
+		t.Fatalf("expected deleted media id %q, got %q", created.ID, deleted.ID)
+	}
+}
+
 func TestDeleteMediaIfUnusedRejectsFutureScheduledReferences(t *testing.T) {
 	store, err := Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
@@ -336,6 +402,7 @@ func TestDeleteMediaUnusedByPendingPosts(t *testing.T) {
 
 	orphan := makeMedia("orphan.png")
 	publishedOnly := makeMedia("published-only.png")
+	canceledOnly := makeMedia("canceled-only.png")
 	draftOnly := makeMedia("draft-only.png")
 	scheduledFutureOnly := makeMedia("scheduled-future-only.png")
 	scheduledPastOnly := makeMedia("scheduled-past-only.png")
@@ -352,6 +419,17 @@ func TestDeleteMediaUnusedByPendingPosts(t *testing.T) {
 		MediaIDs: []string{publishedOnly.ID, mixedPublishedAndDraft.ID},
 	}); err != nil {
 		t.Fatalf("create published post: %v", err)
+	}
+	if _, err := store.CreatePost(ctx, CreatePostParams{
+		Post: domain.Post{
+			AccountID:   account.ID,
+			Text:        "canceled post",
+			Status:      domain.PostStatusCanceled,
+			MaxAttempts: 3,
+		},
+		MediaIDs: []string{canceledOnly.ID},
+	}); err != nil {
+		t.Fatalf("create canceled post: %v", err)
 	}
 	if _, err := store.CreatePost(ctx, CreatePostParams{
 		Post: domain.Post{
@@ -404,12 +482,12 @@ func TestDeleteMediaUnusedByPendingPosts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("purge media: %v", err)
 	}
-	if len(deleted) != 4 {
-		t.Fatalf("expected 4 media files to be purged, got %d", len(deleted))
+	if len(deleted) != 3 {
+		t.Fatalf("expected 3 media files to be purged, got %d", len(deleted))
 	}
-	deletedIDs := []string{deleted[0].ID, deleted[1].ID, deleted[2].ID, deleted[3].ID}
+	deletedIDs := []string{deleted[0].ID, deleted[1].ID, deleted[2].ID}
 	slices.Sort(deletedIDs)
-	expectedDeleted := []string{orphan.ID, publishedOnly.ID, failedOnly.ID, scheduledPastOnly.ID}
+	expectedDeleted := []string{orphan.ID, publishedOnly.ID, canceledOnly.ID}
 	slices.Sort(expectedDeleted)
 	if !slices.Equal(deletedIDs, expectedDeleted) {
 		t.Fatalf("unexpected purged ids: got=%v want=%v", deletedIDs, expectedDeleted)
@@ -423,19 +501,19 @@ func TestDeleteMediaUnusedByPendingPosts(t *testing.T) {
 	for _, item := range items {
 		remaining[item.Media.ID] = struct{}{}
 	}
-	for _, kept := range []string{draftOnly.ID, scheduledFutureOnly.ID, mixedPublishedAndDraft.ID} {
+	for _, kept := range []string{draftOnly.ID, scheduledFutureOnly.ID, scheduledPastOnly.ID, failedOnly.ID, mixedPublishedAndDraft.ID} {
 		if _, ok := remaining[kept]; !ok {
 			t.Fatalf("expected media %s to remain after purge", kept)
 		}
 	}
-	for _, removed := range []string{orphan.ID, publishedOnly.ID, failedOnly.ID, scheduledPastOnly.ID} {
+	for _, removed := range []string{orphan.ID, publishedOnly.ID, canceledOnly.ID} {
 		if _, ok := remaining[removed]; ok {
 			t.Fatalf("expected media %s to be removed by purge", removed)
 		}
 	}
 
 	var dangling int
-	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM post_media WHERE media_id IN (?, ?)`, orphan.ID, publishedOnly.ID).Scan(&dangling); err != nil {
+	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM post_media WHERE media_id IN (?, ?, ?)`, orphan.ID, publishedOnly.ID, canceledOnly.ID).Scan(&dangling); err != nil {
 		t.Fatalf("count post_media after purge: %v", err)
 	}
 	if dangling != 0 {
