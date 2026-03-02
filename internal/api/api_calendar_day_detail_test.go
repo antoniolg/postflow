@@ -259,6 +259,9 @@ func TestDefaultViewIsCalendar(t *testing.T) {
 	if !strings.Contains(body, "aria-label=\"Previous month\"") || !strings.Contains(body, "aria-label=\"Next month\"") || !strings.Contains(body, "href=\"/?view=calendar&month=") {
 		t.Fatalf("expected calendar month controls in calendar header")
 	}
+	if !strings.Contains(body, "<a class=\"create-pill\" href=\"/?view=create") {
+		t.Fatalf("expected create post button in calendar header")
+	}
 	if !strings.Contains(body, "data-day-events") || !strings.Contains(body, "data-day-overflow") {
 		t.Fatalf("expected day cells to expose event and overflow markers")
 	}

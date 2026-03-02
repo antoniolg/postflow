@@ -2742,6 +2742,7 @@
             <a class="month-link" href="/?view=calendar&month={{.NextMonthParam}}&day={{.SelectedDayKey}}" aria-label="{{t "calendar.next_month"}}"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
             <a class="month-go" href="/?view=calendar&month={{.TodayMonthParam}}&day={{.TodayDayKey}}">{{t "common.today"}}</a>
           </div>
+          <a class="create-pill" href="{{.CreateViewURL}}">{{t "common.create_post"}}</a>
           {{end}}
         </div>
         {{if eq .View "create"}}
