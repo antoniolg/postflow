@@ -147,6 +147,54 @@ func TestMediaAPIDeleteRejectsInUseMedia(t *testing.T) {
 	}
 }
 
+func TestMediaAPIDeleteAllowsPublishedOnlyMedia(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	mediaPath := filepath.Join(tempDir, "published-only.png")
+	if err := os.WriteFile(mediaPath, []byte("published"), 0o644); err != nil {
+		t.Fatalf("seed media file: %v", err)
+	}
+	createdMedia, err := store.CreateMedia(t.Context(), domain.Media{
+		Kind:         "image",
+		OriginalName: "published-only.png",
+		StoragePath:  mediaPath,
+		MimeType:     "image/png",
+		SizeBytes:    9,
+	})
+	if err != nil {
+		t.Fatalf("create media: %v", err)
+	}
+	if _, err := store.CreatePost(t.Context(), db.CreatePostParams{
+		Post: domain.Post{
+			AccountID:   createTestAccount(t, store).ID,
+			Text:        "published post with media",
+			Status:      domain.PostStatusPublished,
+			MaxAttempts: 3,
+		},
+		MediaIDs: []string{createdMedia.ID},
+	}); err != nil {
+		t.Fatalf("create published post: %v", err)
+	}
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	deleteReq := httptest.NewRequest(http.MethodDelete, "/media/"+createdMedia.ID, nil)
+	deleteW := httptest.NewRecorder()
+	h.ServeHTTP(deleteW, deleteReq)
+	if deleteW.Code != http.StatusOK {
+		t.Fatalf("expected delete status 200 for published-only media, got %d: %s", deleteW.Code, deleteW.Body.String())
+	}
+	if _, err := os.Stat(mediaPath); !os.IsNotExist(err) {
+		t.Fatalf("expected published-only media file to be removed from disk")
+	}
+}
+
 func TestCreateAndSettingsViewsRenderMediaManagementSections(t *testing.T) {
 	tempDir := t.TempDir()
 	store, err := db.Open(filepath.Join(tempDir, "test.db"))

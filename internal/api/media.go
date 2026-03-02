@@ -193,7 +193,7 @@ func mediaDeleteErrorMessage(err error) string {
 	case errors.Is(err, sql.ErrNoRows):
 		return "media not found"
 	case errors.Is(err, db.ErrMediaInUse):
-		return "media is in use by existing posts"
+		return "media is in use by pending posts"
 	default:
 		return strings.TrimSpace(err.Error())
 	}

@@ -41,6 +41,16 @@ func TestListMediaIncludesUsageCount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create media B: %v", err)
 	}
+	mediaC, err := store.CreateMedia(ctx, domain.Media{
+		Kind:         "image",
+		OriginalName: "c.png",
+		StoragePath:  "/tmp/c.png",
+		MimeType:     "image/png",
+		SizeBytes:    789,
+	})
+	if err != nil {
+		t.Fatalf("create media C: %v", err)
+	}
 
 	_, err = store.CreatePost(ctx, CreatePostParams{
 		Post: domain.Post{
@@ -54,13 +64,25 @@ func TestListMediaIncludesUsageCount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create post with media: %v", err)
 	}
+	_, err = store.CreatePost(ctx, CreatePostParams{
+		Post: domain.Post{
+			AccountID:   account.ID,
+			Text:        "published with media",
+			Status:      domain.PostStatusPublished,
+			MaxAttempts: 3,
+		},
+		MediaIDs: []string{mediaC.ID},
+	})
+	if err != nil {
+		t.Fatalf("create published post with media: %v", err)
+	}
 
 	items, err := store.ListMedia(ctx, 10)
 	if err != nil {
 		t.Fatalf("list media: %v", err)
 	}
-	if len(items) != 2 {
-		t.Fatalf("expected 2 media items, got %d", len(items))
+	if len(items) != 3 {
+		t.Fatalf("expected 3 media items, got %d", len(items))
 	}
 
 	usageByID := map[string]int{}
@@ -72,6 +94,9 @@ func TestListMediaIncludesUsageCount(t *testing.T) {
 	}
 	if got := usageByID[mediaB.ID]; got != 0 {
 		t.Fatalf("expected usage_count=0 for media B, got %d", got)
+	}
+	if got := usageByID[mediaC.ID]; got != 0 {
+		t.Fatalf("expected usage_count=0 for media C because published-only uses are not pending, got %d", got)
 	}
 }
 
@@ -149,6 +174,47 @@ func TestDeleteMediaIfUnusedRejectsInUse(t *testing.T) {
 	}
 	if !errors.Is(err, ErrMediaInUse) {
 		t.Fatalf("expected ErrMediaInUse, got %v", err)
+	}
+}
+
+func TestDeleteMediaIfUnusedAllowsPublishedOnlyReferences(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+	created, err := store.CreateMedia(ctx, domain.Media{
+		Kind:         "image",
+		OriginalName: "published-only.png",
+		StoragePath:  "/tmp/published-only.png",
+		MimeType:     "image/png",
+		SizeBytes:    1234,
+	})
+	if err != nil {
+		t.Fatalf("create media: %v", err)
+	}
+
+	_, err = store.CreatePost(ctx, CreatePostParams{
+		Post: domain.Post{
+			AccountID:   createTestAccount(t, store, domain.PlatformX).ID,
+			Text:        "published with media",
+			Status:      domain.PostStatusPublished,
+			MaxAttempts: 3,
+		},
+		MediaIDs: []string{created.ID},
+	})
+	if err != nil {
+		t.Fatalf("create published post: %v", err)
+	}
+
+	deleted, err := store.DeleteMediaIfUnused(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("expected published-only media to be deletable, got %v", err)
+	}
+	if deleted.ID != created.ID {
+		t.Fatalf("expected deleted media id %q, got %q", created.ID, deleted.ID)
 	}
 }
 
