@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	publishcycle "github.com/antoniolg/publisher/internal/application/publishcycle"
 	"github.com/antoniolg/publisher/internal/application/ports"
+	publishcycle "github.com/antoniolg/publisher/internal/application/publishcycle"
 	"github.com/antoniolg/publisher/internal/db"
 	"github.com/antoniolg/publisher/internal/domain"
 	"github.com/antoniolg/publisher/internal/publisher"
@@ -60,8 +60,8 @@ func TestWorkerFailurePathAccountLookupFailureRecordsFailure(t *testing.T) {
 
 	creds := workerCredentialsStore{worker: Worker{Store: store, Cipher: newWorkerTestCipher(t)}}
 	failingStore := getAccountErrorStore{
-		base:        store,
-		accountErr:  errors.New("account lookup failed: temporary db outage"),
+		base:       store,
+		accountErr: errors.New("account lookup failed: temporary db outage"),
 	}
 	runPublishCycleOnce(t, failingStore, publisher.NewProviderRegistry(publisher.NewMockProvider(domain.PlatformX)), creds, 5*time.Second, 1*time.Second)
 
