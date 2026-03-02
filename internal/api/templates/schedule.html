@@ -776,7 +776,6 @@
       margin-top: 1px;
       padding-left: 2px;
     }
-    /* Calendar visual pass: closer to design, cleaner density */
     body[data-view="calendar"] .calendar-wrap {
       border-radius: 12px;
       background: #1f1f1f;
@@ -4170,7 +4169,6 @@
         labels.set(platform, baseRule.label || platform.toUpperCase());
         return;
       }
-      // Keep the strictest limit when multiple accounts of the same platform are selected.
       limits.set(platform, Math.min(limits.get(platform), max));
     });
 
@@ -4757,8 +4755,6 @@
       if (attachments.length >= maxMedia) {
         break;
       }
-      // Keep uploads sequential so UI state stays stable and predictable.
-      // eslint-disable-next-line no-await-in-loop
       await addFile(file);
     }
   };

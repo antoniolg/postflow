@@ -214,7 +214,6 @@ func (s Server) signedMediaAccessAllowed(r *http.Request, mediaID string) bool {
 	if expUnix < nowUnix {
 		return false
 	}
-	// Prevent overly long-lived URLs.
 	if expUnix > nowUnix+int64(60*60) {
 		return false
 	}

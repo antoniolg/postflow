@@ -26,7 +26,6 @@ func looksLikeRTF(value string) bool {
 }
 
 func rtfToPlainText(raw string) string {
-	// Best-effort unwrapping to avoid publishing literal RTF blobs.
 	out := raw
 	out = strings.ReplaceAll(out, `\line`, "\n")
 	out = strings.ReplaceAll(out, `\par`, "\n")

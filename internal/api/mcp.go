@@ -116,8 +116,6 @@ func (s Server) newMCPHandler() http.Handler {
 	}, nil)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Compatibility shim for clients that send only application/json.
-		// Streamable HTTP requires both JSON and event-stream in Accept.
 		if r.Method == http.MethodPost && strings.EqualFold(strings.TrimSpace(r.Header.Get("Accept")), "application/json") {
 			r2 := r.Clone(r.Context())
 			r2.Header = r.Header.Clone()

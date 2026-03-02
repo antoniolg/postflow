@@ -151,7 +151,6 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	}
 
 	firstWeekday := int(monthStartLocal.Weekday())
-	// Convert Go weekday (Sunday=0) to Monday-first index.
 	firstWeekday = (firstWeekday + 6) % 7
 	gridStart := monthStartLocal.AddDate(0, 0, -firstWeekday)
 

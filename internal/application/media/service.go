@@ -70,6 +70,5 @@ func (s Service) removeFile(path string) {
 	}
 	err := remove(path)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		// DB is the source of truth; storage cleanup can be retried asynchronously.
 	}
 }
