@@ -218,7 +218,7 @@
       display: flex;
     }
     body[data-view="calendar"] .calendar-controls {
-      margin-left: 0;
+      margin-left: auto;
     }
     body[data-view="calendar"] .header-right {
       justify-content: flex-end;
@@ -2735,15 +2735,17 @@
             <h1>{{if eq .View "calendar"}}{{t "header.calendar"}}{{else if eq .View "drafts"}}{{t "header.drafts"}}{{else if eq .View "failed"}}{{t "header.failed"}}{{else if eq .View "create"}}{{t "header.new_post"}}{{else if eq .View "settings"}}{{t "header.settings"}}{{else}}{{t "header.scheduled"}}{{end}}</h1>
             {{if eq .View "calendar"}}<div class="title-sub">// {{t "calendar.scheduled_overview"}}</div>{{end}}
           </div>
-        </div>
-        {{if eq .View "calendar"}}
-        <div class="header-right">
+          {{if eq .View "calendar"}}
           <div class="calendar-controls">
             <a class="month-link" href="/?view=calendar&month={{.PrevMonthParam}}&day={{.SelectedDayKey}}" aria-label="{{t "calendar.previous_month"}}"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 12L6 8l4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
             <span class="month-label">{{.CalendarMonthLabel}}</span>
             <a class="month-link" href="/?view=calendar&month={{.NextMonthParam}}&day={{.SelectedDayKey}}" aria-label="{{t "calendar.next_month"}}"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
             <a class="month-go" href="/?view=calendar&month={{.TodayMonthParam}}&day={{.TodayDayKey}}">{{t "common.today"}}</a>
           </div>
+          {{end}}
+        </div>
+        {{if eq .View "calendar"}}
+        <div class="header-right">
           <a class="create-pill" href="{{.CreateViewURL}}">{{t "common.create_post"}}</a>
         </div>
         {{end}}
