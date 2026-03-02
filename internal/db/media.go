@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/antoniolg/publisher/internal/domain"
@@ -140,4 +141,86 @@ func (s *Store) DeleteMediaIfUnused(ctx context.Context, mediaID string) (domain
 		return domain.Media{}, err
 	}
 	return media, nil
+}
+
+func (s *Store) DeleteMediaUnusedByPendingPosts(ctx context.Context) ([]domain.Media, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	rows, err := tx.QueryContext(ctx, `
+		SELECT
+			m.id,
+			m.kind,
+			m.original_name,
+			m.storage_path,
+			m.mime_type,
+			m.size_bytes,
+			m.created_at
+		FROM media m
+		WHERE NOT EXISTS (
+			SELECT 1
+			FROM post_media pm
+			INNER JOIN posts p ON p.id = pm.post_id
+			WHERE pm.media_id = m.id
+			  AND p.status != ?
+		)
+		ORDER BY m.created_at ASC
+	`, domain.PostStatusPublished)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	deleted := make([]domain.Media, 0, 32)
+	ids := make([]string, 0, 32)
+	for rows.Next() {
+		var created string
+		var item domain.Media
+		if err := rows.Scan(
+			&item.ID,
+			&item.Kind,
+			&item.OriginalName,
+			&item.StoragePath,
+			&item.MimeType,
+			&item.SizeBytes,
+			&created,
+		); err != nil {
+			return nil, err
+		}
+		item.CreatedAt, _ = time.Parse(time.RFC3339Nano, created)
+		deleted = append(deleted, item)
+		ids = append(ids, item.ID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(ids) == 0 {
+		if err := tx.Commit(); err != nil {
+			return nil, err
+		}
+		return deleted, nil
+	}
+
+	placeholders := make([]string, len(ids))
+	args := make([]any, len(ids))
+	for i := range ids {
+		placeholders[i] = "?"
+		args[i] = ids[i]
+	}
+	placeholderSQL := strings.Join(placeholders, ",")
+
+	if _, err := tx.ExecContext(ctx, `DELETE FROM post_media WHERE media_id IN (`+placeholderSQL+`)`, args...); err != nil {
+		return nil, err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM media WHERE id IN (`+placeholderSQL+`)`, args...); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return deleted, nil
 }

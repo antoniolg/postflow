@@ -22,6 +22,7 @@ var (
 type Store interface {
 	ListMedia(ctx context.Context, limit int) ([]db.MediaWithUsage, error)
 	DeleteMediaIfUnused(ctx context.Context, mediaID string) (domain.Media, error)
+	DeleteMediaUnusedByPendingPosts(ctx context.Context) ([]domain.Media, error)
 }
 
 type RemoveFileFunc func(path string) error
@@ -57,6 +58,17 @@ func (s Service) Delete(ctx context.Context, mediaID string) (domain.Media, erro
 	}
 
 	s.removeFile(strings.TrimSpace(deleted.StoragePath))
+	return deleted, nil
+}
+
+func (s Service) PurgeUnusedByPendingPosts(ctx context.Context) ([]domain.Media, error) {
+	deleted, err := s.Store.DeleteMediaUnusedByPendingPosts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, item := range deleted {
+		s.removeFile(strings.TrimSpace(item.StoragePath))
+	}
 	return deleted, nil
 }
 

@@ -1846,6 +1846,15 @@
       overflow: auto;
       padding-right: 2px;
     }
+    .settings-media-tools {
+      margin: 8px 0 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .settings-media-tools button {
+      min-height: 34px;
+    }
     .settings-media-card {
       position: relative;
       border-radius: 12px;
@@ -3052,10 +3061,6 @@
                           </button>
                           {{if .InUse}}
 	                          <span class="pill media-pill-used">{{t "common.used_count" .UsageCount}}</span>
-	                          {{else}}
-	                          <button type="button" class="btn-danger settings-account-icon-btn create-media-icon-btn" data-media-delete="{{.ID}}" aria-label="{{t "common.delete_media"}}" title="{{t "common.delete_media"}}">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
-                          </button>
                           {{end}}
                         </div>
                       </article>
@@ -3219,6 +3224,10 @@
           <div class="meta">
             <span class="meta-soft">{{t "settings.media_summary" (len .MediaLibrary) .MediaInUseCount .MediaTotalSizeLabel}}</span>
           </div>
+          <form method="post" action="/media/purge" class="settings-media-tools" onsubmit="return confirm('{{t "settings.media_purge_confirm"}}');">
+            <input type="hidden" name="return_to" value="/?view=settings" />
+            <button type="submit" class="btn-secondary">{{t "settings.media_purge"}}</button>
+          </form>
           <div class="settings-media-library">
             {{range .MediaLibrary}}
             <article class="settings-media-card {{if .InUse}}in-use{{end}}">
@@ -4117,8 +4126,6 @@
     maxFiles: {{toJSON (t "create.max_files")}},
     uploadingFile: {{toJSON (t "create.uploading_file")}},
     unsupportedMedia: {{toJSON (t "create.unsupported_media")}},
-    deleteFailed: {{toJSON (t "create.delete_failed")}},
-    mediaDeleted: {{toJSON (t "create.media_deleted")}},
     waitUploads: {{toJSON (t "create.wait_uploads")}},
     selectNetwork: {{toJSON (t "create.select_network")}}
   };
@@ -4544,7 +4551,6 @@
 
   const isAttachedMedia = (id) => attachments.some((item) => item.id === id);
   const openIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>';
-  const deleteIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
   const closeIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
   const playIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="8 6 19 12 8 18"/></svg>';
   const fileIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>';
@@ -4686,15 +4692,6 @@
       used.className = "pill media-pill-used";
       used.textContent = i18n.usedLabel;
       actions.appendChild(used);
-    } else {
-      const del = document.createElement("button");
-      del.type = "button";
-      del.className = "btn-danger settings-account-icon-btn create-media-icon-btn";
-      del.setAttribute("data-media-delete", item.id);
-      del.innerHTML = deleteIcon;
-      del.setAttribute("aria-label", i18n.removeMedia);
-      del.setAttribute("title", i18n.removeMedia);
-      actions.appendChild(del);
     }
 
     row.appendChild(thumb);
@@ -4951,42 +4948,6 @@
       try {
         window.open(previewURL, "_blank", "noopener,noreferrer");
       } catch (_) {}
-      return;
-    }
-
-    const deleteButton = target.closest("[data-media-delete]");
-    const deleteID = deleteButton instanceof HTMLButtonElement ? (deleteButton.getAttribute("data-media-delete") || "").trim() : "";
-    if (deleteID) {
-      deleteButton.setAttribute("disabled", "true");
-      try {
-        const res = await fetch("/media/" + encodeURIComponent(deleteID), { method: "DELETE" });
-        if (!res.ok) {
-          let message = i18n.deleteFailed + " (" + res.status + ")";
-          try {
-            const payload = await res.json();
-            if (payload && typeof payload.error === "string" && payload.error.trim() !== "") {
-              message = payload.error.trim();
-            }
-          } catch (_) {}
-          throw new Error(message);
-        }
-        const node = deleteButton.closest("[data-media-library-item]");
-        if (node instanceof HTMLElement) {
-          node.remove();
-        }
-        if (removeAttachmentByID(deleteID)) {
-          syncHiddenMediaInputs();
-          renderMediaList();
-        } else {
-          syncLibraryAttachState();
-        }
-        setNotice(i18n.mediaDeleted, "success");
-      } catch (err) {
-        const message = err instanceof Error ? err.message : i18n.deleteFailed;
-        setNotice(message, "error");
-      } finally {
-        deleteButton.removeAttribute("disabled");
-      }
       return;
     }
 

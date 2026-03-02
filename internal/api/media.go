@@ -107,6 +107,19 @@ func (s Server) deleteMediaByID(ctx context.Context, mediaID string, loc *time.L
 	return toMediaListItemWithUsage(deleted, 0, loc), nil
 }
 
+func (s Server) purgeMediaUnusedByPendingPosts(ctx context.Context, loc *time.Location) ([]mediaListItem, error) {
+	svc := mediaapp.Service{Store: s.Store}
+	deleted, err := svc.PurgeUnusedByPendingPosts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]mediaListItem, 0, len(deleted))
+	for _, item := range deleted {
+		out = append(out, toMediaListItemWithUsage(item, 0, loc))
+	}
+	return out, nil
+}
+
 func (s Server) handleListMedia(w http.ResponseWriter, r *http.Request) {
 	limit := defaultMediaListLimit
 	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
@@ -227,4 +240,30 @@ func (s Server) handleDeleteMediaForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, withQueryValue(returnTo, "media_success", "media deleted"), http.StatusSeeOther)
+}
+
+func (s Server) handlePurgeMediaForm(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Redirect(w, r, "/?view=settings&media_error=invalid+form", http.StatusSeeOther)
+		return
+	}
+	uiLang := preferredUILanguage(r.Header.Get("Accept-Language"))
+	returnTo := sanitizeReturnTo(strings.TrimSpace(r.FormValue("return_to")))
+	if returnTo == "" {
+		returnTo = "/?view=settings"
+	}
+	uiLoc, _, _, err := s.resolveUILocation(r.Context())
+	if err != nil {
+		uiLoc = time.UTC
+	}
+	deleted, err := s.purgeMediaUnusedByPendingPosts(r.Context(), uiLoc)
+	if err != nil {
+		http.Redirect(w, r, withQueryValue(returnTo, "media_error", strings.TrimSpace(err.Error())), http.StatusSeeOther)
+		return
+	}
+	message := uiMessage(uiLang, "settings.media_purge_none")
+	if len(deleted) > 0 {
+		message = uiMessage(uiLang, "settings.media_purge_done", len(deleted))
+	}
+	http.Redirect(w, r, withQueryValue(returnTo, "media_success", message), http.StatusSeeOther)
 }

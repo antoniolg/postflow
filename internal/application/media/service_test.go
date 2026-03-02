@@ -17,6 +17,8 @@ type fakeStore struct {
 	deleteInput   string
 	deleteOutput  domain.Media
 	deleteErr     error
+	purgeOutput   []domain.Media
+	purgeErr      error
 }
 
 func (f *fakeStore) ListMedia(_ context.Context, limit int) ([]db.MediaWithUsage, error) {
@@ -30,6 +32,13 @@ func (f *fakeStore) DeleteMediaIfUnused(_ context.Context, mediaID string) (doma
 		return domain.Media{}, f.deleteErr
 	}
 	return f.deleteOutput, nil
+}
+
+func (f *fakeStore) DeleteMediaUnusedByPendingPosts(_ context.Context) ([]domain.Media, error) {
+	if f.purgeErr != nil {
+		return nil, f.purgeErr
+	}
+	return f.purgeOutput, nil
 }
 
 func TestClampListLimit(t *testing.T) {
@@ -104,5 +113,33 @@ func TestDeleteIgnoresMissingFile(t *testing.T) {
 
 	if _, err := svc.Delete(t.Context(), "med_2"); err != nil {
 		t.Fatalf("delete failed when file missing: %v", err)
+	}
+}
+
+func TestPurgeUnusedByPendingPostsRemovesFiles(t *testing.T) {
+	tmp := t.TempDir()
+	keptPath := filepath.Join(tmp, "kept-missing.mp4")
+	purgePath := filepath.Join(tmp, "purge.mp4")
+	if err := os.WriteFile(purgePath, []byte("to-purge"), 0o644); err != nil {
+		t.Fatalf("write purge file: %v", err)
+	}
+
+	store := &fakeStore{
+		purgeOutput: []domain.Media{
+			{ID: "med_1", StoragePath: purgePath},
+			{ID: "med_2", StoragePath: keptPath},
+		},
+	}
+	svc := Service{Store: store}
+
+	deleted, err := svc.PurgeUnusedByPendingPosts(t.Context())
+	if err != nil {
+		t.Fatalf("purge failed: %v", err)
+	}
+	if len(deleted) != 2 {
+		t.Fatalf("expected 2 purged media records, got %d", len(deleted))
+	}
+	if _, statErr := os.Stat(purgePath); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("expected purge file to be removed, stat err=%v", statErr)
 	}
 }

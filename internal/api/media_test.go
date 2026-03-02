@@ -186,6 +186,9 @@ func TestCreateAndSettingsViewsRenderMediaManagementSections(t *testing.T) {
 	if !strings.Contains(createBody, `data-media-open="`+createdMedia.ID+`"`) {
 		t.Fatalf("expected create media library to include open action button for uploaded media")
 	}
+	if strings.Contains(createBody, `data-media-delete="`) {
+		t.Fatalf("did not expect media management delete controls in create recent library")
+	}
 
 	settingsReq := httptest.NewRequest(http.MethodGet, "/?view=settings", nil)
 	settingsW := httptest.NewRecorder()
@@ -200,6 +203,9 @@ func TestCreateAndSettingsViewsRenderMediaManagementSections(t *testing.T) {
 	if !strings.Contains(settingsBody, `/media/`+createdMedia.ID+`/delete`) {
 		t.Fatalf("expected settings media delete form action for media item")
 	}
+	if !strings.Contains(settingsBody, `action="/media/purge"`) {
+		t.Fatalf("expected settings media purge action")
+	}
 
 	deleteForm := bytes.NewBufferString("return_to=%2F%3Fview%3Dsettings")
 	deleteFormReq := httptest.NewRequest(http.MethodPost, "/media/"+createdMedia.ID+"/delete", deleteForm)
@@ -211,6 +217,107 @@ func TestCreateAndSettingsViewsRenderMediaManagementSections(t *testing.T) {
 	}
 	if loc := deleteFormW.Header().Get("Location"); !strings.Contains(loc, "media_success=") {
 		t.Fatalf("expected success redirect query, got %q", loc)
+	}
+}
+
+func TestMediaPurgeFormDeletesOnlyPublishedOrUnusedMedia(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	makeMedia := func(name string) domain.Media {
+		path := filepath.Join(tempDir, name)
+		if err := os.WriteFile(path, []byte(name), 0o644); err != nil {
+			t.Fatalf("seed media file %s: %v", name, err)
+		}
+		item, err := store.CreateMedia(t.Context(), domain.Media{
+			Kind:         "image",
+			OriginalName: name,
+			StoragePath:  path,
+			MimeType:     "image/png",
+			SizeBytes:    int64(len(name)),
+		})
+		if err != nil {
+			t.Fatalf("create media %s: %v", name, err)
+		}
+		return item
+	}
+
+	orphan := makeMedia("orphan.png")
+	publishedOnly := makeMedia("published-only.png")
+	draftOnly := makeMedia("draft-only.png")
+	account := createTestAccount(t, store)
+
+	publishedResult, err := store.CreatePost(t.Context(), db.CreatePostParams{
+		Post: domain.Post{
+			AccountID:   account.ID,
+			Text:        "published with media",
+			Status:      domain.PostStatusPublished,
+			MaxAttempts: 3,
+		},
+		MediaIDs: []string{publishedOnly.ID},
+	})
+	if err != nil {
+		t.Fatalf("create published post: %v", err)
+	}
+
+	if _, err := store.CreatePost(t.Context(), db.CreatePostParams{
+		Post: domain.Post{
+			AccountID:   account.ID,
+			Text:        "draft with media",
+			Status:      domain.PostStatusDraft,
+			MaxAttempts: 3,
+		},
+		MediaIDs: []string{draftOnly.ID},
+	}); err != nil {
+		t.Fatalf("create draft post: %v", err)
+	}
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	form := bytes.NewBufferString("return_to=%2F%3Fview%3Dsettings")
+	req := httptest.NewRequest(http.MethodPost, "/media/purge", form)
+	req.Header.Set("content-type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("expected purge redirect, got %d: %s", w.Code, w.Body.String())
+	}
+	loc := w.Header().Get("Location")
+	if !strings.Contains(loc, "media_success=") {
+		t.Fatalf("expected purge success redirect, got %q", loc)
+	}
+	if !strings.Contains(loc, "2+media+files+purged") {
+		t.Fatalf("expected purge to report 2 deleted files, got %q", loc)
+	}
+
+	items, err := store.ListMedia(t.Context(), 20)
+	if err != nil {
+		t.Fatalf("list media after purge: %v", err)
+	}
+	if len(items) != 1 || items[0].Media.ID != draftOnly.ID {
+		t.Fatalf("expected only draft media to remain after purge, got %+v", items)
+	}
+
+	for _, path := range []string{orphan.StoragePath, publishedOnly.StoragePath} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("expected purged file %s to be deleted, got err=%v", path, err)
+		}
+	}
+	if _, err := os.Stat(draftOnly.StoragePath); err != nil {
+		t.Fatalf("expected draft media file to remain, stat err=%v", err)
+	}
+
+	publishedPost, err := store.GetPost(t.Context(), publishedResult.Post.ID)
+	if err != nil {
+		t.Fatalf("get published post after purge: %v", err)
+	}
+	if len(publishedPost.Media) != 0 {
+		t.Fatalf("expected published post media references to be cleared by purge")
 	}
 }
 
