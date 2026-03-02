@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"html"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -272,5 +273,58 @@ func TestDefaultViewIsCalendar(t *testing.T) {
 	fullWidthEventRule := regexp.MustCompile(`(?s)body\[data-view="calendar"\]\s*\.day-event\s*\{[^}]*width\s*:\s*100%`)
 	if !fullWidthEventRule.MatchString(body) {
 		t.Fatalf("expected calendar event cards to use full row width")
+	}
+}
+
+func TestCalendarCreateKeepsSelectedDayOnBack(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	monthParam := "2026-02"
+	dayParam := "2026-02-26"
+	calendarReq := httptest.NewRequest(http.MethodGet, "/?view=calendar&month="+monthParam+"&day="+dayParam, nil)
+	calendarW := httptest.NewRecorder()
+	h.ServeHTTP(calendarW, calendarReq)
+	if calendarW.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", calendarW.Code)
+	}
+
+	calendarBody := calendarW.Body.String()
+	createHrefMatch := regexp.MustCompile(`<a class="create-pill" href="([^"]+)"`).FindStringSubmatch(calendarBody)
+	if len(createHrefMatch) != 2 {
+		t.Fatalf("expected calendar create button in header")
+	}
+	createHref := html.UnescapeString(createHrefMatch[1])
+	parsedCreateHref, err := url.Parse(createHref)
+	if err != nil {
+		t.Fatalf("parse create href: %v", err)
+	}
+	if got := parsedCreateHref.Query().Get("view"); got != "create" {
+		t.Fatalf("expected create button to target create view, got %q", got)
+	}
+	returnTo := parsedCreateHref.Query().Get("return_to")
+	expectedReturnTo := "/?view=calendar&month=" + monthParam + "&day=" + dayParam
+	if returnTo != expectedReturnTo {
+		t.Fatalf("expected return_to %q, got %q", expectedReturnTo, returnTo)
+	}
+
+	createReq := httptest.NewRequest(http.MethodGet, createHref, nil)
+	createW := httptest.NewRecorder()
+	h.ServeHTTP(createW, createReq)
+	if createW.Code != http.StatusOK {
+		t.Fatalf("expected 200 for create view, got %d", createW.Code)
+	}
+
+	createBody := createW.Body.String()
+	expectedBackHref := "<a class=\"title-back\" href=\"/?view=calendar&amp;month=" + monthParam + "&amp;day=" + dayParam + "\""
+	if !strings.Contains(createBody, expectedBackHref) {
+		t.Fatalf("expected create back button to return to selected calendar day")
 	}
 }
