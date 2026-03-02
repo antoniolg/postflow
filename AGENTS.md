@@ -10,7 +10,7 @@ Primary goal: **LLM-first publisher with consistent behavior across API, MCP, CL
 
 PostFlow uses a **modular monolith** with an application layer.
 
-- `cmd/`: executable entrypoints (`publisher`, `publisher-cli`)
+- `cmd/`: executable entrypoints (`publisher`, `postflow`)
 - `internal/api`: HTTP + MCP adapters (request parsing, transport mapping, HTML rendering)
 - `internal/cli`: CLI adapter
 - `internal/worker`: runtime adapter for background execution
@@ -145,4 +145,3 @@ Documentation language in this repo is **English**.
 - [ ] Docs updated (`README`, OpenAPI, architecture notes as needed)
 - [ ] `go test ./...` passes
 - [ ] Full gate run for significant changes
-

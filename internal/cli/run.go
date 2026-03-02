@@ -115,7 +115,7 @@ func parseGlobalArgs(args []string, stdout, stderr io.Writer) (config, []string,
 		timeout: 15 * time.Second,
 	}
 
-	fs := flag.NewFlagSet("publisher-cli", flag.ContinueOnError)
+	fs := flag.NewFlagSet("postflow", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	fs.StringVar(&cfg.baseURL, "base-url", cfg.baseURL, "Publisher API base URL")
 	fs.StringVar(&cfg.token, "api-token", cfg.token, "Publisher API token (or env PUBLISHER_API_TOKEN)")
@@ -141,7 +141,7 @@ func parseGlobalArgs(args []string, stdout, stderr io.Writer) (config, []string,
 
 func runSchedule(ctx context.Context, client *APIClient, cfg config, args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 || args[0] != "list" {
-		fmt.Fprintln(stderr, "usage: publisher-cli schedule list [--from RFC3339] [--to RFC3339]")
+		fmt.Fprintln(stderr, "usage: postflow schedule list [--from RFC3339] [--to RFC3339]")
 		return 2
 	}
 	fs := flag.NewFlagSet("schedule list", flag.ContinueOnError)
@@ -179,7 +179,7 @@ func runSchedule(ctx context.Context, client *APIClient, cfg config, args []stri
 
 func runPosts(ctx context.Context, client *APIClient, cfg config, args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(stderr, "usage: publisher-cli posts <create|validate> [flags]")
+		fmt.Fprintln(stderr, "usage: postflow posts <create|validate> [flags]")
 		return 2
 	}
 	switch args[0] {
@@ -303,7 +303,7 @@ func runPostsValidate(ctx context.Context, client *APIClient, cfg config, args [
 
 func runDLQ(ctx context.Context, client *APIClient, cfg config, args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(stderr, "usage: publisher-cli dlq <list|requeue|delete> [flags]")
+		fmt.Fprintln(stderr, "usage: postflow dlq <list|requeue|delete> [flags]")
 		return 2
 	}
 	switch args[0] {
@@ -378,7 +378,7 @@ func runDLQ(ctx context.Context, client *APIClient, cfg config, args []string, s
 
 func runMedia(ctx context.Context, client *APIClient, cfg config, args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(stderr, "usage: publisher-cli media <list|upload|delete> [flags]")
+		fmt.Fprintln(stderr, "usage: postflow media <list|upload|delete> [flags]")
 		return 2
 	}
 	switch args[0] {
@@ -482,10 +482,10 @@ func envOrDefault(key, fallback string) string {
 }
 
 func printHelp(w io.Writer) {
-	fmt.Fprintln(w, `publisher-cli - CLI for publisher HTTP API
+	fmt.Fprintln(w, `postflow - CLI for PostFlow HTTP API
 
 Usage:
-  publisher-cli [global flags] <command> [subcommand] [flags]
+  postflow [global flags] <command> [subcommand] [flags]
 
 Global flags:
   --base-url string      Publisher API base URL (default: $PUBLISHER_BASE_URL or http://localhost:8080)
@@ -507,9 +507,9 @@ Commands:
   media delete           Delete media via /media/{id}
 
 Examples:
-  publisher-cli schedule list --from 2026-03-01T00:00:00Z --to 2026-03-31T23:59:59Z
-  publisher-cli posts create --account-id acc_abc123 --text "hello world" --scheduled-at 2026-03-01T10:00:00Z
-  publisher-cli posts validate --account-id acc_abc123 --text "draft check" --scheduled-at 2026-03-01T10:00:00Z
-  publisher-cli dlq list --limit 50
-  publisher-cli dlq requeue --id dlq_abc123`)
+  postflow schedule list --from 2026-03-01T00:00:00Z --to 2026-03-31T23:59:59Z
+  postflow posts create --account-id acc_abc123 --text "hello world" --scheduled-at 2026-03-01T10:00:00Z
+  postflow posts validate --account-id acc_abc123 --text "draft check" --scheduled-at 2026-03-01T10:00:00Z
+  postflow dlq list --limit 50
+  postflow dlq requeue --id dlq_abc123`)
 }

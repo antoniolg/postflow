@@ -28,28 +28,28 @@ The app loads variables from `.env` when present:
 - Shell-exported variables take precedence.
 - You can use another file with `ENV_FILE=/path/to/other.env`.
 
-## CLI (`publisher-cli`)
+## CLI (`postflow`)
 
 ```bash
-go run ./cmd/publisher-cli --help
+go run ./cmd/postflow --help
 ```
 
 Examples:
 
 ```bash
-go run ./cmd/publisher-cli schedule list --from 2026-03-01T00:00:00Z --to 2026-03-31T23:59:59Z
-go run ./cmd/publisher-cli posts create --account-id acc_xxx --text "hello" --scheduled-at 2026-03-10T09:00:00Z
-go run ./cmd/publisher-cli posts validate --account-id acc_xxx --text "hello" --scheduled-at 2026-03-10T09:00:00Z
-go run ./cmd/publisher-cli dlq list --limit 50
-go run ./cmd/publisher-cli dlq requeue --id dlq_xxx
+go run ./cmd/postflow schedule list --from 2026-03-01T00:00:00Z --to 2026-03-31T23:59:59Z
+go run ./cmd/postflow posts create --account-id acc_xxx --text "hello" --scheduled-at 2026-03-10T09:00:00Z
+go run ./cmd/postflow posts validate --account-id acc_xxx --text "hello" --scheduled-at 2026-03-10T09:00:00Z
+go run ./cmd/postflow dlq list --limit 50
+go run ./cmd/postflow dlq requeue --id dlq_xxx
 ```
 
 Homebrew install (tap):
 
 ```bash
 brew tap antoniolg/tap
-brew install antoniolg/tap/postflow-cli
-publisher-cli --help
+brew install antoniolg/tap/postflow
+postflow --help
 ```
 
 ## Quality Gate (CI)
@@ -108,11 +108,11 @@ CLI release automation runs in `.github/workflows/release-cli-homebrew.yml`:
   - on published GitHub release
   - manual dispatch with a specific tag (`workflow_dispatch`)
 - Uploads release assets:
-  - `postflow-cli_<version>_darwin_amd64.tar.gz`
-  - `postflow-cli_<version>_darwin_arm64.tar.gz`
-  - `postflow-cli_<version>_linux_amd64.tar.gz`
-  - `postflow-cli_<version>_linux_arm64.tar.gz`
-- Updates formula `Formula/postflow-cli.rb` in `antoniolg/homebrew-tap`
+  - `postflow_<version>_darwin_amd64.tar.gz`
+  - `postflow_<version>_darwin_arm64.tar.gz`
+  - `postflow_<version>_linux_amd64.tar.gz`
+  - `postflow_<version>_linux_arm64.tar.gz`
+- Updates formula `Formula/postflow.rb` in `antoniolg/homebrew-tap`
 
 Required secret (in `antoniolg/postflow` GitHub repo):
 
