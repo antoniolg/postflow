@@ -334,6 +334,32 @@ func TestMCPInitializeAcceptJSONOnly(t *testing.T) {
 	}
 }
 
+func TestMCPInitializeAcceptJSONWithCharset(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	httpServer := httptest.NewServer(srv.Handler())
+	defer httpServer.Close()
+
+	mcpURL := httpServer.URL + "/mcp"
+	initializeBody := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test-client","version":"1.0.0"}}}`
+	initializeResp, initializeRaw := postMCPRequestWithAccept(t, mcpURL, "", initializeBody, "application/json; charset=utf-8")
+	if initializeResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected initialize status 200, got %d: %s", initializeResp.StatusCode, string(initializeRaw))
+	}
+	if strings.TrimSpace(initializeResp.Header.Get("Mcp-Session-Id")) == "" {
+		t.Fatalf("expected initialize response to include MCP session id")
+	}
+	if !strings.Contains(string(initializeRaw), "publisher-mcp") {
+		t.Fatalf("expected initialize response to include publisher server info")
+	}
+}
+
 func TestMCPUploadMediaRejectsFilePath(t *testing.T) {
 	tempDir := t.TempDir()
 	store, err := db.Open(filepath.Join(tempDir, "test.db"))

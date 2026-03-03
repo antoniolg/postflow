@@ -214,7 +214,7 @@ func (s Server) newMCPHandler() http.Handler {
 	}, nil)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost && strings.EqualFold(strings.TrimSpace(r.Header.Get("Accept")), "application/json") {
+		if r.Method == http.MethodPost && !mcpAcceptHeaderSupportsJSONAndSSE(r.Header.Values("Accept")) {
 			r2 := r.Clone(r.Context())
 			r2.Header = r.Header.Clone()
 			r2.Header.Set("Accept", "application/json, text/event-stream")
@@ -222,6 +222,34 @@ func (s Server) newMCPHandler() http.Handler {
 		}
 		base.ServeHTTP(w, r)
 	})
+}
+
+func mcpAcceptHeaderSupportsJSONAndSSE(values []string) bool {
+	if len(values) == 0 {
+		return false
+	}
+
+	var jsonOK bool
+	var streamOK bool
+	for _, headerValue := range values {
+		for _, part := range strings.Split(headerValue, ",") {
+			token := strings.ToLower(strings.TrimSpace(part))
+			if token == "" {
+				continue
+			}
+			token = strings.SplitN(token, ";", 2)[0]
+			switch token {
+			case "application/json", "application/*":
+				jsonOK = true
+			case "text/event-stream", "text/*":
+				streamOK = true
+			case "*/*":
+				jsonOK = true
+				streamOK = true
+			}
+		}
+	}
+	return jsonOK && streamOK
 }
 
 type mcpListScheduleInput struct {
@@ -239,22 +267,22 @@ type mcpListFailedInput struct {
 }
 
 type mcpCreatePostInput struct {
-	AccountID      string   `json:"account_id" jsonschema:"Target connected account ID."`
-	Text           string   `json:"text" jsonschema:"Post text content."`
-	ScheduledAt    string   `json:"scheduled_at,omitempty" jsonschema:"RFC3339 or datetime-local value. Empty means draft."`
-	MediaIDs       []string `json:"media_ids,omitempty" jsonschema:"Existing media IDs to attach."`
+	AccountID      string                  `json:"account_id" jsonschema:"Target connected account ID."`
+	Text           string                  `json:"text" jsonschema:"Post text content."`
+	ScheduledAt    string                  `json:"scheduled_at,omitempty" jsonschema:"RFC3339 or datetime-local value. Empty means draft."`
+	MediaIDs       []string                `json:"media_ids,omitempty" jsonschema:"Existing media IDs to attach."`
 	Segments       []mcpThreadSegmentInput `json:"segments,omitempty" jsonschema:"Optional thread segments [{text, media_ids}] where first segment is the root post."`
-	MaxAttempts    int      `json:"max_attempts,omitempty" jsonschema:"Max publish retries. Default from server config."`
-	IdempotencyKey string   `json:"idempotency_key,omitempty" jsonschema:"Optional idempotency key (max 128 chars)."`
+	MaxAttempts    int                     `json:"max_attempts,omitempty" jsonschema:"Max publish retries. Default from server config."`
+	IdempotencyKey string                  `json:"idempotency_key,omitempty" jsonschema:"Optional idempotency key (max 128 chars)."`
 }
 
 type mcpValidatePostInput struct {
-	AccountID   string   `json:"account_id" jsonschema:"Target connected account ID."`
-	Text        string   `json:"text" jsonschema:"Post text content."`
-	ScheduledAt string   `json:"scheduled_at,omitempty" jsonschema:"RFC3339 value. Empty means draft."`
-	MediaIDs    []string `json:"media_ids,omitempty" jsonschema:"Existing media IDs to validate."`
+	AccountID   string                  `json:"account_id" jsonschema:"Target connected account ID."`
+	Text        string                  `json:"text" jsonschema:"Post text content."`
+	ScheduledAt string                  `json:"scheduled_at,omitempty" jsonschema:"RFC3339 value. Empty means draft."`
+	MediaIDs    []string                `json:"media_ids,omitempty" jsonschema:"Existing media IDs to validate."`
 	Segments    []mcpThreadSegmentInput `json:"segments,omitempty" jsonschema:"Optional thread segments [{text, media_ids}] where first segment is the root post."`
-	MaxAttempts int      `json:"max_attempts,omitempty" jsonschema:"Max publish retries. Default from server config."`
+	MaxAttempts int                     `json:"max_attempts,omitempty" jsonschema:"Max publish retries. Default from server config."`
 }
 
 type mcpThreadSegmentInput struct {
