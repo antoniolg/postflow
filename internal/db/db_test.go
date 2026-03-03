@@ -548,3 +548,105 @@ func TestUpdatePostEditableClearsMedia(t *testing.T) {
 		t.Fatalf("expected media to be cleared, got %d items", len(updated.Media))
 	}
 }
+
+func TestScheduleDraftPostMarksDraftAsScheduled(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+	account := createTestAccount(t, store, domain.PlatformX)
+	created, err := store.CreatePost(ctx, CreatePostParams{
+		Post: domain.Post{
+			AccountID:   account.ID,
+			Text:        "draft to schedule",
+			Status:      domain.PostStatusDraft,
+			MaxAttempts: 3,
+		},
+	})
+	if err != nil {
+		t.Fatalf("create post: %v", err)
+	}
+
+	target := time.Now().UTC().Add(45 * time.Minute).Truncate(time.Second)
+	if err := store.ScheduleDraftPost(ctx, created.Post.ID, target); err != nil {
+		t.Fatalf("schedule draft: %v", err)
+	}
+
+	scheduled, err := store.GetPost(ctx, created.Post.ID)
+	if err != nil {
+		t.Fatalf("get scheduled post: %v", err)
+	}
+	if scheduled.Status != domain.PostStatusScheduled {
+		t.Fatalf("expected scheduled status, got %s", scheduled.Status)
+	}
+	if scheduled.ScheduledAt.IsZero() {
+		t.Fatalf("expected scheduled_at to be set")
+	}
+}
+
+func TestCancelPostMarksPostAsCanceled(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+	account := createTestAccount(t, store, domain.PlatformX)
+	created, err := store.CreatePost(ctx, CreatePostParams{
+		Post: domain.Post{
+			AccountID:   account.ID,
+			Text:        "scheduled to cancel",
+			Status:      domain.PostStatusScheduled,
+			ScheduledAt: time.Now().UTC().Add(30 * time.Minute),
+			MaxAttempts: 3,
+		},
+	})
+	if err != nil {
+		t.Fatalf("create post: %v", err)
+	}
+
+	if err := store.CancelPost(ctx, created.Post.ID); err != nil {
+		t.Fatalf("cancel post: %v", err)
+	}
+
+	canceled, err := store.GetPost(ctx, created.Post.ID)
+	if err != nil {
+		t.Fatalf("get canceled post: %v", err)
+	}
+	if canceled.Status != domain.PostStatusCanceled {
+		t.Fatalf("expected canceled status, got %s", canceled.Status)
+	}
+}
+
+func TestDeleteThreadEditableDeletesThreadRoot(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+	account := createTestAccount(t, store, domain.PlatformX)
+	created, err := store.CreatePost(ctx, CreatePostParams{
+		Post: domain.Post{
+			AccountID:   account.ID,
+			Text:        "thread root",
+			Status:      domain.PostStatusDraft,
+			MaxAttempts: 3,
+		},
+	})
+	if err != nil {
+		t.Fatalf("create post: %v", err)
+	}
+
+	if err := store.DeleteThreadEditable(ctx, created.Post.ID); err != nil {
+		t.Fatalf("delete thread editable: %v", err)
+	}
+	if _, err := store.GetPost(ctx, created.Post.ID); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("expected sql.ErrNoRows after delete, got %v", err)
+	}
+}
