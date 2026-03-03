@@ -112,6 +112,81 @@ func TestMCPStreamableHTTPExposesToolsAndCreatesPost(t *testing.T) {
 	if drafts[0].Media[0].ID != mediaID {
 		t.Fatalf("expected attached media id %q, got %q", mediaID, drafts[0].Media[0].ID)
 	}
+	draftID := strings.TrimSpace(drafts[0].ID)
+	if draftID == "" {
+		t.Fatalf("expected draft id from created post")
+	}
+
+	scheduledAt := time.Now().UTC().Add(10 * time.Minute).Format(time.RFC3339)
+	schedulePostBody := `{"jsonrpc":"2.0","id":4.6,"method":"tools/call","params":{"name":"publisher_schedule_post","arguments":{"post_id":"` + draftID + `","scheduled_at":"` + scheduledAt + `"}}}`
+	schedulePostResp, schedulePostRaw := postMCPRequest(t, mcpURL, sessionID, schedulePostBody)
+	if schedulePostResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected schedule post tools/call status 200, got %d: %s", schedulePostResp.StatusCode, string(schedulePostRaw))
+	}
+	if strings.Contains(string(schedulePostRaw), `"isError":true`) {
+		t.Fatalf("expected schedule post tool call without isError=true, got: %s", string(schedulePostRaw))
+	}
+	afterSchedule, err := store.GetPost(t.Context(), draftID)
+	if err != nil {
+		t.Fatalf("get scheduled post: %v", err)
+	}
+	if afterSchedule.Status != domain.PostStatusScheduled {
+		t.Fatalf("expected scheduled status after scheduling tool, got %s", afterSchedule.Status)
+	}
+
+	rescheduledAt := time.Now().UTC().Add(15 * time.Minute).Format(time.RFC3339)
+	editPostBody := `{"jsonrpc":"2.0","id":4.7,"method":"tools/call","params":{"name":"publisher_edit_post","arguments":{"post_id":"` + draftID + `","text":"edited from mcp tool","intent":"schedule","scheduled_at":"` + rescheduledAt + `"}}}`
+	editPostResp, editPostRaw := postMCPRequest(t, mcpURL, sessionID, editPostBody)
+	if editPostResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected edit post tools/call status 200, got %d: %s", editPostResp.StatusCode, string(editPostRaw))
+	}
+	if strings.Contains(string(editPostRaw), `"isError":true`) {
+		t.Fatalf("expected edit post tool call without isError=true, got: %s", string(editPostRaw))
+	}
+	afterEdit, err := store.GetPost(t.Context(), draftID)
+	if err != nil {
+		t.Fatalf("get edited post: %v", err)
+	}
+	if strings.TrimSpace(afterEdit.Text) != "edited from mcp tool" {
+		t.Fatalf("expected edited text, got %q", afterEdit.Text)
+	}
+
+	createDeletablePostBody := `{"jsonrpc":"2.0","id":4.8,"method":"tools/call","params":{"name":"publisher_create_post","arguments":{"account_id":"` + account.ID + `","text":"delete from mcp tool"}}}`
+	createDeletablePostResp, createDeletablePostRaw := postMCPRequest(t, mcpURL, sessionID, createDeletablePostBody)
+	if createDeletablePostResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected deletable create tools/call status 200, got %d: %s", createDeletablePostResp.StatusCode, string(createDeletablePostRaw))
+	}
+	if strings.Contains(string(createDeletablePostRaw), `"isError":true`) {
+		t.Fatalf("expected deletable create tool call without isError=true, got: %s", string(createDeletablePostRaw))
+	}
+	drafts, err = store.ListDrafts(t.Context())
+	if err != nil {
+		t.Fatalf("list drafts after creating deletable: %v", err)
+	}
+	deleteDraftID := ""
+	for _, draft := range drafts {
+		if strings.TrimSpace(draft.Text) == "delete from mcp tool" {
+			deleteDraftID = strings.TrimSpace(draft.ID)
+			break
+		}
+	}
+	if deleteDraftID == "" {
+		t.Fatalf("expected to find deletable draft id")
+	}
+	deletePostBody := `{"jsonrpc":"2.0","id":4.9,"method":"tools/call","params":{"name":"publisher_delete_post","arguments":{"post_id":"` + deleteDraftID + `"}}}`
+	deletePostResp, deletePostRaw := postMCPRequest(t, mcpURL, sessionID, deletePostBody)
+	if deletePostResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected delete post tools/call status 200, got %d: %s", deletePostResp.StatusCode, string(deletePostRaw))
+	}
+	if strings.Contains(string(deletePostRaw), `"isError":true`) {
+		t.Fatalf("expected delete post tool call without isError=true, got: %s", string(deletePostRaw))
+	}
+	if !strings.Contains(string(deletePostRaw), `"deleted":true`) {
+		t.Fatalf("expected delete post response with deleted=true, got: %s", string(deletePostRaw))
+	}
+	if _, err := store.GetPost(t.Context(), deleteDraftID); err == nil {
+		t.Fatalf("expected deleted post %q to be absent", deleteDraftID)
+	}
 
 	validateBody := `{"jsonrpc":"2.0","id":4.5,"method":"tools/call","params":{"name":"publisher_validate_post","arguments":{"account_id":"` + account.ID + `","text":"validate from mcp tool"}}}`
 	validateResp, validateRaw := postMCPRequest(t, mcpURL, sessionID, validateBody)
