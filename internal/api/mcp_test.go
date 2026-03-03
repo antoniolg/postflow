@@ -334,6 +334,42 @@ func TestMCPInitializeAcceptJSONOnly(t *testing.T) {
 	}
 }
 
+func TestMCPUploadMediaRejectsFilePath(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	httpServer := httptest.NewServer(srv.Handler())
+	defer httpServer.Close()
+
+	mcpURL := httpServer.URL + "/mcp"
+	initializeBody := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test-client","version":"1.0.0"}}}`
+	initializeResp, initializeRaw := postMCPRequest(t, mcpURL, "", initializeBody)
+	if initializeResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected initialize status 200, got %d: %s", initializeResp.StatusCode, string(initializeRaw))
+	}
+	sessionID := strings.TrimSpace(initializeResp.Header.Get("Mcp-Session-Id"))
+	if sessionID == "" {
+		t.Fatalf("expected initialize response to include MCP session id")
+	}
+
+	uploadBody := `{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"publisher_upload_media","arguments":{"kind":"image","file_path":"/tmp/media.png"}}}`
+	uploadResp, uploadRaw := postMCPRequest(t, mcpURL, sessionID, uploadBody)
+	if uploadResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected tools/call status 200, got %d: %s", uploadResp.StatusCode, string(uploadRaw))
+	}
+	if !strings.Contains(string(uploadRaw), `"isError":true`) {
+		t.Fatalf("expected upload media tool call to return isError=true, got: %s", string(uploadRaw))
+	}
+	if !strings.Contains(string(uploadRaw), "file_path is not supported in MCP; use content_base64") {
+		t.Fatalf("expected upload error message to explain file_path is unsupported, got: %s", string(uploadRaw))
+	}
+}
+
 func TestSettingsViewIncludesMCPURLAndConfig(t *testing.T) {
 	tempDir := t.TempDir()
 	store, err := db.Open(filepath.Join(tempDir, "test.db"))

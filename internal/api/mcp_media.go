@@ -1,8 +1,10 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"mime"
 	"net/http"
@@ -19,8 +21,7 @@ type mcpUploadMediaInput struct {
 	Kind          string `json:"kind,omitempty" jsonschema:"Media kind. Defaults to video."`
 	OriginalName  string `json:"original_name,omitempty" jsonschema:"Original filename (recommended for extension/mime detection)."`
 	MimeType      string `json:"mime_type,omitempty" jsonschema:"Optional mime type override, e.g. image/png."`
-	FilePath      string `json:"file_path,omitempty" jsonschema:"Optional absolute/local path on server. Use instead of content_base64."`
-	ContentBase64 string `json:"content_base64,omitempty" jsonschema:"Base64-encoded file content. Use instead of file_path."`
+	ContentBase64 string `json:"content_base64,omitempty" jsonschema:"Base64-encoded file content."`
 }
 
 type mcpUploadMediaOutput struct {
@@ -31,10 +32,14 @@ type mcpUploadMediaOutput struct {
 	SizeBytes    int64  `json:"size_bytes"`
 }
 
-func (s Server) mcpUploadMediaTool(ctx context.Context, _ *mcp.CallToolRequest, in mcpUploadMediaInput) (*mcp.CallToolResult, mcpUploadMediaOutput, error) {
+func (s Server) mcpUploadMediaTool(ctx context.Context, req *mcp.CallToolRequest, in mcpUploadMediaInput) (*mcp.CallToolResult, mcpUploadMediaOutput, error) {
 	kind := strings.ToLower(strings.TrimSpace(in.Kind))
 	if kind == "" {
 		kind = "video"
+	}
+
+	if err := rejectMCPUploadFilePath(req); err != nil {
+		return nil, mcpUploadMediaOutput{}, err
 	}
 
 	content, originalName, err := resolveMCPUploadContent(in)
@@ -96,26 +101,11 @@ func (s Server) mcpUploadMediaTool(ctx context.Context, _ *mcp.CallToolRequest, 
 }
 
 func resolveMCPUploadContent(in mcpUploadMediaInput) ([]byte, string, error) {
-	filePath := strings.TrimSpace(in.FilePath)
 	base64Content := strings.TrimSpace(in.ContentBase64)
 	originalName := strings.TrimSpace(in.OriginalName)
 
-	if filePath != "" && base64Content != "" {
-		return nil, "", fmt.Errorf("provide either file_path or content_base64, not both")
-	}
-	if filePath == "" && base64Content == "" {
-		return nil, "", fmt.Errorf("file_path or content_base64 is required")
-	}
-
-	if filePath != "" {
-		content, err := os.ReadFile(filePath)
-		if err != nil {
-			return nil, "", fmt.Errorf("read file_path: %w", err)
-		}
-		if originalName == "" {
-			originalName = filepath.Base(filePath)
-		}
-		return content, originalName, nil
+	if base64Content == "" {
+		return nil, "", fmt.Errorf("content_base64 is required")
 	}
 
 	decoded, err := base64.StdEncoding.DecodeString(base64Content)
@@ -126,4 +116,23 @@ func resolveMCPUploadContent(in mcpUploadMediaInput) ([]byte, string, error) {
 		originalName = "upload.bin"
 	}
 	return decoded, originalName, nil
+}
+
+func rejectMCPUploadFilePath(req *mcp.CallToolRequest) error {
+	if req == nil || req.Params == nil || len(req.Params.Arguments) == 0 {
+		return nil
+	}
+	var args map[string]json.RawMessage
+	if err := json.Unmarshal(req.Params.Arguments, &args); err != nil {
+		return nil
+	}
+	raw, ok := args["file_path"]
+	if !ok {
+		return nil
+	}
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) || bytes.Equal(trimmed, []byte(`""`)) {
+		return nil
+	}
+	return fmt.Errorf("file_path is not supported in MCP; use content_base64")
 }
