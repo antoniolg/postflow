@@ -64,6 +64,7 @@ type pageData struct {
 	ActiveNavView             string
 	UITimezone                string
 	TimezoneConfigured        bool
+	AppVersion                string
 	MCPURL                    string
 	MCPAuthHint               string
 	MCPConfigJSON             string

@@ -29,6 +29,7 @@ type Server struct {
 	Registry          *publisher.ProviderRegistry
 	Cipher            *secure.Cipher
 	PublicBaseURL     string
+	AppVersion        string
 }
 
 func (s Server) Handler() http.Handler {
@@ -66,6 +67,14 @@ func (s Server) Handler() http.Handler {
 
 func (s Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (s Server) appVersion() string {
+	version := strings.TrimSpace(s.AppVersion)
+	if version == "" {
+		return "dev"
+	}
+	return version
 }
 
 func (s Server) handleUploadMedia(w http.ResponseWriter, r *http.Request) {

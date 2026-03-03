@@ -4,6 +4,7 @@ FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS builder
 ARG TARGETOS
 ARG TARGETARCH
 ARG TARGETVARIANT
+ARG APP_VERSION=dev
 WORKDIR /app
 
 COPY go.mod go.sum ./
@@ -15,7 +16,7 @@ RUN set -eux; \
 	goarch="${TARGETARCH:-amd64}"; \
 	goarm=""; \
 	if [ "$goarch" = "arm" ] && [ -n "${TARGETVARIANT:-}" ]; then goarm="${TARGETVARIANT#v}"; fi; \
-	CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" GOARM="$goarm" go build -trimpath -ldflags='-s -w' -o /out/publisher ./cmd/publisher
+	CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" GOARM="$goarm" go build -trimpath -ldflags "-s -w -X github.com/antoniolg/publisher/cmd/publisher.Version=${APP_VERSION}" -o /out/publisher ./cmd/publisher
 
 FROM alpine:3.21
 RUN apk add --no-cache ca-certificates tzdata && adduser -D -u 10001 app

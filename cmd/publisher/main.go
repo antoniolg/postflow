@@ -23,6 +23,8 @@ import (
 	"github.com/antoniolg/publisher/internal/worker"
 )
 
+var Version = "dev"
+
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
@@ -70,6 +72,7 @@ func main() {
 		Registry:          registry,
 		Cipher:            cipher,
 		PublicBaseURL:     cfg.PublicBaseURL,
+		AppVersion:        Version,
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

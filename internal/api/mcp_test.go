@@ -260,6 +260,7 @@ func TestSettingsViewIncludesMCPURLAndConfig(t *testing.T) {
 		DataDir:           tempDir,
 		DefaultMaxRetries: 3,
 		APIToken:          "super-secret",
+		AppVersion:        "v9.9.9-test",
 	}
 	h := srv.Handler()
 
@@ -296,6 +297,9 @@ func TestSettingsViewIncludesMCPURLAndConfig(t *testing.T) {
 	}
 	if !strings.Contains(body, "Authorization: Bearer") {
 		t.Fatalf("expected bearer auth hint in settings")
+	}
+	if !strings.Contains(body, "version: v9.9.9-test") {
+		t.Fatalf("expected app version in settings")
 	}
 }
 

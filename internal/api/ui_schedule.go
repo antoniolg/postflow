@@ -368,6 +368,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	datePickerMonthNames := datePickerMonthLabels(uiLang)
 	datePickerWeekdayNames := datePickerWeekdayLabels(uiLang)
 	mcpURL, mcpAuthHint, mcpConfigJSON, mcpClaudeCommand, mcpCodexCommand, mcpCodexConfigTOML := s.mcpSettingsInfo(r)
+	appVersion := s.appVersion()
 	tpl := scheduleHTMLTemplate
 	t, err := template.New("schedule").Funcs(template.FuncMap{
 		"previewMarkdown": func(raw string) template.HTML {
@@ -395,6 +396,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		ActiveNavView:             activeNavView,
 		UITimezone:                uiTimezone,
 		TimezoneConfigured:        timezoneConfigured,
+		AppVersion:                appVersion,
 		MCPURL:                    mcpURL,
 		MCPAuthHint:               mcpAuthHint,
 		MCPConfigJSON:             mcpConfigJSON,

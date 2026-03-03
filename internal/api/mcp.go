@@ -23,7 +23,7 @@ const (
 func (s Server) newMCPHandler() http.Handler {
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "publisher-mcp",
-		Version: "0.1.0",
+		Version: s.appVersion(),
 	}, nil)
 
 	mcp.AddTool(server, &mcp.Tool{
