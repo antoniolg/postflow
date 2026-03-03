@@ -9,20 +9,25 @@ import (
 
 	"github.com/antoniolg/publisher/internal/db"
 	"github.com/antoniolg/publisher/internal/domain"
+	"github.com/antoniolg/publisher/internal/publisher"
 )
 
 type fakeMutationsStore struct {
-	cancelID          string
-	deleteID          string
-	scheduleID        string
-	scheduleAt        time.Time
-	updateID          string
-	updateText        string
-	updateScheduledAt time.Time
-	updateThreadRoot  string
-	updateThreadSteps []db.ThreadStepUpdate
-	post              domain.Post
-	err               error
+	cancelID           string
+	deleteID           string
+	scheduleID         string
+	scheduleAt         time.Time
+	updateID           string
+	updateText         string
+	updateScheduledAt  time.Time
+	updateMediaIDs     []string
+	updateReplaceMedia bool
+	updateThreadRoot   string
+	updateThreadSteps  []db.ThreadStepUpdate
+	post               domain.Post
+	account            domain.SocialAccount
+	mediaByID          map[string]domain.Media
+	err                error
 }
 
 func (f *fakeMutationsStore) CancelPost(_ context.Context, id string) error {
@@ -41,10 +46,12 @@ func (f *fakeMutationsStore) ScheduleDraftPost(_ context.Context, id string, sch
 	return f.err
 }
 
-func (f *fakeMutationsStore) UpdatePostEditable(_ context.Context, id, text string, scheduledAt time.Time) error {
+func (f *fakeMutationsStore) UpdatePostEditable(_ context.Context, id, text string, scheduledAt time.Time, mediaIDs []string, replaceMedia bool) error {
 	f.updateID = id
 	f.updateText = text
 	f.updateScheduledAt = scheduledAt
+	f.updateReplaceMedia = replaceMedia
+	f.updateMediaIDs = append([]string(nil), mediaIDs...)
 	return f.err
 }
 
@@ -61,6 +68,28 @@ func (f *fakeMutationsStore) GetPost(_ context.Context, id string) (domain.Post,
 	post := f.post
 	post.ID = id
 	return post, nil
+}
+
+func (f *fakeMutationsStore) GetAccount(_ context.Context, _ string) (domain.SocialAccount, error) {
+	if f.err != nil {
+		return domain.SocialAccount{}, f.err
+	}
+	return f.account, nil
+}
+
+func (f *fakeMutationsStore) GetMediaByIDs(_ context.Context, ids []string) ([]domain.Media, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	out := make([]domain.Media, 0, len(ids))
+	for _, id := range ids {
+		item, ok := f.mediaByID[strings.TrimSpace(id)]
+		if !ok {
+			return nil, errors.New("media not found: " + strings.TrimSpace(id))
+		}
+		out = append(out, item)
+	}
+	return out, nil
 }
 
 func TestResolveScheduledAtForEdit(t *testing.T) {
@@ -118,9 +147,16 @@ func TestMutationsServiceScheduleAndUpdate(t *testing.T) {
 	store := &fakeMutationsStore{
 		post: domain.Post{
 			ID:          "pst_1",
+			AccountID:   "acc_1",
+			Platform:    domain.PlatformX,
 			Text:        "updated",
 			Status:      domain.PostStatusScheduled,
 			ScheduledAt: time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC),
+		},
+		account: domain.SocialAccount{
+			ID:       "acc_1",
+			Platform: domain.PlatformX,
+			Status:   domain.AccountStatusConnected,
 		},
 	}
 	svc := MutationsService{Store: store}
@@ -160,6 +196,141 @@ func TestMutationsServiceScheduleAndUpdate(t *testing.T) {
 	}
 	if post.ID != "pst_1" {
 		t.Fatalf("expected updated post id pst_1, got %q", post.ID)
+	}
+}
+
+func TestMutationsServiceUpdateEditableReplacesMediaWhenRequested(t *testing.T) {
+	store := &fakeMutationsStore{
+		post: domain.Post{
+			ID:        "pst_1",
+			AccountID: "acc_li",
+			Platform:  domain.PlatformLinkedIn,
+			Status:    domain.PostStatusDraft,
+			Text:      "old text",
+		},
+		account: domain.SocialAccount{
+			ID:       "acc_li",
+			Platform: domain.PlatformLinkedIn,
+			Status:   domain.AccountStatusConnected,
+		},
+		mediaByID: map[string]domain.Media{
+			"med_new": {ID: "med_new", MimeType: "image/png"},
+		},
+	}
+	svc := MutationsService{
+		Store: store,
+		Registry: fakeRegistry{
+			providers: map[domain.Platform]publisher.Provider{
+				domain.PlatformLinkedIn: publisher.NewLinkedInProvider(publisher.LinkedInProviderConfig{}),
+			},
+		},
+	}
+
+	_, err := svc.UpdateEditable(t.Context(), EditInput{
+		PostID:       "pst_1",
+		Text:         "new text",
+		MediaIDs:     []string{"med_new"},
+		ReplaceMedia: true,
+	}, nil)
+	if err != nil {
+		t.Fatalf("update failed: %v", err)
+	}
+	if !store.updateReplaceMedia {
+		t.Fatalf("expected update to replace media")
+	}
+	if len(store.updateMediaIDs) != 1 || store.updateMediaIDs[0] != "med_new" {
+		t.Fatalf("expected media replacement with med_new, got %#v", store.updateMediaIDs)
+	}
+}
+
+func TestMutationsServiceUpdateEditableAllowsClearingMediaWhenPlatformAllowsIt(t *testing.T) {
+	store := &fakeMutationsStore{
+		post: domain.Post{
+			ID:        "pst_1",
+			AccountID: "acc_li",
+			Platform:  domain.PlatformLinkedIn,
+			Status:    domain.PostStatusScheduled,
+			Text:      "old text",
+			Media: []domain.Media{
+				{ID: "med_old", MimeType: "image/png"},
+			},
+		},
+		account: domain.SocialAccount{
+			ID:       "acc_li",
+			Platform: domain.PlatformLinkedIn,
+			Status:   domain.AccountStatusConnected,
+		},
+	}
+	svc := MutationsService{
+		Store: store,
+		Registry: fakeRegistry{
+			providers: map[domain.Platform]publisher.Provider{
+				domain.PlatformLinkedIn: publisher.NewLinkedInProvider(publisher.LinkedInProviderConfig{}),
+			},
+		},
+	}
+
+	_, err := svc.UpdateEditable(t.Context(), EditInput{
+		PostID:       "pst_1",
+		Text:         "new text",
+		MediaIDs:     []string{},
+		ReplaceMedia: true,
+	}, nil)
+	if err != nil {
+		t.Fatalf("update failed: %v", err)
+	}
+	if !store.updateReplaceMedia {
+		t.Fatalf("expected update to replace media")
+	}
+	if len(store.updateMediaIDs) != 0 {
+		t.Fatalf("expected media to be cleared, got %#v", store.updateMediaIDs)
+	}
+}
+
+func TestMutationsServiceUpdateEditableRejectsInstagramWithoutMedia(t *testing.T) {
+	store := &fakeMutationsStore{
+		post: domain.Post{
+			ID:        "pst_ig",
+			AccountID: "acc_ig",
+			Platform:  domain.PlatformInstagram,
+			Status:    domain.PostStatusScheduled,
+			Text:      "caption",
+			Media: []domain.Media{
+				{ID: "med_ig", MimeType: "image/png"},
+			},
+		},
+		account: domain.SocialAccount{
+			ID:       "acc_ig",
+			Platform: domain.PlatformInstagram,
+			Status:   domain.AccountStatusConnected,
+		},
+	}
+	svc := MutationsService{
+		Store: store,
+		Registry: fakeRegistry{
+			providers: map[domain.Platform]publisher.Provider{
+				domain.PlatformInstagram: publisher.NewInstagramProvider(publisher.MetaProviderConfig{}),
+			},
+		},
+	}
+
+	_, err := svc.UpdateEditable(t.Context(), EditInput{
+		PostID:       "pst_ig",
+		Text:         "caption updated",
+		MediaIDs:     []string{},
+		ReplaceMedia: true,
+	}, nil)
+	if err == nil {
+		t.Fatalf("expected validation error")
+	}
+	if !IsValidationError(err) {
+		t.Fatalf("expected validation error wrapper, got %v", err)
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "instagram") || !strings.Contains(strings.ToLower(err.Error()), "media") {
+		t.Fatalf("expected instagram media validation error, got %v", err)
+	}
+	if store.updateID != "" {
+		t.Fatalf("expected no update call when validation fails")
 	}
 }
 

@@ -573,6 +573,7 @@ Examples:
   postflow posts validate --account-id acc_abc123 --text "draft check" --scheduled-at 2026-03-01T10:00:00Z
   postflow posts schedule --id pst_abc123 --scheduled-at 2026-03-01T10:00:00Z
   postflow posts edit --id pst_abc123 --text "updated copy" --intent schedule --scheduled-at 2026-03-01T10:30:00Z
+  postflow posts edit --id pst_abc123 --text "updated with media" --replace-media --media-id med_a --media-id med_b
   postflow posts delete --id pst_abc123
   postflow dlq list --limit 50
   postflow dlq requeue --id dlq_abc123`)

@@ -137,7 +137,7 @@ func (s Server) newMCPHandler() http.Handler {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "publisher_edit_post",
-		Description: "Edit a post text (and optional intent/scheduled date) while still editable.",
+		Description: "Edit post text and optionally replace media_ids (pass [] to clear), plus optional intent/scheduled date, while still editable.",
 		Annotations: &mcp.ToolAnnotations{
 			IdempotentHint: false,
 		},

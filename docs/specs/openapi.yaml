@@ -471,6 +471,11 @@ paths:
                 scheduled_at:
                   type: string
                   description: Optional RFC3339 or datetime-local value in UI timezone
+                media_ids:
+                  type: array
+                  items:
+                    type: string
+                  description: Optional replacement media IDs. Pass an empty array to remove all media.
       responses:
         '200':
           description: Post edited

@@ -426,26 +426,52 @@ func (s *Store) DeleteThreadEditable(ctx context.Context, rootPostID string) err
 	return s.DeletePostEditable(ctx, rootPostID)
 }
 
-func (s *Store) UpdatePostEditable(ctx context.Context, id, text string, scheduledAt time.Time) error {
+func (s *Store) UpdatePostEditable(ctx context.Context, id, text string, scheduledAt time.Time, mediaIDs []string, replaceMedia bool) error {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return fmt.Errorf("post not editable")
+	}
+
 	status := domain.PostStatusDraft
 	if !scheduledAt.IsZero() {
 		status = domain.PostStatusScheduled
 	}
 
-	result, err := s.db.ExecContext(ctx, `
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	result, err := tx.ExecContext(ctx, `
 		UPDATE posts
 		SET text = ?, status = ?, scheduled_at = ?, next_retry_at = NULL, attempts = 0, error = NULL, updated_at = ?
 		WHERE id = ?
 		  AND status IN (?, ?, ?, ?)
-	`, strings.TrimSpace(text), status, formatScheduledAt(scheduledAt.UTC()), time.Now().UTC().Format(time.RFC3339Nano), strings.TrimSpace(id), domain.PostStatusDraft, domain.PostStatusScheduled, domain.PostStatusFailed, domain.PostStatusCanceled)
+	`, strings.TrimSpace(text), status, formatScheduledAt(scheduledAt.UTC()), time.Now().UTC().Format(time.RFC3339Nano), id, domain.PostStatusDraft, domain.PostStatusScheduled, domain.PostStatusFailed, domain.PostStatusCanceled)
 	if err != nil {
 		return err
 	}
-	n, _ := result.RowsAffected()
-	if n == 0 {
+	if rows, _ := result.RowsAffected(); rows == 0 {
 		return fmt.Errorf("post not editable")
 	}
-	return nil
+
+	if replaceMedia {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM post_media WHERE post_id = ?`, id); err != nil {
+			return err
+		}
+		for _, mediaID := range mediaIDs {
+			trimmed := strings.TrimSpace(mediaID)
+			if trimmed == "" {
+				continue
+			}
+			if _, err := tx.ExecContext(ctx, `INSERT INTO post_media (post_id, media_id) VALUES (?, ?)`, id, trimmed); err != nil {
+				return err
+			}
+		}
+	}
+
+	return tx.Commit()
 }
 
 func (s *Store) UpdateThreadEditable(ctx context.Context, rootPostID string, steps []ThreadStepUpdate) error {

@@ -6,8 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/antoniolg/publisher/internal/application/ports"
 	"github.com/antoniolg/publisher/internal/db"
 	"github.com/antoniolg/publisher/internal/domain"
+	"github.com/antoniolg/publisher/internal/publisher"
 )
 
 var (
@@ -19,21 +21,26 @@ type MutationsStore interface {
 	CancelPost(ctx context.Context, id string) error
 	DeletePostEditable(ctx context.Context, id string) error
 	ScheduleDraftPost(ctx context.Context, id string, scheduledAt time.Time) error
-	UpdatePostEditable(ctx context.Context, id, text string, scheduledAt time.Time) error
+	UpdatePostEditable(ctx context.Context, id, text string, scheduledAt time.Time, mediaIDs []string, replaceMedia bool) error
 	UpdateThreadEditable(ctx context.Context, rootPostID string, steps []db.ThreadStepUpdate) error
 	GetPost(ctx context.Context, id string) (domain.Post, error)
+	GetAccount(ctx context.Context, id string) (domain.SocialAccount, error)
+	GetMediaByIDs(ctx context.Context, ids []string) ([]domain.Media, error)
 }
 
 type MutationsService struct {
-	Store MutationsStore
+	Store    MutationsStore
+	Registry ports.ProviderRegistry
 }
 
 type EditInput struct {
-	PostID      string
-	Text        string
-	Intent      string
-	ScheduledAt time.Time
-	Segments    []ThreadSegmentInput
+	PostID       string
+	Text         string
+	Intent       string
+	ScheduledAt  time.Time
+	MediaIDs     []string
+	ReplaceMedia bool
+	Segments     []ThreadSegmentInput
 }
 
 func ResolveScheduledAtForEdit(intent string, scheduledAt time.Time, now func() time.Time) (time.Time, error) {
@@ -133,8 +140,66 @@ func (s MutationsService) UpdateEditable(ctx context.Context, in EditInput, now 
 	if text == "" {
 		return domain.Post{}, ErrTextRequired
 	}
-	if err := s.Store.UpdatePostEditable(ctx, postID, text, scheduledAt); err != nil {
+	current, err := s.Store.GetPost(ctx, postID)
+	if err != nil {
+		return domain.Post{}, err
+	}
+
+	mediaIDs := mediaIDsFromPost(current.Media)
+	if in.ReplaceMedia {
+		mediaIDs = normalizeMediaIDs(in.MediaIDs)
+	}
+	if err := s.validateEditableDraft(ctx, current, text, mediaIDs, in.ReplaceMedia); err != nil {
+		return domain.Post{}, err
+	}
+
+	if err := s.Store.UpdatePostEditable(ctx, postID, text, scheduledAt, mediaIDs, in.ReplaceMedia); err != nil {
 		return domain.Post{}, err
 	}
 	return s.Store.GetPost(ctx, postID)
+}
+
+func (s MutationsService) validateEditableDraft(ctx context.Context, post domain.Post, text string, mediaIDs []string, replaceMedia bool) error {
+	if s.Registry == nil {
+		return nil
+	}
+
+	account, err := s.Store.GetAccount(ctx, strings.TrimSpace(post.AccountID))
+	if err != nil {
+		return ValidationError{Err: ErrAccountNotFound}
+	}
+	provider, ok := s.Registry.Get(account.Platform)
+	if !ok {
+		return ValidationError{Err: ErrProviderNotConfigured}
+	}
+
+	media := post.Media
+	if replaceMedia {
+		media, err = s.Store.GetMediaByIDs(ctx, mediaIDs)
+		if err != nil {
+			return ValidationError{Err: err}
+		}
+	}
+	if _, err := provider.ValidateDraft(ctx, account, publisher.Draft{
+		Text:  text,
+		Media: media,
+	}); err != nil {
+		return ValidationError{Err: err}
+	}
+	return nil
+}
+
+func mediaIDsFromPost(media []domain.Media) []string {
+	if len(media) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(media))
+	for _, item := range media {
+		id := strings.TrimSpace(item.ID)
+		if id == "" {
+			continue
+		}
+		out = append(out, id)
+	}
+	return out
 }

@@ -135,6 +135,7 @@ Thread payload support (same shape in API/MCP/CLI):
 - `segments`: `[{ "text": "...", "media_ids": ["med_x"] }]`
 - If `segments` is present, step `1` is the root post and steps `2..N` are follow-ups.
 - Backward compatibility is preserved for legacy `text` + `media_ids`.
+- `publisher_edit_post` accepts optional `media_ids` to replace media on editable posts (`[]` clears all media).
 
 ### Codex CLI
 
@@ -200,6 +201,7 @@ postflow posts validate --account-id acc_xxx --segments-json '[{"text":"root"},{
 postflow posts create --account-id acc_xxx --segments-json '[{"text":"root"},{"text":"reply 1","media_ids":["med_x"]}]' --scheduled-at 2026-03-01T10:00:00Z
 postflow posts schedule --id pst_xxx --scheduled-at 2026-03-01T10:00:00Z
 postflow posts edit --id pst_xxx --text "copy updated" --intent schedule --scheduled-at 2026-03-01T10:30:00Z
+postflow posts edit --id pst_xxx --text "copy + media" --replace-media --media-id med_a --media-id med_b
 postflow posts delete --id pst_xxx
 postflow posts cancel --id pst_xxx
 postflow accounts list

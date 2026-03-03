@@ -150,6 +150,76 @@ func TestRunPostsEdit(t *testing.T) {
 	}
 }
 
+func TestRunPostsEditWithMediaReplacement(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/posts/pst_1/edit" {
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		var payload map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode payload: %v", err)
+		}
+		rawMedia, ok := payload["media_ids"].([]any)
+		if !ok {
+			t.Fatalf("expected media_ids array in payload, got %#v", payload["media_ids"])
+		}
+		if len(rawMedia) != 2 || strings.TrimSpace(anyString(rawMedia[0])) != "med_1" || strings.TrimSpace(anyString(rawMedia[1])) != "med_2" {
+			t.Fatalf("expected media_ids [med_1 med_2], got %#v", rawMedia)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "pst_1", "status": "draft"})
+	}))
+	defer server.Close()
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := Run(context.Background(), []string{
+		"--base-url", server.URL,
+		"posts", "edit",
+		"--id", "pst_1",
+		"--text", "updated text",
+		"--replace-media",
+		"--media-id", "med_1",
+		"--media-id", "med_2",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d, stderr=%s", code, stderr.String())
+	}
+}
+
+func TestRunPostsEditWithReplaceMediaWithoutIDsClearsMedia(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/posts/pst_1/edit" {
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		var payload map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode payload: %v", err)
+		}
+		rawMedia, ok := payload["media_ids"].([]any)
+		if !ok {
+			t.Fatalf("expected media_ids array in payload, got %#v", payload["media_ids"])
+		}
+		if len(rawMedia) != 0 {
+			t.Fatalf("expected empty media_ids to clear media, got %#v", rawMedia)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "pst_1", "status": "draft"})
+	}))
+	defer server.Close()
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := Run(context.Background(), []string{
+		"--base-url", server.URL,
+		"posts", "edit",
+		"--id", "pst_1",
+		"--text", "updated text",
+		"--replace-media",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d, stderr=%s", code, stderr.String())
+	}
+}
+
 func TestRunPostsDelete(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/posts/pst_1/delete" {

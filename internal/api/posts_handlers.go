@@ -394,8 +394,22 @@ func (s Server) handleEditPost(w http.ResponseWriter, r *http.Request) {
 	intent := strings.ToLower(strings.TrimSpace(r.FormValue("intent")))
 	scheduledAtRaw := strings.TrimSpace(r.FormValue("scheduled_at"))
 	var reqSegments []createPostSegment
+	var mediaIDs []string
+	replaceMedia := false
 	if scheduledAtRaw == "" {
 		scheduledAtRaw = strings.TrimSpace(r.FormValue("scheduled_at_local"))
+	}
+	if fromForm {
+		if rawMediaIDs, ok := r.Form["media_ids"]; ok {
+			replaceMedia = true
+			for _, rawMediaID := range rawMediaIDs {
+				mediaID := strings.TrimSpace(rawMediaID)
+				if mediaID == "" {
+					continue
+				}
+				mediaIDs = append(mediaIDs, mediaID)
+			}
+		}
 	}
 	if rawSegments := strings.TrimSpace(r.FormValue("segments_json")); rawSegments != "" {
 		if len(rawSegments) > maxPostRequestBodyBytes {
@@ -423,6 +437,7 @@ func (s Server) handleEditPost(w http.ResponseWriter, r *http.Request) {
 			Intent           string              `json:"intent"`
 			ScheduledAt      string              `json:"scheduled_at"`
 			ScheduledAtLocal string              `json:"scheduled_at_local"`
+			MediaIDs         []string            `json:"media_ids"`
 			Segments         []createPostSegment `json:"segments"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err == nil {
@@ -437,6 +452,17 @@ func (s Server) handleEditPost(w http.ResponseWriter, r *http.Request) {
 			}
 			if scheduledAtRaw == "" {
 				scheduledAtRaw = strings.TrimSpace(body.ScheduledAtLocal)
+			}
+			if body.MediaIDs != nil {
+				replaceMedia = true
+				mediaIDs = mediaIDs[:0]
+				for _, rawMediaID := range body.MediaIDs {
+					mediaID := strings.TrimSpace(rawMediaID)
+					if mediaID == "" {
+						continue
+					}
+					mediaIDs = append(mediaIDs, mediaID)
+				}
 			}
 			if len(reqSegments) == 0 {
 				reqSegments = normalizeRequestSegments(body.Segments)
@@ -468,13 +494,18 @@ func (s Server) handleEditPost(w http.ResponseWriter, r *http.Request) {
 		}
 		scheduledAt = parsed
 	}
-	svc := postsapp.MutationsService{Store: s.Store}
+	svc := postsapp.MutationsService{
+		Store:    s.Store,
+		Registry: s.providerRegistry(),
+	}
 	post, err := svc.UpdateEditable(r.Context(), postsapp.EditInput{
-		PostID:      postID,
-		Text:        text,
-		Intent:      intent,
-		ScheduledAt: scheduledAt,
-		Segments:    segments,
+		PostID:       postID,
+		Text:         text,
+		Intent:       intent,
+		ScheduledAt:  scheduledAt,
+		MediaIDs:     mediaIDs,
+		ReplaceMedia: replaceMedia,
+		Segments:     segments,
 	}, time.Now)
 	if errors.Is(err, postsapp.ErrScheduledAtNeeded) {
 		if fromForm {

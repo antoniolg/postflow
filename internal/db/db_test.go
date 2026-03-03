@@ -438,3 +438,113 @@ func TestDeletePostEditableRejectsPublishedPost(t *testing.T) {
 		t.Fatalf("expected ErrPostNotDeletable, got %v", err)
 	}
 }
+
+func TestUpdatePostEditableReplacesMedia(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+	account := createTestAccount(t, store, domain.PlatformLinkedIn)
+	mediaA, err := store.CreateMedia(ctx, domain.Media{
+		Kind:         "image",
+		OriginalName: "a.png",
+		StoragePath:  "/tmp/a.png",
+		MimeType:     "image/png",
+		SizeBytes:    10,
+	})
+	if err != nil {
+		t.Fatalf("create media A: %v", err)
+	}
+	mediaB, err := store.CreateMedia(ctx, domain.Media{
+		Kind:         "image",
+		OriginalName: "b.png",
+		StoragePath:  "/tmp/b.png",
+		MimeType:     "image/png",
+		SizeBytes:    11,
+	})
+	if err != nil {
+		t.Fatalf("create media B: %v", err)
+	}
+	created, err := store.CreatePost(ctx, CreatePostParams{
+		Post: domain.Post{
+			AccountID:   account.ID,
+			Text:        "initial",
+			Status:      domain.PostStatusScheduled,
+			ScheduledAt: time.Now().UTC().Add(30 * time.Minute),
+			MaxAttempts: 3,
+		},
+		MediaIDs: []string{mediaA.ID},
+	})
+	if err != nil {
+		t.Fatalf("create post: %v", err)
+	}
+
+	if err := store.UpdatePostEditable(ctx, created.Post.ID, "edited", time.Time{}, []string{mediaB.ID}, true); err != nil {
+		t.Fatalf("update editable: %v", err)
+	}
+
+	updated, err := store.GetPost(ctx, created.Post.ID)
+	if err != nil {
+		t.Fatalf("get post: %v", err)
+	}
+	if updated.Status != domain.PostStatusDraft {
+		t.Fatalf("expected draft status after clearing schedule, got %s", updated.Status)
+	}
+	if updated.Text != "edited" {
+		t.Fatalf("expected updated text, got %q", updated.Text)
+	}
+	if len(updated.Media) != 1 {
+		t.Fatalf("expected one media item after replacement, got %d", len(updated.Media))
+	}
+	if updated.Media[0].ID != mediaB.ID {
+		t.Fatalf("expected media %q after replacement, got %q", mediaB.ID, updated.Media[0].ID)
+	}
+}
+
+func TestUpdatePostEditableClearsMedia(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+	account := createTestAccount(t, store, domain.PlatformLinkedIn)
+	media, err := store.CreateMedia(ctx, domain.Media{
+		Kind:         "image",
+		OriginalName: "clear.png",
+		StoragePath:  "/tmp/clear.png",
+		MimeType:     "image/png",
+		SizeBytes:    12,
+	})
+	if err != nil {
+		t.Fatalf("create media: %v", err)
+	}
+	created, err := store.CreatePost(ctx, CreatePostParams{
+		Post: domain.Post{
+			AccountID:   account.ID,
+			Text:        "has media",
+			Status:      domain.PostStatusDraft,
+			MaxAttempts: 3,
+		},
+		MediaIDs: []string{media.ID},
+	})
+	if err != nil {
+		t.Fatalf("create post: %v", err)
+	}
+
+	if err := store.UpdatePostEditable(ctx, created.Post.ID, "no media now", time.Time{}, nil, true); err != nil {
+		t.Fatalf("update editable: %v", err)
+	}
+
+	updated, err := store.GetPost(ctx, created.Post.ID)
+	if err != nil {
+		t.Fatalf("get post: %v", err)
+	}
+	if len(updated.Media) != 0 {
+		t.Fatalf("expected media to be cleared, got %d items", len(updated.Media))
+	}
+}
