@@ -243,6 +243,7 @@ type mcpCreatePostInput struct {
 	Text           string   `json:"text" jsonschema:"Post text content."`
 	ScheduledAt    string   `json:"scheduled_at,omitempty" jsonschema:"RFC3339 or datetime-local value. Empty means draft."`
 	MediaIDs       []string `json:"media_ids,omitempty" jsonschema:"Existing media IDs to attach."`
+	Segments       []mcpThreadSegmentInput `json:"segments,omitempty" jsonschema:"Optional thread segments [{text, media_ids}] where first segment is the root post."`
 	MaxAttempts    int      `json:"max_attempts,omitempty" jsonschema:"Max publish retries. Default from server config."`
 	IdempotencyKey string   `json:"idempotency_key,omitempty" jsonschema:"Optional idempotency key (max 128 chars)."`
 }
@@ -252,7 +253,13 @@ type mcpValidatePostInput struct {
 	Text        string   `json:"text" jsonschema:"Post text content."`
 	ScheduledAt string   `json:"scheduled_at,omitempty" jsonschema:"RFC3339 value. Empty means draft."`
 	MediaIDs    []string `json:"media_ids,omitempty" jsonschema:"Existing media IDs to validate."`
+	Segments    []mcpThreadSegmentInput `json:"segments,omitempty" jsonschema:"Optional thread segments [{text, media_ids}] where first segment is the root post."`
 	MaxAttempts int      `json:"max_attempts,omitempty" jsonschema:"Max publish retries. Default from server config."`
+}
+
+type mcpThreadSegmentInput struct {
+	Text     string   `json:"text"`
+	MediaIDs []string `json:"media_ids,omitempty"`
 }
 
 type mcpPostSummary struct {
@@ -410,7 +417,11 @@ func (s Server) mcpCreatePostTool(ctx context.Context, _ *mcp.CallToolRequest, i
 	}
 
 	text := strings.TrimSpace(in.Text)
-	if text == "" {
+	segments := normalizeMCPThreadSegments(in.Segments)
+	if len(segments) > 0 {
+		text = strings.TrimSpace(segments[0].Text)
+	}
+	if text == "" && len(segments) == 0 {
 		return nil, mcpCreatePostOutput{}, fmt.Errorf("text is required")
 	}
 
@@ -435,16 +446,25 @@ func (s Server) mcpCreatePostTool(ctx context.Context, _ *mcp.CallToolRequest, i
 		Text:           text,
 		ScheduledAt:    scheduledAt,
 		MediaIDs:       mediaIDs,
+		Segments:       toAppSegments(segments),
 		MaxAttempts:    in.MaxAttempts,
 		IdempotencyKey: strings.TrimSpace(in.IdempotencyKey),
 	})
 	if err != nil {
 		return nil, mcpCreatePostOutput{}, err
 	}
-	if len(createOut.Items) != 1 {
+	if len(createOut.Items) != 1 && len(segments) == 0 {
 		return nil, mcpCreatePostOutput{}, fmt.Errorf("expected single create result, got %d", len(createOut.Items))
 	}
 	item := createOut.Items[0]
+	if len(segments) > 0 {
+		for _, candidate := range createOut.Items {
+			if candidate.Post.ThreadPosition == 1 {
+				item = candidate
+				break
+			}
+		}
+	}
 
 	return nil, mcpCreatePostOutput{
 		Created: item.Created,
@@ -453,11 +473,13 @@ func (s Server) mcpCreatePostTool(ctx context.Context, _ *mcp.CallToolRequest, i
 }
 
 func (s Server) mcpValidatePostTool(ctx context.Context, _ *mcp.CallToolRequest, in mcpValidatePostInput) (*mcp.CallToolResult, mcpValidatePostOutput, error) {
+	segments := normalizeMCPThreadSegments(in.Segments)
 	out, err := s.validatePost(ctx, validatePostInput{
 		AccountID:   strings.TrimSpace(in.AccountID),
 		Text:        strings.TrimSpace(in.Text),
 		ScheduledAt: strings.TrimSpace(in.ScheduledAt),
 		MediaIDs:    cleanMCPMediaIDs(in.MediaIDs),
+		Segments:    segments,
 		MaxAttempts: in.MaxAttempts,
 	})
 	if err != nil {
@@ -468,6 +490,20 @@ func (s Server) mcpValidatePostTool(ctx context.Context, _ *mcp.CallToolRequest,
 		Normalized: out.Normalized,
 		Warnings:   out.Warnings,
 	}, nil
+}
+
+func normalizeMCPThreadSegments(raw []mcpThreadSegmentInput) []createPostSegment {
+	if len(raw) == 0 {
+		return nil
+	}
+	out := make([]createPostSegment, 0, len(raw))
+	for _, segment := range raw {
+		out = append(out, createPostSegment{
+			Text:     strings.TrimSpace(segment.Text),
+			MediaIDs: cleanMCPMediaIDs(segment.MediaIDs),
+		})
+	}
+	return normalizeRequestSegments(out)
 }
 
 func (s Server) mcpRequeueFailedTool(ctx context.Context, _ *mcp.CallToolRequest, in mcpFailedMutationInput) (*mcp.CallToolResult, mcpRequeueFailedOutput, error) {

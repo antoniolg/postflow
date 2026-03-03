@@ -111,7 +111,7 @@ func (p *InstagramProvider) ValidateDraft(_ context.Context, _ domain.SocialAcco
 	return nil, nil
 }
 
-func (p *FacebookProvider) Publish(ctx context.Context, account domain.SocialAccount, credentials Credentials, post domain.Post) (string, error) {
+func (p *FacebookProvider) Publish(ctx context.Context, account domain.SocialAccount, credentials Credentials, post domain.Post, opts PublishOptions) (string, error) {
 	postText := formatPostTextForPublish(post.Text)
 	pageID := strings.TrimSpace(account.ExternalAccountID)
 	if pageID == "" {
@@ -122,6 +122,43 @@ func (p *FacebookProvider) Publish(ctx context.Context, account domain.SocialAcc
 	}
 	if strings.TrimSpace(credentials.AccessToken) == "" {
 		return "", fmt.Errorf("facebook access token missing")
+	}
+	if opts.Mode == PublishModeComment {
+		if len(post.Media) > 0 {
+			return "", fmt.Errorf("facebook thread comments do not support media in this release")
+		}
+		parentExternalID := strings.TrimSpace(opts.ParentExternalID)
+		if parentExternalID == "" {
+			return "", fmt.Errorf("facebook parent external id is required for comment mode")
+		}
+		values := url.Values{}
+		values.Set("message", strings.TrimSpace(postText))
+		values.Set("access_token", strings.TrimSpace(credentials.AccessToken))
+		reqURL := fmt.Sprintf("%s/%s/%s/comments", strings.TrimRight(p.cfg.GraphURL, "/"), p.cfg.APIVersion, parentExternalID)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, strings.NewReader(values.Encode()))
+		if err != nil {
+			return "", err
+		}
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		resp, err := p.client.Do(req)
+		if err != nil {
+			return "", err
+		}
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+		if resp.StatusCode >= 300 {
+			return "", fmt.Errorf("facebook comment failed: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
+		}
+		var out struct {
+			ID string `json:"id"`
+		}
+		if err := json.Unmarshal(body, &out); err != nil {
+			return "", err
+		}
+		if strings.TrimSpace(out.ID) == "" {
+			return "", fmt.Errorf("facebook comment response missing id")
+		}
+		return strings.TrimSpace(out.ID), nil
 	}
 	if len(post.Media) > 10 {
 		return "", fmt.Errorf("facebook supports up to 10 media attachments per post")
@@ -201,7 +238,7 @@ func (p *FacebookProvider) Publish(ctx context.Context, account domain.SocialAcc
 	return strings.TrimSpace(out.ID), nil
 }
 
-func (p *InstagramProvider) Publish(ctx context.Context, account domain.SocialAccount, credentials Credentials, post domain.Post) (string, error) {
+func (p *InstagramProvider) Publish(ctx context.Context, account domain.SocialAccount, credentials Credentials, post domain.Post, opts PublishOptions) (string, error) {
 	postText := formatPostTextForPublish(post.Text)
 	igUserID := strings.TrimSpace(account.ExternalAccountID)
 	if igUserID == "" {
@@ -212,6 +249,43 @@ func (p *InstagramProvider) Publish(ctx context.Context, account domain.SocialAc
 	}
 	if strings.TrimSpace(credentials.AccessToken) == "" {
 		return "", fmt.Errorf("instagram access token missing")
+	}
+	if opts.Mode == PublishModeComment {
+		if len(post.Media) > 0 {
+			return "", fmt.Errorf("instagram thread comments do not support media in this release")
+		}
+		parentExternalID := strings.TrimSpace(opts.ParentExternalID)
+		if parentExternalID == "" {
+			return "", fmt.Errorf("instagram parent external id is required for comment mode")
+		}
+		values := url.Values{}
+		values.Set("message", strings.TrimSpace(postText))
+		values.Set("access_token", strings.TrimSpace(credentials.AccessToken))
+		commentURL := fmt.Sprintf("%s/%s/%s/comments", strings.TrimRight(p.cfg.GraphURL, "/"), p.cfg.APIVersion, parentExternalID)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, commentURL, strings.NewReader(values.Encode()))
+		if err != nil {
+			return "", err
+		}
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		resp, err := p.client.Do(req)
+		if err != nil {
+			return "", err
+		}
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+		if resp.StatusCode >= 300 {
+			return "", fmt.Errorf("instagram comment failed: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
+		}
+		var out struct {
+			ID string `json:"id"`
+		}
+		if err := json.Unmarshal(body, &out); err != nil {
+			return "", err
+		}
+		if strings.TrimSpace(out.ID) == "" {
+			return "", fmt.Errorf("instagram comment response missing id")
+		}
+		return strings.TrimSpace(out.ID), nil
 	}
 	if len(post.Media) == 0 {
 		return "", fmt.Errorf("instagram requires at least one media item")

@@ -14,14 +14,20 @@ import (
 )
 
 type createPostRequest struct {
-	AccountID   string   `json:"account_id"`
-	AccountIDs  []string `json:"account_ids"`
-	Text        string   `json:"text"`
-	ScheduledAt string   `json:"scheduled_at"`
-	MediaIDs    []string `json:"media_ids"`
-	MaxAttempts int      `json:"max_attempts"`
-	Intent      string   `json:"intent"`
-	ReturnTo    string   `json:"return_to"`
+	AccountID   string              `json:"account_id"`
+	AccountIDs  []string            `json:"account_ids"`
+	Text        string              `json:"text"`
+	ScheduledAt string              `json:"scheduled_at"`
+	MediaIDs    []string            `json:"media_ids"`
+	Segments    []createPostSegment `json:"segments"`
+	MaxAttempts int                 `json:"max_attempts"`
+	Intent      string              `json:"intent"`
+	ReturnTo    string              `json:"return_to"`
+}
+
+type createPostSegment struct {
+	Text     string   `json:"text"`
+	MediaIDs []string `json:"media_ids"`
 }
 
 func (s Server) handleCreatePost(w http.ResponseWriter, r *http.Request) {
@@ -46,7 +52,11 @@ func (s Server) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	text := strings.TrimSpace(req.Text)
-	if text == "" {
+	segments := toAppSegments(req.Segments)
+	if len(segments) > 0 {
+		text = strings.TrimSpace(segments[0].Text)
+	}
+	if text == "" && len(segments) == 0 {
 		if fromForm {
 			http.Redirect(w, r, createViewURL("", req.Text, req.ScheduledAt, req.ReturnTo, "text is required", ""), http.StatusSeeOther)
 			return
@@ -101,6 +111,7 @@ func (s Server) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 		Text:           text,
 		ScheduledAt:    scheduledAt,
 		MediaIDs:       req.MediaIDs,
+		Segments:       segments,
 		MaxAttempts:    req.MaxAttempts,
 		IdempotencyKey: idempotencyKey,
 	})
@@ -142,19 +153,40 @@ func (s Server) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 	for _, item := range createOut.Items {
 		items = append(items, item.Post)
 	}
+	rootID := ""
+	totalSteps := 0
+	if len(segments) > 1 {
+		totalSteps = len(segments)
+		for _, item := range createOut.Items {
+			if item.Post.ThreadPosition == 1 {
+				rootID = item.Post.ID
+				break
+			}
+		}
+	}
 	if createOut.CreatedCount > 0 {
-		writeJSON(w, http.StatusCreated, map[string]any{
+		payload := map[string]any{
 			"items":         items,
 			"created_count": createOut.CreatedCount,
 			"total":         len(items),
-		})
+		}
+		if totalSteps > 1 {
+			payload["root_id"] = rootID
+			payload["total_steps"] = totalSteps
+		}
+		writeJSON(w, http.StatusCreated, payload)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	payload := map[string]any{
 		"items":         items,
 		"created_count": createOut.CreatedCount,
 		"total":         len(items),
-	})
+	}
+	if totalSteps > 1 {
+		payload["root_id"] = rootID
+		payload["total_steps"] = totalSteps
+	}
+	writeJSON(w, http.StatusOK, payload)
 }
 
 func mapCreatePostError(err error, fromForm bool) (int, string) {
@@ -361,15 +393,37 @@ func (s Server) handleEditPost(w http.ResponseWriter, r *http.Request) {
 	text := strings.TrimSpace(r.FormValue("text"))
 	intent := strings.ToLower(strings.TrimSpace(r.FormValue("intent")))
 	scheduledAtRaw := strings.TrimSpace(r.FormValue("scheduled_at"))
+	var reqSegments []createPostSegment
 	if scheduledAtRaw == "" {
 		scheduledAtRaw = strings.TrimSpace(r.FormValue("scheduled_at_local"))
 	}
+	if rawSegments := strings.TrimSpace(r.FormValue("segments_json")); rawSegments != "" {
+		if len(rawSegments) > maxPostRequestBodyBytes {
+			if fromForm {
+				http.Redirect(w, r, createViewURL(postID, text, strings.TrimSpace(r.FormValue("scheduled_at_local")), returnTo, "segments_json payload is too large", ""), http.StatusSeeOther)
+				return
+			}
+			writeError(w, http.StatusBadRequest, errors.New("segments_json payload is too large"))
+			return
+		}
+		var parsed []createPostSegment
+		if err := json.Unmarshal([]byte(rawSegments), &parsed); err != nil {
+			if fromForm {
+				http.Redirect(w, r, createViewURL(postID, text, strings.TrimSpace(r.FormValue("scheduled_at_local")), returnTo, "segments_json must be valid json", ""), http.StatusSeeOther)
+				return
+			}
+			writeError(w, http.StatusBadRequest, fmt.Errorf("segments_json must be valid json: %w", err))
+			return
+		}
+		reqSegments = normalizeRequestSegments(parsed)
+	}
 	if !fromForm {
 		var body struct {
-			Text             string `json:"text"`
-			Intent           string `json:"intent"`
-			ScheduledAt      string `json:"scheduled_at"`
-			ScheduledAtLocal string `json:"scheduled_at_local"`
+			Text             string              `json:"text"`
+			Intent           string              `json:"intent"`
+			ScheduledAt      string              `json:"scheduled_at"`
+			ScheduledAtLocal string              `json:"scheduled_at_local"`
+			Segments         []createPostSegment `json:"segments"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err == nil {
 			if text == "" {
@@ -384,9 +438,16 @@ func (s Server) handleEditPost(w http.ResponseWriter, r *http.Request) {
 			if scheduledAtRaw == "" {
 				scheduledAtRaw = strings.TrimSpace(body.ScheduledAtLocal)
 			}
+			if len(reqSegments) == 0 {
+				reqSegments = normalizeRequestSegments(body.Segments)
+			}
 		}
 	}
-	if text == "" {
+	segments := toAppSegments(reqSegments)
+	if len(segments) > 0 {
+		text = strings.TrimSpace(segments[0].Text)
+	}
+	if text == "" && len(segments) == 0 {
 		if fromForm {
 			http.Redirect(w, r, createViewURL(postID, text, strings.TrimSpace(r.FormValue("scheduled_at_local")), returnTo, "text is required", ""), http.StatusSeeOther)
 			return
@@ -413,6 +474,7 @@ func (s Server) handleEditPost(w http.ResponseWriter, r *http.Request) {
 		Text:        text,
 		Intent:      intent,
 		ScheduledAt: scheduledAt,
+		Segments:    segments,
 	}, time.Now)
 	if errors.Is(err, postsapp.ErrScheduledAtNeeded) {
 		if fromForm {
@@ -439,4 +501,30 @@ func (s Server) handleEditPost(w http.ResponseWriter, r *http.Request) {
 		scheduledLocal = post.ScheduledAt.In(uiLoc).Format("2006-01-02T15:04")
 	}
 	http.Redirect(w, r, createViewURL(post.ID, post.Text, scheduledLocal, returnTo, "", "changes saved"), http.StatusSeeOther)
+}
+
+func toAppSegments(raw []createPostSegment) []postsapp.ThreadSegmentInput {
+	if len(raw) == 0 {
+		return nil
+	}
+	segments := make([]postsapp.ThreadSegmentInput, 0, len(raw))
+	for _, segment := range raw {
+		text := strings.TrimSpace(segment.Text)
+		if text == "" {
+			continue
+		}
+		mediaIDs := make([]string, 0, len(segment.MediaIDs))
+		for _, mediaID := range segment.MediaIDs {
+			trimmed := strings.TrimSpace(mediaID)
+			if trimmed == "" {
+				continue
+			}
+			mediaIDs = append(mediaIDs, trimmed)
+		}
+		segments = append(segments, postsapp.ThreadSegmentInput{
+			Text:     text,
+			MediaIDs: mediaIDs,
+		})
+	}
+	return segments
 }

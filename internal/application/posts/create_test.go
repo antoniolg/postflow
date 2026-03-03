@@ -15,13 +15,15 @@ import (
 )
 
 type fakeStore struct {
-	accounts    map[string]domain.SocialAccount
-	media       map[string]domain.Media
-	createCalls []db.CreatePostParams
-	deletedIDs  []string
-	createErrAt int
-	createErr   error
-	createCount int
+	accounts           map[string]domain.SocialAccount
+	media              map[string]domain.Media
+	createCalls        []db.CreatePostParams
+	deletedIDs         []string
+	createErrAt        int
+	createErr          error
+	createCount        int
+	idempotencyPostIDs map[string]string
+	postsByID          map[string]domain.Post
 }
 
 func (f *fakeStore) GetAccount(_ context.Context, id string) (domain.SocialAccount, error) {
@@ -58,10 +60,53 @@ func (f *fakeStore) CreatePost(_ context.Context, params db.CreatePostParams) (d
 	}
 	post := params.Post
 	post.ID = fmt.Sprintf("pst_%d", f.createCount)
+	if f.postsByID == nil {
+		f.postsByID = make(map[string]domain.Post)
+	}
+	f.postsByID[post.ID] = post
+	if trimmed := strings.TrimSpace(params.IdempotencyKey); trimmed != "" {
+		if f.idempotencyPostIDs == nil {
+			f.idempotencyPostIDs = make(map[string]string)
+		}
+		f.idempotencyPostIDs[trimmed] = post.ID
+	}
 	return db.CreatePostResult{
 		Post:    post,
 		Created: true,
 	}, nil
+}
+
+func (f *fakeStore) GetPostByIdempotencyKey(_ context.Context, idempotencyKey string) (domain.Post, error) {
+	if f.idempotencyPostIDs == nil {
+		return domain.Post{}, sql.ErrNoRows
+	}
+	postID, ok := f.idempotencyPostIDs[strings.TrimSpace(idempotencyKey)]
+	if !ok {
+		return domain.Post{}, sql.ErrNoRows
+	}
+	post, ok := f.postsByID[postID]
+	if !ok {
+		return domain.Post{}, sql.ErrNoRows
+	}
+	return post, nil
+}
+
+func (f *fakeStore) ListThreadPosts(_ context.Context, rootPostID string) ([]domain.Post, error) {
+	if f.postsByID == nil {
+		return nil, nil
+	}
+	rootPostID = strings.TrimSpace(rootPostID)
+	out := make([]domain.Post, 0)
+	for _, post := range f.postsByID {
+		if strings.TrimSpace(post.ID) == rootPostID {
+			out = append(out, post)
+			continue
+		}
+		if post.RootPostID != nil && strings.TrimSpace(*post.RootPostID) == rootPostID {
+			out = append(out, post)
+		}
+	}
+	return out, nil
 }
 
 func (f *fakeStore) DeletePostEditable(_ context.Context, id string) error {
@@ -94,7 +139,7 @@ func (f fakeProvider) ValidateDraft(context.Context, domain.SocialAccount, publi
 	return nil, nil
 }
 
-func (f fakeProvider) Publish(context.Context, domain.SocialAccount, publisher.Credentials, domain.Post) (string, error) {
+func (f fakeProvider) Publish(context.Context, domain.SocialAccount, publisher.Credentials, domain.Post, publisher.PublishOptions) (string, error) {
 	return "", nil
 }
 
@@ -255,5 +300,38 @@ func TestCreatePropagatesProviderValidationErrorsAsValidation(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "too long") {
 		t.Fatalf("expected provider validation message, got %v", err)
+	}
+}
+
+func TestCreateRejectsTooManySegments(t *testing.T) {
+	store := &fakeStore{
+		accounts: map[string]domain.SocialAccount{
+			"acc_1": {ID: "acc_1", Platform: domain.PlatformX, Status: domain.AccountStatusConnected},
+		},
+	}
+	service := CreateService{
+		Store: store,
+		Registry: fakeRegistry{
+			providers: map[domain.Platform]publisher.Provider{
+				domain.PlatformX: fakeProvider{platform: domain.PlatformX},
+			},
+		},
+		DefaultMaxRetries: 3,
+	}
+
+	segments := make([]ThreadSegmentInput, 0, MaxThreadSegments+1)
+	for i := 0; i < MaxThreadSegments+1; i++ {
+		segments = append(segments, ThreadSegmentInput{Text: fmt.Sprintf("segment %d", i+1)})
+	}
+
+	_, err := service.Create(t.Context(), CreateInput{
+		AccountIDs: []string{"acc_1"},
+		Segments:   segments,
+	})
+	if err == nil {
+		t.Fatalf("expected validation error")
+	}
+	if !errors.Is(err, ErrThreadTooLong) {
+		t.Fatalf("expected ErrThreadTooLong, got %v", err)
 	}
 }

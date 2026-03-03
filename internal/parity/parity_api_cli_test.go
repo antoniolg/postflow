@@ -37,11 +37,57 @@ func (e *parityEnv) apiCreatePost(text string, scheduledAt time.Time, mediaIDs [
 	return out.ID
 }
 
+func (e *parityEnv) apiCreateThread(segments []map[string]any) []string {
+	e.t.Helper()
+	body := map[string]any{
+		"account_id": e.account.ID,
+		"segments":   segments,
+	}
+	raw, status := e.apiJSON(http.MethodPost, "/posts", body, "application/json")
+	if status != http.StatusCreated && status != http.StatusOK {
+		e.t.Fatalf("create thread status=%d body=%s", status, string(raw))
+	}
+	var out struct {
+		ID    string `json:"id"`
+		Items []struct {
+			ID string `json:"id"`
+		} `json:"items"`
+	}
+	mustJSON(e.t, raw, &out)
+	if strings.TrimSpace(out.ID) != "" {
+		return []string{strings.TrimSpace(out.ID)}
+	}
+	ids := make([]string, 0, len(out.Items))
+	for _, item := range out.Items {
+		ids = append(ids, strings.TrimSpace(item.ID))
+	}
+	if len(ids) == 0 {
+		e.t.Fatalf("expected thread post ids in create response")
+	}
+	return ids
+}
+
 func (e *parityEnv) apiValidatePost(text string) bool {
 	e.t.Helper()
 	raw, status := e.apiJSON(http.MethodPost, "/posts/validate", map[string]any{"account_id": e.account.ID, "text": text}, "application/json")
 	if status != http.StatusOK {
 		e.t.Fatalf("validate post status=%d body=%s", status, string(raw))
+	}
+	var out struct {
+		Valid bool `json:"valid"`
+	}
+	mustJSON(e.t, raw, &out)
+	return out.Valid
+}
+
+func (e *parityEnv) apiValidateThread(segments []map[string]any) bool {
+	e.t.Helper()
+	raw, status := e.apiJSON(http.MethodPost, "/posts/validate", map[string]any{
+		"account_id": e.account.ID,
+		"segments":   segments,
+	}, "application/json")
+	if status != http.StatusOK {
+		e.t.Fatalf("validate thread status=%d body=%s", status, string(raw))
 	}
 	var out struct {
 		Valid bool `json:"valid"`
@@ -340,9 +386,42 @@ func (e *parityEnv) cliCreatePost(text string) string {
 	return strings.TrimSpace(out.ID)
 }
 
+func (e *parityEnv) cliCreateThread(segmentsJSON string) []string {
+	e.t.Helper()
+	raw := e.runCLI("posts", "create", "--account-id", e.account.ID, "--segments-json", strings.TrimSpace(segmentsJSON))
+	var out struct {
+		ID    string `json:"id"`
+		Items []struct {
+			ID string `json:"id"`
+		} `json:"items"`
+	}
+	mustJSON(e.t, raw, &out)
+	if strings.TrimSpace(out.ID) != "" {
+		return []string{strings.TrimSpace(out.ID)}
+	}
+	ids := make([]string, 0, len(out.Items))
+	for _, item := range out.Items {
+		ids = append(ids, strings.TrimSpace(item.ID))
+	}
+	if len(ids) == 0 {
+		e.t.Fatalf("expected thread post ids in cli response")
+	}
+	return ids
+}
+
 func (e *parityEnv) cliValidatePost(text string) bool {
 	e.t.Helper()
 	raw := e.runCLI("posts", "validate", "--account-id", e.account.ID, "--text", text)
+	var out struct {
+		Valid bool `json:"valid"`
+	}
+	mustJSON(e.t, raw, &out)
+	return out.Valid
+}
+
+func (e *parityEnv) cliValidateThread(segmentsJSON string) bool {
+	e.t.Helper()
+	raw := e.runCLI("posts", "validate", "--account-id", e.account.ID, "--segments-json", strings.TrimSpace(segmentsJSON))
 	var out struct {
 		Valid bool `json:"valid"`
 	}

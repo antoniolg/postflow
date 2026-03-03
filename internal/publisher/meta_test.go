@@ -102,7 +102,7 @@ func TestFacebookPublishWithImageAttachment(t *testing.T) {
 			StoragePath:  mediaPath,
 			MimeType:     "image/jpeg",
 		}},
-	})
+	}, PublishOptions{})
 	if err != nil {
 		t.Fatalf("publish: %v", err)
 	}
@@ -159,7 +159,7 @@ func TestFacebookPublishWithVideoAttachment(t *testing.T) {
 			StoragePath:  mediaPath,
 			MimeType:     "video/mp4",
 		}},
-	})
+	}, PublishOptions{})
 	if err != nil {
 		t.Fatalf("publish: %v", err)
 	}
@@ -211,7 +211,7 @@ func TestInstagramPublishUsesMediaURLBuilder(t *testing.T) {
 			StoragePath: "/tmp/not-public.jpg",
 			MimeType:    "image/jpeg",
 		}},
-	})
+	}, PublishOptions{})
 	if err != nil {
 		t.Fatalf("publish: %v", err)
 	}
@@ -266,7 +266,7 @@ func TestInstagramPublishVideoUsesMediaURLBuilder(t *testing.T) {
 			StoragePath: "/tmp/not-public.mp4",
 			MimeType:    "video/mp4",
 		}},
-	})
+	}, PublishOptions{})
 	if err != nil {
 		t.Fatalf("publish: %v", err)
 	}

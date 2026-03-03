@@ -74,7 +74,7 @@ func TestLinkedInPublishUploadsImageAsset(t *testing.T) {
 			StoragePath:  imagePath,
 			MimeType:     "image/jpeg",
 		}},
-	})
+	}, PublishOptions{})
 	if err != nil {
 		t.Fatalf("publish: %v", err)
 	}
@@ -154,7 +154,7 @@ func TestLinkedInPublishUploadsVideoAsset(t *testing.T) {
 			StoragePath:  videoPath,
 			MimeType:     "video/mp4",
 		}},
-	})
+	}, PublishOptions{})
 	if err != nil {
 		t.Fatalf("publish: %v", err)
 	}

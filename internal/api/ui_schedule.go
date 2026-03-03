@@ -3,9 +3,11 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"html/template"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 
@@ -86,6 +88,44 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
+	}
+	threadRoots := make(map[string]struct{})
+	collectThreadRoot := func(post domain.Post) {
+		rootID := postThreadRootID(post)
+		if rootID == "" {
+			return
+		}
+		threadRoots[rootID] = struct{}{}
+	}
+	for _, item := range items {
+		collectThreadRoot(item)
+	}
+	for _, item := range publicationsItems {
+		collectThreadRoot(item)
+	}
+	for _, item := range drafts {
+		collectThreadRoot(item)
+	}
+	threadTotals := make(map[string]int, len(threadRoots))
+	for rootID := range threadRoots {
+		total := 1
+		threadPosts, err := s.Store.ListThreadPosts(r.Context(), rootID)
+		if err == nil && len(threadPosts) > 0 {
+			maxPos := 1
+			for _, post := range threadPosts {
+				if post.ThreadPosition > maxPos {
+					maxPos = post.ThreadPosition
+				}
+			}
+			if len(threadPosts) > maxPos {
+				maxPos = len(threadPosts)
+			}
+			total = maxPos
+		}
+		threadTotals[rootID] = total
+	}
+	threadLabelFor := func(post domain.Post) string {
+		return formatThreadLabel(post, threadTotals)
 	}
 	accounts, err := s.Store.ListAccounts(r.Context())
 	if err != nil {
@@ -190,6 +230,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 			StatusLabel: statusLabel,
 			StatusKey:   statusKey,
 			TextPreview: text,
+			ThreadLabel: threadLabelFor(item),
 			Platform:    item.Platform,
 		})
 		detailsByDate[key] = append(detailsByDate[key], dayDetailItem{
@@ -201,6 +242,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 			StatusLabel: statusLabel,
 			StatusKey:   statusKey,
 			Text:        strings.TrimSpace(item.Text),
+			ThreadLabel: threadLabelFor(item),
 			Platform:    item.Platform,
 			MediaCount:  len(item.Media),
 		})
@@ -336,33 +378,68 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	mediaTotalSizeLabel := formatByteSize(mediaTotalBytes)
 	var editingPost *domain.Post
 	createInitialMedia := make([]createMediaAttachment, 0)
+	createInitialSegments := make([]createThreadSegment, 0, 1)
 	var createText string
 	var createScheduledLocal string
 	var createAccountID string
 	if editID != "" {
 		p, err := s.Store.GetPost(r.Context(), editID)
 		if err == nil {
-			editingPost = &p
-			createText = p.Text
-			createAccountID = strings.TrimSpace(p.AccountID)
-			if !p.ScheduledAt.IsZero() {
-				createScheduledLocal = p.ScheduledAt.In(uiLoc).Format("2006-01-02T15:04")
-			}
-			createInitialMedia = make([]createMediaAttachment, 0, len(p.Media))
-			for _, media := range p.Media {
-				mediaID := strings.TrimSpace(media.ID)
-				if mediaID == "" {
-					continue
+			rootID := postThreadRootID(p)
+			threadPosts, listErr := s.Store.ListThreadPosts(r.Context(), rootID)
+			if listErr == nil && len(threadPosts) > 0 {
+				sort.SliceStable(threadPosts, func(i, j int) bool {
+					leftPos := threadPosts[i].ThreadPosition
+					rightPos := threadPosts[j].ThreadPosition
+					if leftPos <= 0 {
+						leftPos = 1
+					}
+					if rightPos <= 0 {
+						rightPos = 1
+					}
+					if leftPos != rightPos {
+						return leftPos < rightPos
+					}
+					return threadPosts[i].CreatedAt.Before(threadPosts[j].CreatedAt)
+				})
+				rootPost := threadPosts[0]
+				editingPost = &rootPost
+				createText = rootPost.Text
+				createAccountID = strings.TrimSpace(rootPost.AccountID)
+				if !rootPost.ScheduledAt.IsZero() {
+					createScheduledLocal = rootPost.ScheduledAt.In(uiLoc).Format("2006-01-02T15:04")
 				}
-				createInitialMedia = append(createInitialMedia, createMediaAttachment{
-					ID:         mediaID,
-					Name:       strings.TrimSpace(media.OriginalName),
-					Size:       media.SizeBytes,
-					Mime:       strings.TrimSpace(media.MimeType),
-					PreviewURL: mediaContentURL(mediaID),
+				for _, step := range threadPosts {
+					attachments := mediaAttachmentsFromPost(step)
+					createInitialSegments = append(createInitialSegments, createThreadSegment{
+						Text:  strings.TrimSpace(step.Text),
+						Media: attachments,
+					})
+				}
+				if len(createInitialSegments) > 0 {
+					createInitialMedia = append(createInitialMedia, createInitialSegments[0].Media...)
+				}
+			}
+			if len(createInitialSegments) == 0 {
+				editingPost = &p
+				createText = p.Text
+				createAccountID = strings.TrimSpace(p.AccountID)
+				if !p.ScheduledAt.IsZero() {
+					createScheduledLocal = p.ScheduledAt.In(uiLoc).Format("2006-01-02T15:04")
+				}
+				createInitialMedia = mediaAttachmentsFromPost(p)
+				createInitialSegments = append(createInitialSegments, createThreadSegment{
+					Text:  strings.TrimSpace(p.Text),
+					Media: append([]createMediaAttachment(nil), createInitialMedia...),
 				})
 			}
 		}
+	}
+	if len(createInitialSegments) == 0 {
+		createInitialSegments = append(createInitialSegments, createThreadSegment{
+			Text:  strings.TrimSpace(createText),
+			Media: append([]createMediaAttachment(nil), createInitialMedia...),
+		})
 	}
 	if qAccount := strings.TrimSpace(r.URL.Query().Get("account_id")); qAccount != "" {
 		createAccountID = qAccount
@@ -379,6 +456,12 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	if qScheduled := strings.TrimSpace(r.URL.Query().Get("scheduled_at_local")); qScheduled != "" {
 		createScheduledLocal = qScheduled
 	}
+	if len(createInitialSegments) == 0 {
+		createInitialSegments = append(createInitialSegments, createThreadSegment{})
+	}
+	createInitialSegments[0].Text = strings.TrimSpace(createText)
+	createInitialSegments[0].Media = append([]createMediaAttachment(nil), createInitialMedia...)
+
 	weekdayLabels := weekdayHeaders(uiLang)
 	datePickerMonthNames := datePickerMonthLabels(uiLang)
 	datePickerWeekdayNames := datePickerWeekdayLabels(uiLang)
@@ -391,6 +474,9 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		},
 		"t": func(key string, args ...any) string {
 			return uiMessage(uiLang, key, args...)
+		},
+		"threadLabel": func(post domain.Post) string {
+			return threadLabelFor(post)
 		},
 		"toJSON": func(v any) template.JS {
 			raw, err := json.Marshal(v)
@@ -429,6 +515,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		Accounts:                  connectedAccounts,
 		EditingPost:               editingPost,
 		CreateInitialMedia:        createInitialMedia,
+		CreateInitialSegments:     createInitialSegments,
 		CreateAccountID:           createAccountID,
 		CreateText:                createText,
 		CreateScheduledLocal:      createScheduledLocal,
@@ -470,4 +557,53 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		DatePickerMonthNames:      datePickerMonthNames,
 		DatePickerWeekdayNames:    datePickerWeekdayNames,
 	})
+}
+
+func mediaAttachmentsFromPost(post domain.Post) []createMediaAttachment {
+	if len(post.Media) == 0 {
+		return nil
+	}
+	attachments := make([]createMediaAttachment, 0, len(post.Media))
+	for _, media := range post.Media {
+		mediaID := strings.TrimSpace(media.ID)
+		if mediaID == "" {
+			continue
+		}
+		attachments = append(attachments, createMediaAttachment{
+			ID:         mediaID,
+			Name:       strings.TrimSpace(media.OriginalName),
+			Size:       media.SizeBytes,
+			Mime:       strings.TrimSpace(media.MimeType),
+			PreviewURL: mediaContentURL(mediaID),
+		})
+	}
+	return attachments
+}
+
+func postThreadRootID(post domain.Post) string {
+	if post.RootPostID != nil {
+		if root := strings.TrimSpace(*post.RootPostID); root != "" {
+			return root
+		}
+	}
+	return strings.TrimSpace(post.ID)
+}
+
+func formatThreadLabel(post domain.Post, totals map[string]int) string {
+	rootID := postThreadRootID(post)
+	if rootID == "" {
+		return ""
+	}
+	total := totals[rootID]
+	if total <= 1 {
+		return ""
+	}
+	position := post.ThreadPosition
+	if position <= 0 {
+		position = 1
+	}
+	if position > total {
+		total = position
+	}
+	return fmt.Sprintf("#%d/%d", position, total)
 }

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/antoniolg/publisher/internal/db"
 	"github.com/antoniolg/publisher/internal/domain"
 )
 
@@ -19,6 +20,7 @@ type MutationsStore interface {
 	DeletePostEditable(ctx context.Context, id string) error
 	ScheduleDraftPost(ctx context.Context, id string, scheduledAt time.Time) error
 	UpdatePostEditable(ctx context.Context, id, text string, scheduledAt time.Time) error
+	UpdateThreadEditable(ctx context.Context, rootPostID string, steps []db.ThreadStepUpdate) error
 	GetPost(ctx context.Context, id string) (domain.Post, error)
 }
 
@@ -31,6 +33,7 @@ type EditInput struct {
 	Text        string
 	Intent      string
 	ScheduledAt time.Time
+	Segments    []ThreadSegmentInput
 }
 
 func ResolveScheduledAtForEdit(intent string, scheduledAt time.Time, now func() time.Time) (time.Time, error) {
@@ -91,13 +94,44 @@ func (s MutationsService) UpdateEditable(ctx context.Context, in EditInput, now 
 	if postID == "" {
 		return domain.Post{}, ErrPostIDRequired
 	}
-	text := strings.TrimSpace(in.Text)
-	if text == "" {
-		return domain.Post{}, ErrTextRequired
-	}
 	scheduledAt, err := ResolveScheduledAtForEdit(in.Intent, in.ScheduledAt, now)
 	if err != nil {
 		return domain.Post{}, err
+	}
+
+	if len(in.Segments) > 0 {
+		if len(in.Segments) > MaxThreadSegments {
+			return domain.Post{}, ErrThreadTooLong
+		}
+		steps := make([]db.ThreadStepUpdate, 0, len(in.Segments))
+		for _, segment := range in.Segments {
+			text := strings.TrimSpace(segment.Text)
+			if text == "" {
+				return domain.Post{}, ErrTextRequired
+			}
+			steps = append(steps, db.ThreadStepUpdate{
+				Text:        text,
+				ScheduledAt: scheduledAt,
+				MediaIDs:    normalizeMediaIDs(segment.MediaIDs),
+			})
+		}
+		current, err := s.Store.GetPost(ctx, postID)
+		if err != nil {
+			return domain.Post{}, err
+		}
+		rootID := strings.TrimSpace(current.ID)
+		if current.RootPostID != nil && strings.TrimSpace(*current.RootPostID) != "" {
+			rootID = strings.TrimSpace(*current.RootPostID)
+		}
+		if err := s.Store.UpdateThreadEditable(ctx, rootID, steps); err != nil {
+			return domain.Post{}, err
+		}
+		return s.Store.GetPost(ctx, rootID)
+	}
+
+	text := strings.TrimSpace(in.Text)
+	if text == "" {
+		return domain.Post{}, ErrTextRequired
 	}
 	if err := s.Store.UpdatePostEditable(ctx, postID, text, scheduledAt); err != nil {
 		return domain.Post{}, err

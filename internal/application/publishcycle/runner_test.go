@@ -34,6 +34,15 @@ func (f *fakeStore) GetAccount(_ context.Context, id string) (domain.SocialAccou
 	return account, nil
 }
 
+func (f *fakeStore) GetPost(_ context.Context, id string) (domain.Post, error) {
+	for _, post := range f.duePosts {
+		if post.ID == id {
+			return post, nil
+		}
+	}
+	return domain.Post{}, errors.New("post not found")
+}
+
 func (f *fakeStore) RecordPublishFailure(context.Context, string, error, time.Duration) error {
 	f.recordFailureCalls++
 	return nil
@@ -98,7 +107,7 @@ func (f *fakeProvider) ValidateDraft(context.Context, domain.SocialAccount, publ
 	return nil, nil
 }
 
-func (f *fakeProvider) Publish(context.Context, domain.SocialAccount, publisher.Credentials, domain.Post) (string, error) {
+func (f *fakeProvider) Publish(context.Context, domain.SocialAccount, publisher.Credentials, domain.Post, publisher.PublishOptions) (string, error) {
 	f.publishCalls++
 	if f.publishErr != nil {
 		return "", f.publishErr
@@ -251,7 +260,7 @@ type authRetryProvider struct {
 	fakeProvider
 }
 
-func (p *authRetryProvider) Publish(ctx context.Context, account domain.SocialAccount, credentials publisher.Credentials, post domain.Post) (string, error) {
+func (p *authRetryProvider) Publish(context.Context, domain.SocialAccount, publisher.Credentials, domain.Post, publisher.PublishOptions) (string, error) {
 	p.publishCalls++
 	if p.publishCalls == 1 {
 		return "", errors.New("401 unauthorized")

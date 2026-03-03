@@ -217,18 +217,24 @@ func runPostsCreate(ctx context.Context, client *APIClient, cfg config, args []s
 	var scheduledAt string
 	var maxAttempts int
 	var idempotencyKey string
+	var segmentsJSON string
 	var mediaIDs stringListFlag
 	fs.StringVar(&accountID, "account-id", "", "Target account ID")
 	fs.StringVar(&text, "text", "", "Post content")
 	fs.StringVar(&scheduledAt, "scheduled-at", "", "Scheduled datetime (RFC3339)")
+	fs.StringVar(&segmentsJSON, "segments-json", "", "Thread segments JSON: [{\"text\":\"...\",\"media_ids\":[\"med_x\"]}]")
 	fs.IntVar(&maxAttempts, "max-attempts", 0, "Max publish retries")
 	fs.StringVar(&idempotencyKey, "idempotency-key", "", "Idempotency key")
 	fs.Var(&mediaIDs, "media-id", "Media ID (repeatable)")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
-	if strings.TrimSpace(text) == "" {
-		fmt.Fprintln(stderr, "--text is required")
+	if strings.TrimSpace(text) == "" && strings.TrimSpace(segmentsJSON) == "" {
+		fmt.Fprintln(stderr, "--text is required (or --segments-json)")
+		return 2
+	}
+	if strings.TrimSpace(text) != "" && strings.TrimSpace(segmentsJSON) != "" {
+		fmt.Fprintln(stderr, "--text and --segments-json are mutually exclusive")
 		return 2
 	}
 	if strings.TrimSpace(accountID) == "" {
@@ -240,6 +246,16 @@ func runPostsCreate(ctx context.Context, client *APIClient, cfg config, args []s
 		"account_id": strings.TrimSpace(accountID),
 		"text":       text,
 		"media_ids":  []string(mediaIDs),
+	}
+	if strings.TrimSpace(segmentsJSON) != "" {
+		var segments []map[string]any
+		if err := json.Unmarshal([]byte(strings.TrimSpace(segmentsJSON)), &segments); err != nil {
+			fmt.Fprintf(stderr, "--segments-json must be valid JSON array: %v\n", err)
+			return 2
+		}
+		payload["segments"] = segments
+		delete(payload, "text")
+		delete(payload, "media_ids")
 	}
 	if strings.TrimSpace(scheduledAt) != "" {
 		payload["scheduled_at"] = strings.TrimSpace(scheduledAt)
@@ -276,17 +292,23 @@ func runPostsValidate(ctx context.Context, client *APIClient, cfg config, args [
 	var text string
 	var scheduledAt string
 	var maxAttempts int
+	var segmentsJSON string
 	var mediaIDs stringListFlag
 	fs.StringVar(&accountID, "account-id", "", "Target account ID")
 	fs.StringVar(&text, "text", "", "Post content")
 	fs.StringVar(&scheduledAt, "scheduled-at", "", "Scheduled datetime (RFC3339)")
+	fs.StringVar(&segmentsJSON, "segments-json", "", "Thread segments JSON: [{\"text\":\"...\",\"media_ids\":[\"med_x\"]}]")
 	fs.IntVar(&maxAttempts, "max-attempts", 0, "Max publish retries")
 	fs.Var(&mediaIDs, "media-id", "Media ID (repeatable)")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
-	if strings.TrimSpace(text) == "" {
-		fmt.Fprintln(stderr, "--text is required")
+	if strings.TrimSpace(text) == "" && strings.TrimSpace(segmentsJSON) == "" {
+		fmt.Fprintln(stderr, "--text is required (or --segments-json)")
+		return 2
+	}
+	if strings.TrimSpace(text) != "" && strings.TrimSpace(segmentsJSON) != "" {
+		fmt.Fprintln(stderr, "--text and --segments-json are mutually exclusive")
 		return 2
 	}
 	if strings.TrimSpace(accountID) == "" {
@@ -298,6 +320,16 @@ func runPostsValidate(ctx context.Context, client *APIClient, cfg config, args [
 		"account_id": strings.TrimSpace(accountID),
 		"text":       text,
 		"media_ids":  []string(mediaIDs),
+	}
+	if strings.TrimSpace(segmentsJSON) != "" {
+		var segments []map[string]any
+		if err := json.Unmarshal([]byte(strings.TrimSpace(segmentsJSON)), &segments); err != nil {
+			fmt.Fprintf(stderr, "--segments-json must be valid JSON array: %v\n", err)
+			return 2
+		}
+		payload["segments"] = segments
+		delete(payload, "text")
+		delete(payload, "media_ids")
 	}
 	if strings.TrimSpace(scheduledAt) != "" {
 		payload["scheduled_at"] = strings.TrimSpace(scheduledAt)

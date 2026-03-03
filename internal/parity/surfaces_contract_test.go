@@ -103,6 +103,35 @@ func TestRequiredCapabilitiesBehaviorParity(t *testing.T) {
 		}
 	})
 
+	t.Run("posts.thread.create", func(t *testing.T) {
+		threadSegments := []map[string]any{
+			{"text": "thread root"},
+			{"text": "thread follow up 1"},
+			{"text": "thread follow up 2"},
+		}
+		apiIDs := env.apiCreateThread(threadSegments)
+		cliIDs := env.cliCreateThread(`[{"text":"thread root"},{"text":"thread follow up 1"},{"text":"thread follow up 2"}]`)
+		mcpIDs := env.mcpCreateThread(threadSegments)
+
+		assertThreadLength(t, env, "api", apiIDs, 3)
+		assertThreadLength(t, env, "cli", cliIDs, 3)
+		assertThreadLength(t, env, "mcp", mcpIDs, 3)
+	})
+
+	t.Run("posts.thread.validate", func(t *testing.T) {
+		threadSegments := []map[string]any{
+			{"text": "validate root"},
+			{"text": "validate follow up 1"},
+			{"text": "validate follow up 2"},
+		}
+		apiValid := env.apiValidateThread(threadSegments)
+		cliValid := env.cliValidateThread(`[{"text":"validate root"},{"text":"validate follow up 1"},{"text":"validate follow up 2"}]`)
+		mcpValid := env.mcpValidateThread(threadSegments)
+		if !apiValid || !cliValid || !mcpValid {
+			t.Fatalf("expected valid=true on thread validate on all surfaces, got api=%t cli=%t mcp=%t", apiValid, cliValid, mcpValid)
+		}
+	})
+
 	t.Run("failed.list", func(t *testing.T) {
 		dlqID := env.seedFailedDeadLetter("failed list parity")
 		assertContainsID(t, "api failed list", env.apiDLQListIDs(), dlqID)
@@ -182,6 +211,28 @@ func assertNotContainsID(t *testing.T, label string, ids []string, banned string
 	for _, id := range ids {
 		if strings.TrimSpace(id) == banned {
 			t.Fatalf("%s still contains %q; got=%v", label, banned, ids)
+		}
+	}
+}
+
+func assertThreadLength(t *testing.T, env *parityEnv, source string, ids []string, expected int) {
+	t.Helper()
+	if len(ids) == 0 {
+		t.Fatalf("%s thread create returned no ids", source)
+	}
+	rootID := strings.TrimSpace(ids[0])
+	posts, err := env.store.ListThreadPosts(t.Context(), rootID)
+	if err != nil {
+		t.Fatalf("%s list thread posts: %v", source, err)
+	}
+	if len(posts) != expected {
+		t.Fatalf("%s expected thread length %d, got %d", source, expected, len(posts))
+	}
+	expectedTexts := []string{"thread root", "thread follow up 1", "thread follow up 2"}
+	for i := 0; i < expected; i++ {
+		expectedText := expectedTexts[i]
+		if strings.TrimSpace(posts[i].Text) != expectedText {
+			t.Fatalf("%s expected step %d text %q, got %q", source, i+1, expectedText, strings.TrimSpace(posts[i].Text))
 		}
 	}
 }

@@ -30,7 +30,7 @@ func (p *oauthLifecycleProvider) ValidateDraft(_ context.Context, _ domain.Socia
 	return nil, nil
 }
 
-func (p *oauthLifecycleProvider) Publish(_ context.Context, _ domain.SocialAccount, _ publisher.Credentials, _ domain.Post) (string, error) {
+func (p *oauthLifecycleProvider) Publish(_ context.Context, _ domain.SocialAccount, _ publisher.Credentials, _ domain.Post, _ publisher.PublishOptions) (string, error) {
 	return "ok", nil
 }
 

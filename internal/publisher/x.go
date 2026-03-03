@@ -61,7 +61,7 @@ func NewXClient(cfg XConfig) (*XClient, error) {
 	}, nil
 }
 
-func (c *XClient) Publish(ctx context.Context, post domain.Post) (string, error) {
+func (c *XClient) Publish(ctx context.Context, post domain.Post, opts PublishOptions) (string, error) {
 	postText := formatPostTextForPublish(post.Text)
 	mediaIDs := make([]string, 0, len(post.Media))
 	for _, m := range post.Media {
@@ -71,7 +71,7 @@ func (c *XClient) Publish(ctx context.Context, post domain.Post) (string, error)
 		}
 		mediaIDs = append(mediaIDs, mediaID)
 	}
-	id, err := c.createStatus(ctx, postText, mediaIDs)
+	id, err := c.createStatus(ctx, postText, mediaIDs, opts)
 	if err != nil {
 		return "", fmt.Errorf("create post: %w", err)
 	}
@@ -267,13 +267,18 @@ func (c *XClient) waitForProcessing(ctx context.Context, mediaID string, info *p
 	}
 }
 
-func (c *XClient) createStatus(ctx context.Context, text string, mediaIDs []string) (string, error) {
+func (c *XClient) createStatus(ctx context.Context, text string, mediaIDs []string, opts PublishOptions) (string, error) {
 	payload := map[string]any{
 		"text": text,
 	}
 	if len(mediaIDs) > 0 {
 		payload["media"] = map[string]any{
 			"media_ids": mediaIDs,
+		}
+	}
+	if strings.TrimSpace(opts.ParentExternalID) != "" && opts.Mode == PublishModeReply {
+		payload["reply"] = map[string]any{
+			"in_reply_to_tweet_id": strings.TrimSpace(opts.ParentExternalID),
 		}
 	}
 	bodyJSON, err := json.Marshal(payload)

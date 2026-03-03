@@ -161,9 +161,57 @@ func (e *parityEnv) mcpCreatePost(text string) string {
 	return strings.TrimSpace(stringValue(post, "id"))
 }
 
+func (e *parityEnv) mcpCreateThread(segments []map[string]any) []string {
+	e.t.Helper()
+	rootText := ""
+	if len(segments) > 0 {
+		rootText = strings.TrimSpace(stringValue(segments[0], "text"))
+	}
+	out := e.mcpCallTool("publisher_create_post", map[string]any{
+		"account_id": e.account.ID,
+		"text":       rootText,
+		"segments":   segments,
+	})
+	if post, ok := out["post"].(map[string]any); ok {
+		postID := strings.TrimSpace(stringValue(post, "id"))
+		if postID != "" {
+			return []string{postID}
+		}
+	}
+	items, _ := out["items"].([]any)
+	ids := make([]string, 0, len(items))
+	for _, rawItem := range items {
+		item, _ := rawItem.(map[string]any)
+		postID := strings.TrimSpace(stringValue(item, "id"))
+		if postID == "" {
+			continue
+		}
+		ids = append(ids, postID)
+	}
+	if len(ids) == 0 {
+		e.t.Fatalf("expected thread post ids in mcp response")
+	}
+	return ids
+}
+
 func (e *parityEnv) mcpValidatePost(text string) bool {
 	e.t.Helper()
 	out := e.mcpCallTool("publisher_validate_post", map[string]any{"account_id": e.account.ID, "text": text})
+	valid, _ := out["valid"].(bool)
+	return valid
+}
+
+func (e *parityEnv) mcpValidateThread(segments []map[string]any) bool {
+	e.t.Helper()
+	rootText := ""
+	if len(segments) > 0 {
+		rootText = strings.TrimSpace(stringValue(segments[0], "text"))
+	}
+	out := e.mcpCallTool("publisher_validate_post", map[string]any{
+		"account_id": e.account.ID,
+		"text":       rootText,
+		"segments":   segments,
+	})
 	valid, _ := out["valid"].(bool)
 	return valid
 }

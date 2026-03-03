@@ -211,7 +211,7 @@ func TestWorkerFailurePathTransientMediaDeferralReschedules(t *testing.T) {
 
 	provider := &workerScenarioProvider{
 		platform: domain.PlatformInstagram,
-		publishFn: func(context.Context, domain.SocialAccount, publisher.Credentials, domain.Post) (string, error) {
+		publishFn: func(context.Context, domain.SocialAccount, publisher.Credentials, domain.Post, publisher.PublishOptions) (string, error) {
 			return "", errors.New("instagram error 2207027: media id is not available")
 		},
 	}
@@ -255,6 +255,10 @@ func (s getAccountErrorStore) ClaimDuePosts(ctx context.Context, limit int) ([]d
 
 func (s getAccountErrorStore) GetAccount(context.Context, string) (domain.SocialAccount, error) {
 	return domain.SocialAccount{}, s.accountErr
+}
+
+func (s getAccountErrorStore) GetPost(ctx context.Context, id string) (domain.Post, error) {
+	return s.base.GetPost(ctx, id)
 }
 
 func (s getAccountErrorStore) RecordPublishFailure(ctx context.Context, id string, postErr error, retryBackoff time.Duration) error {
@@ -301,7 +305,7 @@ func (s forcedCredentialsStore) SaveCredentials(ctx context.Context, accountID s
 
 type workerScenarioProvider struct {
 	platform  domain.Platform
-	publishFn func(context.Context, domain.SocialAccount, publisher.Credentials, domain.Post) (string, error)
+	publishFn func(context.Context, domain.SocialAccount, publisher.Credentials, domain.Post, publisher.PublishOptions) (string, error)
 	refreshFn func(context.Context, domain.SocialAccount, publisher.Credentials) (publisher.Credentials, bool, error)
 }
 
@@ -313,9 +317,9 @@ func (p *workerScenarioProvider) ValidateDraft(context.Context, domain.SocialAcc
 	return nil, nil
 }
 
-func (p *workerScenarioProvider) Publish(ctx context.Context, account domain.SocialAccount, credentials publisher.Credentials, post domain.Post) (string, error) {
+func (p *workerScenarioProvider) Publish(ctx context.Context, account domain.SocialAccount, credentials publisher.Credentials, post domain.Post, opts publisher.PublishOptions) (string, error) {
 	if p.publishFn != nil {
-		return p.publishFn(ctx, account, credentials, post)
+		return p.publishFn(ctx, account, credentials, post, opts)
 	}
 	return "ext_" + post.ID, nil
 }

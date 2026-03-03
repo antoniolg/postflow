@@ -28,7 +28,7 @@ func (p *oauthReplayTestProvider) ValidateDraft(_ context.Context, _ domain.Soci
 	return nil, nil
 }
 
-func (p *oauthReplayTestProvider) Publish(_ context.Context, _ domain.SocialAccount, _ publisher.Credentials, _ domain.Post) (string, error) {
+func (p *oauthReplayTestProvider) Publish(_ context.Context, _ domain.SocialAccount, _ publisher.Credentials, _ domain.Post, _ publisher.PublishOptions) (string, error) {
 	return "ok", nil
 }
 

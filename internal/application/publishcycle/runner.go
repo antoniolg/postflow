@@ -2,6 +2,7 @@ package publishcycle
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"strings"
 	"time"
@@ -14,6 +15,7 @@ import (
 type Store interface {
 	ClaimDuePosts(ctx context.Context, limit int) ([]domain.Post, error)
 	GetAccount(ctx context.Context, id string) (domain.SocialAccount, error)
+	GetPost(ctx context.Context, id string) (domain.Post, error)
 	RecordPublishFailure(ctx context.Context, id string, postErr error, retryBackoff time.Duration) error
 	ReschedulePublishWithoutAttempt(ctx context.Context, id string, postErr error, retryDelay time.Duration) error
 	MarkPublished(ctx context.Context, id, externalID string) error
@@ -45,10 +47,19 @@ func (r Runner) RunOnce(ctx context.Context) {
 	}
 
 	for _, post := range posts {
+		rootPostID := strings.TrimSpace(post.ID)
+		if post.RootPostID != nil && strings.TrimSpace(*post.RootPostID) != "" {
+			rootPostID = strings.TrimSpace(*post.RootPostID)
+		}
+		threadPosition := post.ThreadPosition
+		if threadPosition <= 0 {
+			threadPosition = 1
+		}
+		threadGroupID := strings.TrimSpace(post.ThreadGroupID)
 		account, err := r.Store.GetAccount(ctx, post.AccountID)
 		if err != nil {
 			_ = r.Store.RecordPublishFailure(ctx, post.ID, err, r.RetryBackoff)
-			logger.Error("worker account lookup failed", "post_id", post.ID, "account_id", post.AccountID, "error", err)
+			logger.Error("worker account lookup failed", "post_id", post.ID, "root_post_id", rootPostID, "thread_group_id", threadGroupID, "thread_position", threadPosition, "account_id", post.AccountID, "error", err)
 			continue
 		}
 
@@ -56,14 +67,14 @@ func (r Runner) RunOnce(ctx context.Context) {
 		if !ok {
 			err := errUnsupportedPlatform(account.Platform)
 			_ = r.Store.RecordPublishFailure(ctx, post.ID, err, r.RetryBackoff)
-			logger.Error("worker provider not found", "post_id", post.ID, "platform", account.Platform)
+			logger.Error("worker provider not found", "post_id", post.ID, "root_post_id", rootPostID, "thread_group_id", threadGroupID, "thread_position", threadPosition, "platform", account.Platform)
 			continue
 		}
 
 		credentials, err := r.Credentials.LoadCredentials(ctx, account.ID)
 		if err != nil {
 			_ = r.Store.RecordPublishFailure(ctx, post.ID, err, r.RetryBackoff)
-			logger.Error("worker credentials load failed", "post_id", post.ID, "account_id", account.ID, "error", err)
+			logger.Error("worker credentials load failed", "post_id", post.ID, "root_post_id", rootPostID, "thread_group_id", threadGroupID, "thread_position", threadPosition, "account_id", account.ID, "error", err)
 			continue
 		}
 
@@ -71,37 +82,61 @@ func (r Runner) RunOnce(ctx context.Context) {
 		if err != nil {
 			_ = r.Store.RecordPublishFailure(ctx, post.ID, err, r.RetryBackoff)
 			_ = r.Store.UpdateAccountStatus(ctx, account.ID, domain.AccountStatusError, ptr(err.Error()))
-			logger.Error("worker proactive refresh failed", "post_id", post.ID, "account_id", account.ID, "error", err)
+			logger.Error("worker proactive refresh failed", "post_id", post.ID, "root_post_id", rootPostID, "thread_group_id", threadGroupID, "thread_position", threadPosition, "account_id", account.ID, "error", err)
 			continue
 		}
 
-		externalID, err := provider.Publish(ctx, account, credentials, post)
+		publishOpts := publisher.PublishOptions{
+			Mode: publisher.PublishModeRoot,
+		}
+		if post.ParentPostID != nil && strings.TrimSpace(*post.ParentPostID) != "" {
+			parent, err := r.Store.GetPost(ctx, strings.TrimSpace(*post.ParentPostID))
+			if err != nil {
+				_ = r.Store.RecordPublishFailure(ctx, post.ID, err, r.RetryBackoff)
+				logger.Error("worker parent lookup failed", "post_id", post.ID, "root_post_id", rootPostID, "thread_group_id", threadGroupID, "thread_position", threadPosition, "parent_post_id", strings.TrimSpace(*post.ParentPostID), "error", err)
+				continue
+			}
+			if parent.ExternalID == nil || strings.TrimSpace(*parent.ExternalID) == "" {
+				err := errors.New("parent post external id is missing")
+				_ = r.Store.RecordPublishFailure(ctx, post.ID, err, r.RetryBackoff)
+				logger.Error("worker parent external id missing", "post_id", post.ID, "root_post_id", rootPostID, "thread_group_id", threadGroupID, "thread_position", threadPosition, "parent_post_id", parent.ID)
+				continue
+			}
+			publishOpts.ParentExternalID = strings.TrimSpace(*parent.ExternalID)
+			if post.Platform == domain.PlatformX {
+				publishOpts.Mode = publisher.PublishModeReply
+			} else {
+				publishOpts.Mode = publisher.PublishModeComment
+			}
+		}
+
+		externalID, err := provider.Publish(ctx, account, credentials, post, publishOpts)
 		if err != nil && isAuthFailure(err) {
 			credentials, err = r.refreshIfNeeded(ctx, provider, account, credentials, true)
 			if err == nil {
-				externalID, err = provider.Publish(ctx, account, credentials, post)
+				externalID, err = provider.Publish(ctx, account, credentials, post, publishOpts)
 			}
 		}
 		if err != nil {
 			if isTransientMediaProcessingError(err) {
 				_ = r.Store.ReschedulePublishWithoutAttempt(ctx, post.ID, err, r.Interval)
-				logger.Warn("worker publish deferred while media is processing", "post_id", post.ID, "account_id", account.ID, "platform", post.Platform, "error", err)
+				logger.Warn("worker publish deferred while media is processing", "post_id", post.ID, "root_post_id", rootPostID, "thread_group_id", threadGroupID, "thread_position", threadPosition, "account_id", account.ID, "platform", post.Platform, "error", err)
 				continue
 			}
 			_ = r.Store.RecordPublishFailure(ctx, post.ID, err, r.RetryBackoff)
 			if isAuthFailure(err) {
 				_ = r.Store.UpdateAccountStatus(ctx, account.ID, domain.AccountStatusError, ptr(err.Error()))
 			}
-			logger.Error("worker publish failed", "post_id", post.ID, "account_id", account.ID, "platform", post.Platform, "attempt", post.Attempts+1, "error", err)
+			logger.Error("worker publish failed", "post_id", post.ID, "root_post_id", rootPostID, "thread_group_id", threadGroupID, "thread_position", threadPosition, "account_id", account.ID, "platform", post.Platform, "attempt", post.Attempts+1, "error", err)
 			continue
 		}
 
 		if err := r.Store.MarkPublished(ctx, post.ID, externalID); err != nil {
-			logger.Error("worker mark published failed", "post_id", post.ID, "external_id", externalID, "error", err)
+			logger.Error("worker mark published failed", "post_id", post.ID, "root_post_id", rootPostID, "thread_group_id", threadGroupID, "thread_position", threadPosition, "external_id", externalID, "error", err)
 			continue
 		}
 		_ = r.Store.UpdateAccountStatus(ctx, account.ID, domain.AccountStatusConnected, nil)
-		logger.Info("worker published post", "post_id", post.ID, "platform", post.Platform, "external_id", externalID)
+		logger.Info("worker published post", "post_id", post.ID, "root_post_id", rootPostID, "thread_group_id", threadGroupID, "thread_position", threadPosition, "platform", post.Platform, "external_id", externalID)
 	}
 }
 

@@ -131,6 +131,11 @@ Main MCP tools available:
 - `publisher_delete_failed`
 - `publisher_set_timezone`
 
+Thread payload support (same shape in API/MCP/CLI):
+- `segments`: `[{ "text": "...", "media_ids": ["med_x"] }]`
+- If `segments` is present, step `1` is the root post and steps `2..N` are follow-ups.
+- Backward compatibility is preserved for legacy `text` + `media_ids`.
+
 ### Codex CLI
 
 ```bash
@@ -191,6 +196,8 @@ postflow health
 postflow schedule list --from 2026-03-01T00:00:00Z --to 2026-03-31T23:59:59Z
 postflow drafts list --limit 20
 postflow posts validate --account-id acc_xxx --text "hello"
+postflow posts validate --account-id acc_xxx --segments-json '[{"text":"root"},{"text":"reply 1"}]'
+postflow posts create --account-id acc_xxx --segments-json '[{"text":"root"},{"text":"reply 1","media_ids":["med_x"]}]' --scheduled-at 2026-03-01T10:00:00Z
 postflow posts schedule --id pst_xxx --scheduled-at 2026-03-01T10:00:00Z
 postflow posts edit --id pst_xxx --text "copy updated" --intent schedule --scheduled-at 2026-03-01T10:30:00Z
 postflow posts delete --id pst_xxx
@@ -200,6 +207,8 @@ postflow accounts create-static --platform x --external-account-id x-default --c
 postflow settings set-timezone --timezone Europe/Madrid
 postflow media list --limit 20
 ```
+
+`--text` and `--segments-json` are mutually exclusive on `posts create` and `posts validate`.
 
 ---
 

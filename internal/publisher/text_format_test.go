@@ -61,7 +61,7 @@ func TestXProviderPublishSendsPlainText(t *testing.T) {
 	}, domain.Post{
 		Platform: domain.PlatformX,
 		Text:     "Hola **mundo** _equipo_",
-	})
+	}, PublishOptions{})
 	if err != nil {
 		t.Fatalf("publish: %v", err)
 	}

@@ -28,6 +28,11 @@ var dbMigrations = []migration{
 		Name:    "accounts_x_premium",
 		Up:      migrationAddAccountsXPremium,
 	},
+	{
+		Version: 3,
+		Name:    "posts_threads",
+		Up:      migrationAddPostsThreads,
+	},
 }
 
 func (s *Store) hasPendingMigrations(ctx context.Context) (bool, error) {
@@ -198,6 +203,10 @@ func migrationInitialSchema(ctx context.Context, tx *sql.Tx) error {
 			text TEXT NOT NULL,
 			status TEXT NOT NULL,
 			scheduled_at TEXT NOT NULL,
+			thread_group_id TEXT NOT NULL DEFAULT '',
+			thread_position INTEGER NOT NULL DEFAULT 1,
+			parent_post_id TEXT,
+			root_post_id TEXT,
 			next_retry_at TEXT,
 			attempts INTEGER NOT NULL DEFAULT 0,
 			max_attempts INTEGER NOT NULL DEFAULT 3,
@@ -251,6 +260,45 @@ func migrationAddAccountsXPremium(ctx context.Context, tx *sql.Tx) error {
 		return nil
 	}
 	return err
+}
+
+func migrationAddPostsThreads(ctx context.Context, tx *sql.Tx) error {
+	columns := []string{
+		`ALTER TABLE posts ADD COLUMN thread_group_id TEXT NOT NULL DEFAULT '';`,
+		`ALTER TABLE posts ADD COLUMN thread_position INTEGER NOT NULL DEFAULT 1;`,
+		`ALTER TABLE posts ADD COLUMN parent_post_id TEXT;`,
+		`ALTER TABLE posts ADD COLUMN root_post_id TEXT;`,
+	}
+	for _, query := range columns {
+		if _, err := tx.ExecContext(ctx, query); err != nil {
+			if strings.Contains(strings.ToLower(err.Error()), "duplicate column name") {
+				continue
+			}
+			return err
+		}
+	}
+	updates := []string{
+		`UPDATE posts SET thread_group_id = id WHERE TRIM(COALESCE(thread_group_id, '')) = '';`,
+		`UPDATE posts SET thread_position = 1 WHERE thread_position IS NULL OR thread_position <= 0;`,
+		`UPDATE posts SET root_post_id = id WHERE TRIM(COALESCE(root_post_id, '')) = '';`,
+	}
+	for _, query := range updates {
+		if _, err := tx.ExecContext(ctx, query); err != nil {
+			return err
+		}
+	}
+
+	indexes := []string{
+		`CREATE INDEX IF NOT EXISTS idx_posts_thread_group_position ON posts(thread_group_id, thread_position);`,
+		`CREATE INDEX IF NOT EXISTS idx_posts_parent_status ON posts(parent_post_id, status);`,
+		`CREATE INDEX IF NOT EXISTS idx_posts_root ON posts(root_post_id);`,
+	}
+	for _, query := range indexes {
+		if _, err := tx.ExecContext(ctx, query); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func backupSQLiteDatabase(path string) error {

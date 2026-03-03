@@ -72,7 +72,7 @@ func (p *LinkedInProvider) ValidateDraft(_ context.Context, _ domain.SocialAccou
 	return nil, nil
 }
 
-func (p *LinkedInProvider) Publish(ctx context.Context, account domain.SocialAccount, credentials Credentials, post domain.Post) (string, error) {
+func (p *LinkedInProvider) Publish(ctx context.Context, account domain.SocialAccount, credentials Credentials, post domain.Post, opts PublishOptions) (string, error) {
 	postText := formatPostTextForPublish(post.Text)
 	token := strings.TrimSpace(credentials.AccessToken)
 	if token == "" {
@@ -81,6 +81,16 @@ func (p *LinkedInProvider) Publish(ctx context.Context, account domain.SocialAcc
 	memberID := strings.TrimSpace(account.ExternalAccountID)
 	if memberID == "" {
 		return "", fmt.Errorf("linkedin external account id is required")
+	}
+	if opts.Mode == PublishModeComment {
+		if len(post.Media) > 0 {
+			return "", fmt.Errorf("linkedin thread comments do not support media in this release")
+		}
+		parentExternalID := strings.TrimSpace(opts.ParentExternalID)
+		if parentExternalID == "" {
+			return "", fmt.Errorf("linkedin parent external id is required for comment mode")
+		}
+		return p.publishComment(ctx, token, memberID, parentExternalID, postText)
 	}
 	assetURNs := make([]string, 0, len(post.Media))
 	videoCount := 0
@@ -170,6 +180,45 @@ func (p *LinkedInProvider) Publish(ctx context.Context, account domain.SocialAcc
 	}
 	if strings.TrimSpace(out.ID) == "" {
 		return fmt.Sprintf("linkedin_%d", time.Now().Unix()), nil
+	}
+	return strings.TrimSpace(out.ID), nil
+}
+
+func (p *LinkedInProvider) publishComment(ctx context.Context, accessToken, memberID, parentExternalID, text string) (string, error) {
+	target := strings.TrimSpace(parentExternalID)
+	if target == "" {
+		return "", fmt.Errorf("linkedin comment target is required")
+	}
+	payload := map[string]any{
+		"actor":   "urn:li:person:" + strings.TrimSpace(memberID),
+		"message": map[string]any{"text": strings.TrimSpace(text)},
+	}
+	raw, _ := json.Marshal(payload)
+	endpoint := strings.TrimRight(p.cfg.APIBaseURL, "/") + "/v2/socialActions/" + url.PathEscape(target) + "/comments"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(raw))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(accessToken))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Restli-Protocol-Version", "2.0.0")
+	resp, err := p.client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+	if resp.StatusCode >= 300 {
+		return "", fmt.Errorf("linkedin comment failed: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	var out struct {
+		ID string `json:"id"`
+	}
+	if len(body) > 0 {
+		_ = json.Unmarshal(body, &out)
+	}
+	if strings.TrimSpace(out.ID) == "" {
+		return fmt.Sprintf("linkedin_comment_%d", time.Now().Unix()), nil
 	}
 	return strings.TrimSpace(out.ID), nil
 }

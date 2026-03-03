@@ -13,10 +13,15 @@ import (
 	postsapp "github.com/antoniolg/publisher/internal/application/posts"
 )
 
+const maxPostRequestBodyBytes = 4 * 1024 * 1024
+
 func parseCreatePostRequest(r *http.Request) (createPostRequest, bool, error) {
 	rawBody, readErr := io.ReadAll(r.Body)
 	if readErr != nil {
 		return createPostRequest{}, false, fmt.Errorf("read body: %w", readErr)
+	}
+	if len(rawBody) > maxPostRequestBodyBytes {
+		return createPostRequest{}, false, fmt.Errorf("request body too large (max %d bytes)", maxPostRequestBodyBytes)
 	}
 	r.Body = io.NopCloser(bytes.NewReader(rawBody))
 
@@ -29,6 +34,7 @@ func parseCreatePostRequest(r *http.Request) (createPostRequest, bool, error) {
 		if err := json.Unmarshal(rawBody, &req); err != nil {
 			return createPostRequest{}, false, fmt.Errorf("invalid json body: %w", err)
 		}
+		req.Segments = normalizeRequestSegments(req.Segments)
 		normalizedIDs := make([]string, 0, len(req.AccountIDs))
 		for _, rawID := range req.AccountIDs {
 			id := strings.TrimSpace(rawID)
@@ -83,7 +89,40 @@ func parseCreatePostRequest(r *http.Request) (createPostRequest, bool, error) {
 		}
 		req.MediaIDs = append(req.MediaIDs, id)
 	}
+	if rawSegments := strings.TrimSpace(r.FormValue("segments_json")); rawSegments != "" {
+		var parsed []createPostSegment
+		if err := json.Unmarshal([]byte(rawSegments), &parsed); err != nil {
+			return createPostRequest{}, true, fmt.Errorf("segments_json must be valid json: %w", err)
+		}
+		req.Segments = normalizeRequestSegments(parsed)
+	}
 	return req, true, nil
+}
+
+func normalizeRequestSegments(raw []createPostSegment) []createPostSegment {
+	if len(raw) == 0 {
+		return nil
+	}
+	out := make([]createPostSegment, 0, len(raw))
+	for _, segment := range raw {
+		text := strings.TrimSpace(segment.Text)
+		if text == "" {
+			continue
+		}
+		normalizedMedia := make([]string, 0, len(segment.MediaIDs))
+		for _, rawMediaID := range segment.MediaIDs {
+			mediaID := strings.TrimSpace(rawMediaID)
+			if mediaID == "" {
+				continue
+			}
+			normalizedMedia = append(normalizedMedia, mediaID)
+		}
+		out = append(out, createPostSegment{
+			Text:     text,
+			MediaIDs: normalizedMedia,
+		})
+	}
+	return out
 }
 
 func parseScheduledAtInput(raw string) (time.Time, error) {

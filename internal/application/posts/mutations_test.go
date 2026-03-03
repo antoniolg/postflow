@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/antoniolg/publisher/internal/db"
 	"github.com/antoniolg/publisher/internal/domain"
 )
 
@@ -18,6 +19,8 @@ type fakeMutationsStore struct {
 	updateID          string
 	updateText        string
 	updateScheduledAt time.Time
+	updateThreadRoot  string
+	updateThreadSteps []db.ThreadStepUpdate
 	post              domain.Post
 	err               error
 }
@@ -42,6 +45,12 @@ func (f *fakeMutationsStore) UpdatePostEditable(_ context.Context, id, text stri
 	f.updateID = id
 	f.updateText = text
 	f.updateScheduledAt = scheduledAt
+	return f.err
+}
+
+func (f *fakeMutationsStore) UpdateThreadEditable(_ context.Context, rootPostID string, steps []db.ThreadStepUpdate) error {
+	f.updateThreadRoot = rootPostID
+	f.updateThreadSteps = append([]db.ThreadStepUpdate(nil), steps...)
 	return f.err
 }
 
@@ -172,5 +181,23 @@ func TestMutationsServiceUpdateValidatesTextAndSchedule(t *testing.T) {
 	}, nil)
 	if !errors.Is(err, ErrScheduledAtNeeded) {
 		t.Fatalf("expected ErrScheduledAtNeeded, got %v", err)
+	}
+}
+
+func TestMutationsServiceUpdateRejectsTooManySegments(t *testing.T) {
+	store := &fakeMutationsStore{}
+	svc := MutationsService{Store: store}
+
+	segments := make([]ThreadSegmentInput, 0, MaxThreadSegments+1)
+	for i := 0; i < MaxThreadSegments+1; i++ {
+		segments = append(segments, ThreadSegmentInput{Text: "segment"})
+	}
+
+	_, err := svc.UpdateEditable(t.Context(), EditInput{
+		PostID:   "pst_1",
+		Segments: segments,
+	}, nil)
+	if !errors.Is(err, ErrThreadTooLong) {
+		t.Fatalf("expected ErrThreadTooLong, got %v", err)
 	}
 }

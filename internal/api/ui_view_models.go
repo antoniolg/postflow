@@ -20,6 +20,7 @@ type calendarEvent struct {
 	StatusLabel string
 	StatusKey   string
 	TextPreview string
+	ThreadLabel string
 	Platform    domain.Platform
 }
 
@@ -32,6 +33,7 @@ type dayDetailItem struct {
 	StatusLabel string
 	StatusKey   string
 	Text        string
+	ThreadLabel string
 	Platform    domain.Platform
 	MediaCount  int
 }
@@ -66,6 +68,11 @@ type createMediaAttachment struct {
 	PreviewURL string `json:"previewUrl"`
 }
 
+type createThreadSegment struct {
+	Text  string                  `json:"text"`
+	Media []createMediaAttachment `json:"media"`
+}
+
 type pageData struct {
 	Lang                      string
 	View                      string
@@ -90,6 +97,7 @@ type pageData struct {
 	Accounts                  []domain.SocialAccount
 	EditingPost               *domain.Post
 	CreateInitialMedia        []createMediaAttachment
+	CreateInitialSegments     []createThreadSegment
 	CreateAccountID           string
 	CreateText                string
 	CreateScheduledLocal      string

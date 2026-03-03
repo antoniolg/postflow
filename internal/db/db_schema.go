@@ -32,6 +32,12 @@ type CreatePostResult struct {
 	Created bool
 }
 
+type ThreadStepUpdate struct {
+	Text        string
+	ScheduledAt time.Time
+	MediaIDs    []string
+}
+
 type EncryptedCredentials struct {
 	Ciphertext []byte
 	Nonce      []byte

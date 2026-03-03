@@ -76,3 +76,30 @@ func TestValidatePostEndpointDraftMode(t *testing.T) {
 		t.Fatalf("expected empty scheduled_at in draft mode, got %q", scheduledAt)
 	}
 }
+
+func TestValidatePostEndpointRejectsTooManySegments(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	segments := make([]map[string]any, 0, 501)
+	for i := 0; i < 501; i++ {
+		segments = append(segments, map[string]any{"text": "segment"})
+	}
+	payload, _ := json.Marshal(map[string]any{
+		"account_id": testAccountID(t, store),
+		"segments":   segments,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/posts/validate", bytes.NewReader(payload))
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+}

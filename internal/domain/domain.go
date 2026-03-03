@@ -76,6 +76,10 @@ type Post struct {
 	Text           string     `json:"text"`
 	Status         PostStatus `json:"status"`
 	ScheduledAt    time.Time  `json:"scheduled_at"`
+	ThreadGroupID  string     `json:"thread_group_id,omitempty"`
+	ThreadPosition int        `json:"thread_position,omitempty"`
+	ParentPostID   *string    `json:"parent_post_id,omitempty"`
+	RootPostID     *string    `json:"root_post_id,omitempty"`
 	NextRetryAt    *time.Time `json:"next_retry_at,omitempty"`
 	Attempts       int        `json:"attempts"`
 	MaxAttempts    int        `json:"max_attempts"`

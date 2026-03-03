@@ -36,6 +36,18 @@ func (s *Store) CreatePost(ctx context.Context, params CreatePostParams) (Create
 		}
 		p.ID = id
 	}
+	if strings.TrimSpace(p.ThreadGroupID) == "" {
+		p.ThreadGroupID = p.ID
+	}
+	if p.ThreadPosition <= 0 {
+		p.ThreadPosition = 1
+	}
+	if p.RootPostID == nil || strings.TrimSpace(*p.RootPostID) == "" {
+		p.RootPostID = ptrTrimmedString(p.ID)
+	}
+	if p.ThreadPosition == 1 {
+		p.ParentPostID = nil
+	}
 	now := time.Now().UTC()
 	p.CreatedAt = now
 	p.UpdatedAt = now
@@ -60,9 +72,9 @@ func (s *Store) CreatePost(ctx context.Context, params CreatePostParams) (Create
 	defer tx.Rollback()
 
 	_, err = tx.ExecContext(ctx, `
-		INSERT INTO posts (id, account_id, text, status, scheduled_at, next_retry_at, attempts, max_attempts, idempotency_key, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, p.ID, p.AccountID, strings.TrimSpace(p.Text), p.Status, formatScheduledAt(p.ScheduledAt), sqlNullTimeString(p.NextRetryAt), p.Attempts, p.MaxAttempts, sqlNullString(p.IdempotencyKey), p.CreatedAt.Format(time.RFC3339Nano), p.UpdatedAt.Format(time.RFC3339Nano))
+		INSERT INTO posts (id, account_id, text, status, scheduled_at, thread_group_id, thread_position, parent_post_id, root_post_id, next_retry_at, attempts, max_attempts, idempotency_key, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, p.ID, p.AccountID, strings.TrimSpace(p.Text), p.Status, formatScheduledAt(p.ScheduledAt), strings.TrimSpace(p.ThreadGroupID), p.ThreadPosition, sqlNullString(p.ParentPostID), sqlNullString(p.RootPostID), sqlNullTimeString(p.NextRetryAt), p.Attempts, p.MaxAttempts, sqlNullString(p.IdempotencyKey), p.CreatedAt.Format(time.RFC3339Nano), p.UpdatedAt.Format(time.RFC3339Nano))
 	if err != nil {
 		if idempotencyKey != "" && strings.Contains(strings.ToLower(err.Error()), "unique") {
 			existing, findErr := s.GetPostByIdempotencyKey(ctx, idempotencyKey)
@@ -94,18 +106,44 @@ func (s *Store) GetPost(ctx context.Context, id string) (domain.Post, error) {
 	var scheduled, created, updated string
 	var published, nextRetry sql.NullString
 	var external, failed, idempotencyKey sql.NullString
+	var threadGroupID sql.NullString
+	var threadPosition sql.NullInt64
+	var parentPostID sql.NullString
+	var rootPostID sql.NullString
 	var platform string
 	err := s.db.QueryRowContext(ctx, `
-		SELECT p.id, p.account_id, a.platform, p.text, p.status, p.scheduled_at, p.next_retry_at, p.attempts, p.max_attempts, p.idempotency_key, p.published_at, p.external_id, p.error, p.created_at, p.updated_at
+		SELECT p.id, p.account_id, a.platform, p.text, p.status, p.scheduled_at, p.thread_group_id, p.thread_position, p.parent_post_id, p.root_post_id, p.next_retry_at, p.attempts, p.max_attempts, p.idempotency_key, p.published_at, p.external_id, p.error, p.created_at, p.updated_at
 		FROM posts p
 		JOIN accounts a ON a.id = p.account_id
 		WHERE p.id = ?
-	`, strings.TrimSpace(id)).Scan(&p.ID, &p.AccountID, &platform, &p.Text, &p.Status, &scheduled, &nextRetry, &p.Attempts, &p.MaxAttempts, &idempotencyKey, &published, &external, &failed, &created, &updated)
+	`, strings.TrimSpace(id)).Scan(&p.ID, &p.AccountID, &platform, &p.Text, &p.Status, &scheduled, &threadGroupID, &threadPosition, &parentPostID, &rootPostID, &nextRetry, &p.Attempts, &p.MaxAttempts, &idempotencyKey, &published, &external, &failed, &created, &updated)
 	if err != nil {
 		return domain.Post{}, err
 	}
 	p.Platform = domain.Platform(strings.TrimSpace(platform))
 	p.ScheduledAt, _ = time.Parse(time.RFC3339Nano, scheduled)
+	p.ThreadGroupID = strings.TrimSpace(threadGroupID.String)
+	if p.ThreadGroupID == "" {
+		p.ThreadGroupID = p.ID
+	}
+	if threadPosition.Valid && threadPosition.Int64 > 0 {
+		p.ThreadPosition = int(threadPosition.Int64)
+	} else {
+		p.ThreadPosition = 1
+	}
+	if parentPostID.Valid {
+		if trimmed := strings.TrimSpace(parentPostID.String); trimmed != "" {
+			p.ParentPostID = &trimmed
+		}
+	}
+	if rootPostID.Valid {
+		if trimmed := strings.TrimSpace(rootPostID.String); trimmed != "" {
+			p.RootPostID = &trimmed
+		}
+	}
+	if p.RootPostID == nil {
+		p.RootPostID = ptrTrimmedString(p.ID)
+	}
 	if nextRetry.Valid && strings.TrimSpace(nextRetry.String) != "" {
 		t, _ := time.Parse(time.RFC3339Nano, nextRetry.String)
 		p.NextRetryAt = &t
@@ -168,12 +206,51 @@ func (s *Store) GetPostByIdempotencyKey(ctx context.Context, idempotencyKey stri
 	return s.GetPost(ctx, id)
 }
 
+func (s *Store) ListThreadPosts(ctx context.Context, rootPostID string) ([]domain.Post, error) {
+	rootPostID = strings.TrimSpace(rootPostID)
+	if rootPostID == "" {
+		return nil, fmt.Errorf("root_post_id is required")
+	}
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id
+		FROM posts
+		WHERE id = ? OR root_post_id = ?
+		ORDER BY thread_position ASC, created_at ASC
+	`, rootPostID, rootPostID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	ids := make([]string, 0)
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	posts := make([]domain.Post, 0, len(ids))
+	for _, id := range ids {
+		post, err := s.GetPost(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		posts = append(posts, post)
+	}
+	return posts, nil
+}
+
 func (s *Store) ListSchedule(ctx context.Context, from, to time.Time) ([]domain.Post, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id
 		FROM posts
 		WHERE scheduled_at >= ? AND scheduled_at <= ?
-		ORDER BY scheduled_at ASC
+		ORDER BY scheduled_at ASC, thread_group_id ASC, thread_position ASC
 	`, from.UTC().Format(time.RFC3339Nano), to.UTC().Format(time.RFC3339Nano))
 	if err != nil {
 		return nil, err
@@ -239,11 +316,16 @@ func (s *Store) ListDrafts(ctx context.Context) ([]domain.Post, error) {
 }
 
 func (s *Store) ScheduleDraftPost(ctx context.Context, id string, scheduledAt time.Time) error {
+	rootID, err := s.resolveRootPostID(ctx, id)
+	if err != nil {
+		return fmt.Errorf("post not schedulable")
+	}
 	result, err := s.db.ExecContext(ctx, `
 		UPDATE posts
 		SET status = ?, scheduled_at = ?, next_retry_at = NULL, attempts = 0, error = NULL, updated_at = ?
-		WHERE id = ? AND status = ?
-	`, domain.PostStatusScheduled, formatScheduledAt(scheduledAt.UTC()), time.Now().UTC().Format(time.RFC3339Nano), strings.TrimSpace(id), domain.PostStatusDraft)
+		WHERE (id = ? OR root_post_id = ?)
+		  AND status IN (?, ?, ?, ?)
+	`, domain.PostStatusScheduled, formatScheduledAt(scheduledAt.UTC()), time.Now().UTC().Format(time.RFC3339Nano), rootID, rootID, domain.PostStatusDraft, domain.PostStatusScheduled, domain.PostStatusFailed, domain.PostStatusCanceled)
 	if err != nil {
 		return err
 	}
@@ -255,11 +337,16 @@ func (s *Store) ScheduleDraftPost(ctx context.Context, id string, scheduledAt ti
 }
 
 func (s *Store) CancelPost(ctx context.Context, id string) error {
+	rootID, err := s.resolveRootPostID(ctx, id)
+	if err != nil {
+		return fmt.Errorf("post not cancelable")
+	}
 	result, err := s.db.ExecContext(ctx, `
 		UPDATE posts
 		SET status = ?, updated_at = ?
-		WHERE id = ? AND status = ?
-	`, domain.PostStatusCanceled, time.Now().UTC().Format(time.RFC3339Nano), strings.TrimSpace(id), domain.PostStatusScheduled)
+		WHERE (id = ? OR root_post_id = ?)
+		  AND status = ?
+	`, domain.PostStatusCanceled, time.Now().UTC().Format(time.RFC3339Nano), rootID, rootID, domain.PostStatusScheduled)
 	if err != nil {
 		return err
 	}
@@ -282,35 +369,61 @@ func (s *Store) DeletePostEditable(ctx context.Context, id string) error {
 	}
 	defer tx.Rollback()
 
-	var status domain.PostStatus
-	err = tx.QueryRowContext(ctx, `SELECT status FROM posts WHERE id = ?`, id).Scan(&status)
+	rootID, err := resolveRootPostIDTx(ctx, tx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrPostNotDeletable
 		}
 		return err
 	}
-	switch status {
-	case domain.PostStatusDraft, domain.PostStatusScheduled, domain.PostStatusFailed, domain.PostStatusCanceled:
-	default:
-		return ErrPostNotDeletable
-	}
 
-	if _, err := tx.ExecContext(ctx, `DELETE FROM post_media WHERE post_id = ?`, id); err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM dead_letters WHERE post_id = ?`, id); err != nil {
-		return err
-	}
-	result, err := tx.ExecContext(ctx, `DELETE FROM posts WHERE id = ?`, id)
+	rows, err := tx.QueryContext(ctx, `
+		SELECT id, status
+		FROM posts
+		WHERE id = ? OR root_post_id = ?
+	`, rootID, rootID)
 	if err != nil {
 		return err
 	}
-	affected, _ := result.RowsAffected()
-	if affected == 0 {
+	defer rows.Close()
+
+	ids := make([]string, 0, 4)
+	for rows.Next() {
+		var postID string
+		var status domain.PostStatus
+		if err := rows.Scan(&postID, &status); err != nil {
+			return err
+		}
+		switch status {
+		case domain.PostStatusDraft, domain.PostStatusScheduled, domain.PostStatusFailed, domain.PostStatusCanceled:
+		default:
+			return ErrPostNotDeletable
+		}
+		ids = append(ids, postID)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if len(ids) == 0 {
 		return ErrPostNotDeletable
 	}
+
+	for _, postID := range ids {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM post_media WHERE post_id = ?`, postID); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM dead_letters WHERE post_id = ?`, postID); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM posts WHERE id = ?`, postID); err != nil {
+			return err
+		}
+	}
 	return tx.Commit()
+}
+
+func (s *Store) DeleteThreadEditable(ctx context.Context, rootPostID string) error {
+	return s.DeletePostEditable(ctx, rootPostID)
 }
 
 func (s *Store) UpdatePostEditable(ctx context.Context, id, text string, scheduledAt time.Time) error {
@@ -335,6 +448,187 @@ func (s *Store) UpdatePostEditable(ctx context.Context, id, text string, schedul
 	return nil
 }
 
+func (s *Store) UpdateThreadEditable(ctx context.Context, rootPostID string, steps []ThreadStepUpdate) error {
+	rootPostID = strings.TrimSpace(rootPostID)
+	if rootPostID == "" {
+		return fmt.Errorf("root_post_id is required")
+	}
+	if len(steps) == 0 {
+		return fmt.Errorf("thread steps are required")
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	rootID, err := resolveRootPostIDTx(ctx, tx, rootPostID)
+	if err != nil {
+		return fmt.Errorf("post not editable")
+	}
+
+	type threadRow struct {
+		ID            string
+		Status        domain.PostStatus
+		AccountID     string
+		MaxAttempts   int
+		ThreadGroupID string
+	}
+	rows, err := tx.QueryContext(ctx, `
+		SELECT id, status, account_id, max_attempts, thread_group_id
+		FROM posts
+		WHERE id = ? OR root_post_id = ?
+		ORDER BY thread_position ASC, created_at ASC
+	`, rootID, rootID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	existing := make([]threadRow, 0, 4)
+	for rows.Next() {
+		var item threadRow
+		if err := rows.Scan(&item.ID, &item.Status, &item.AccountID, &item.MaxAttempts, &item.ThreadGroupID); err != nil {
+			return err
+		}
+		if !isEditablePostStatus(item.Status) {
+			return fmt.Errorf("post not editable")
+		}
+		existing = append(existing, item)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if len(existing) == 0 {
+		return fmt.Errorf("post not editable")
+	}
+
+	accountID := strings.TrimSpace(existing[0].AccountID)
+	if accountID == "" {
+		return fmt.Errorf("post not editable")
+	}
+	threadGroupID := strings.TrimSpace(existing[0].ThreadGroupID)
+	if threadGroupID == "" {
+		threadGroupID = rootID
+	}
+	maxAttempts := existing[0].MaxAttempts
+	if maxAttempts <= 0 {
+		maxAttempts = 3
+	}
+	now := time.Now().UTC()
+	nowFmt := now.Format(time.RFC3339Nano)
+
+	for i := len(existing) - 1; i >= len(steps); i-- {
+		postID := strings.TrimSpace(existing[i].ID)
+		if postID == "" {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM post_media WHERE post_id = ?`, postID); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM dead_letters WHERE post_id = ?`, postID); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM posts WHERE id = ?`, postID); err != nil {
+			return err
+		}
+	}
+
+	orderedIDs := make([]string, 0, len(steps))
+	insertPostWithMedia := func(postID string, pos int, step ThreadStepUpdate, parentID *string) error {
+		status := domain.PostStatusDraft
+		if !step.ScheduledAt.IsZero() {
+			status = domain.PostStatusScheduled
+		}
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO posts (id, account_id, text, status, scheduled_at, thread_group_id, thread_position, parent_post_id, root_post_id, next_retry_at, attempts, max_attempts, idempotency_key, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, ?, NULL, ?, ?)
+		`, postID, accountID, strings.TrimSpace(step.Text), status, formatScheduledAt(step.ScheduledAt), threadGroupID, pos, sqlNullString(parentID), rootID, maxAttempts, nowFmt, nowFmt); err != nil {
+			return err
+		}
+		for _, mediaID := range step.MediaIDs {
+			trimmed := strings.TrimSpace(mediaID)
+			if trimmed == "" {
+				continue
+			}
+			if _, err := tx.ExecContext(ctx, `INSERT INTO post_media (post_id, media_id) VALUES (?, ?)`, postID, trimmed); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	for idx, step := range steps {
+		pos := idx + 1
+		var parentID *string
+		if len(orderedIDs) > 0 {
+			parentID = ptrTrimmedString(orderedIDs[len(orderedIDs)-1])
+		}
+
+		if idx < len(existing) {
+			postID := strings.TrimSpace(existing[idx].ID)
+			status := domain.PostStatusDraft
+			if !step.ScheduledAt.IsZero() {
+				status = domain.PostStatusScheduled
+			}
+			if _, err := tx.ExecContext(ctx, `
+				UPDATE posts
+				SET text = ?, status = ?, scheduled_at = ?, thread_group_id = ?, thread_position = ?, parent_post_id = ?, root_post_id = ?, next_retry_at = NULL, attempts = 0, error = NULL, updated_at = ?
+				WHERE id = ?
+			`, strings.TrimSpace(step.Text), status, formatScheduledAt(step.ScheduledAt), threadGroupID, pos, sqlNullString(parentID), rootID, nowFmt, postID); err != nil {
+				return err
+			}
+			if _, err := tx.ExecContext(ctx, `DELETE FROM post_media WHERE post_id = ?`, postID); err != nil {
+				return err
+			}
+			for _, mediaID := range step.MediaIDs {
+				trimmed := strings.TrimSpace(mediaID)
+				if trimmed == "" {
+					continue
+				}
+				if _, err := tx.ExecContext(ctx, `INSERT INTO post_media (post_id, media_id) VALUES (?, ?)`, postID, trimmed); err != nil {
+					return err
+				}
+			}
+			orderedIDs = append(orderedIDs, postID)
+			continue
+		}
+
+		newID, err := NewID("pst")
+		if err != nil {
+			return err
+		}
+		if err := insertPostWithMedia(newID, pos, step, parentID); err != nil {
+			return err
+		}
+		orderedIDs = append(orderedIDs, newID)
+	}
+
+	if len(orderedIDs) == 0 {
+		return fmt.Errorf("thread steps are required")
+	}
+
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE posts
+		SET root_post_id = ?, thread_group_id = ?, thread_position = 1, parent_post_id = NULL, updated_at = ?
+		WHERE id = ?
+	`, orderedIDs[0], threadGroupID, nowFmt, orderedIDs[0]); err != nil {
+		return err
+	}
+	for idx := 1; idx < len(orderedIDs); idx++ {
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE posts
+			SET root_post_id = ?, thread_group_id = ?, thread_position = ?, parent_post_id = ?, updated_at = ?
+			WHERE id = ?
+		`, orderedIDs[0], threadGroupID, idx+1, orderedIDs[idx-1], nowFmt, orderedIDs[idx]); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
 func (s *Store) ClaimDuePosts(ctx context.Context, limit int) ([]domain.Post, error) {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	rows, err := s.db.QueryContext(ctx, `
@@ -342,9 +636,19 @@ func (s *Store) ClaimDuePosts(ctx context.Context, limit int) ([]domain.Post, er
 		FROM posts
 		WHERE status = ?
 		  AND COALESCE(next_retry_at, scheduled_at) <= ?
-		ORDER BY COALESCE(next_retry_at, scheduled_at) ASC
+		  AND (
+			parent_post_id IS NULL
+			OR EXISTS (
+				SELECT 1
+				FROM posts parent
+				WHERE parent.id = posts.parent_post_id
+				  AND parent.status = ?
+				  AND TRIM(COALESCE(parent.external_id, '')) != ''
+			)
+		  )
+		ORDER BY COALESCE(next_retry_at, scheduled_at) ASC, thread_group_id ASC, thread_position ASC
 		LIMIT ?
-	`, domain.PostStatusScheduled, now, limit)
+	`, domain.PostStatusScheduled, now, domain.PostStatusPublished, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -545,6 +849,41 @@ func (s *Store) ReschedulePublishWithoutAttempt(ctx context.Context, id string, 
 	return err
 }
 
+func (s *Store) resolveRootPostID(ctx context.Context, postID string) (string, error) {
+	row := s.db.QueryRowContext(ctx, `
+		SELECT COALESCE(NULLIF(TRIM(root_post_id), ''), id)
+		FROM posts
+		WHERE id = ?
+	`, strings.TrimSpace(postID))
+	var rootID string
+	if err := row.Scan(&rootID); err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(rootID), nil
+}
+
+func resolveRootPostIDTx(ctx context.Context, tx *sql.Tx, postID string) (string, error) {
+	row := tx.QueryRowContext(ctx, `
+		SELECT COALESCE(NULLIF(TRIM(root_post_id), ''), id)
+		FROM posts
+		WHERE id = ?
+	`, strings.TrimSpace(postID))
+	var rootID string
+	if err := row.Scan(&rootID); err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(rootID), nil
+}
+
+func isEditablePostStatus(status domain.PostStatus) bool {
+	switch status {
+	case domain.PostStatusDraft, domain.PostStatusScheduled, domain.PostStatusFailed, domain.PostStatusCanceled:
+		return true
+	default:
+		return false
+	}
+}
+
 func sqlNullString(v *string) any {
 	if v == nil || strings.TrimSpace(*v) == "" {
 		return nil
@@ -564,4 +903,12 @@ func formatScheduledAt(v time.Time) string {
 		return ""
 	}
 	return v.UTC().Format(time.RFC3339Nano)
+}
+
+func ptrTrimmedString(raw string) *string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return nil
+	}
+	return &trimmed
 }

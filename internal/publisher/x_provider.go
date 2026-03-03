@@ -35,7 +35,7 @@ func (p *XProvider) ValidateDraft(_ context.Context, account domain.SocialAccoun
 	return warnings, nil
 }
 
-func (p *XProvider) Publish(ctx context.Context, _ domain.SocialAccount, credentials Credentials, post domain.Post) (string, error) {
+func (p *XProvider) Publish(ctx context.Context, _ domain.SocialAccount, credentials Credentials, post domain.Post, opts PublishOptions) (string, error) {
 	token := strings.TrimSpace(credentials.AccessToken)
 	tokenSecret := strings.TrimSpace(credentials.AccessTokenSecret)
 	if token == "" {
@@ -55,7 +55,7 @@ func (p *XProvider) Publish(ctx context.Context, _ domain.SocialAccount, credent
 	if err != nil {
 		return "", fmt.Errorf("build x client: %w", err)
 	}
-	return client.Publish(ctx, post)
+	return client.Publish(ctx, post, opts)
 }
 
 func (p *XProvider) RefreshIfNeeded(_ context.Context, _ domain.SocialAccount, credentials Credentials) (Credentials, bool, error) {

@@ -38,7 +38,7 @@ func TestCreateStatusUsesV2TweetsEndpoint(t *testing.T) {
 		t.Fatalf("NewXClient() error = %v", err)
 	}
 
-	id, err := client.createStatus(context.Background(), "hola", []string{"111", "222"})
+	id, err := client.createStatus(context.Background(), "hola", []string{"111", "222"}, PublishOptions{})
 	if err != nil {
 		t.Fatalf("createStatus() error = %v", err)
 	}
@@ -86,7 +86,7 @@ func TestCreateStatusSupportsLegacyResponseID(t *testing.T) {
 		t.Fatalf("NewXClient() error = %v", err)
 	}
 
-	id, err := client.createStatus(context.Background(), "hola", nil)
+	id, err := client.createStatus(context.Background(), "hola", nil, PublishOptions{})
 	if err != nil {
 		t.Fatalf("createStatus() error = %v", err)
 	}
