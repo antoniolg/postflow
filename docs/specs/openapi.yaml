@@ -470,7 +470,7 @@ paths:
                   description: Optional mode override (draft|schedule|publish_now)
                 scheduled_at:
                   type: string
-                  description: Optional RFC3339 or datetime-local value in UI timezone
+                  description: Optional RFC3339 or datetime-local value in UI timezone. If omitted with empty intent, current scheduling is preserved.
                 media_ids:
                   type: array
                   items:

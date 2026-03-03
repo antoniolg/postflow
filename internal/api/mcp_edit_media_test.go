@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/antoniolg/publisher/internal/db"
 	"github.com/antoniolg/publisher/internal/domain"
@@ -65,6 +66,48 @@ func TestMCPEditPostEditsTextAndMedia(t *testing.T) {
 	}
 	if len(updated.Media) != 1 || updated.Media[0].ID != replacementMedia.ID {
 		t.Fatalf("expected one replacement media %q, got %#v", replacementMedia.ID, updated.Media)
+	}
+}
+
+func TestMCPEditPostPreservesScheduledStateWithoutIntentOrScheduledAt(t *testing.T) {
+	store, mcpURL, sessionID := setupMCPMediaEditTest(t)
+	account := createConnectedAccountForPlatform(t, store, domain.PlatformLinkedIn, "li-preserve-schedule")
+	initialMedia := createMCPTestMedia(t, store, "scheduled-initial.png")
+	replacementMedia := createMCPTestMedia(t, store, "scheduled-replacement.png")
+	scheduledAt := time.Now().UTC().Add(2 * time.Hour).Truncate(time.Second)
+
+	created, err := store.CreatePost(t.Context(), db.CreatePostParams{
+		Post: domain.Post{
+			AccountID:   account.ID,
+			Text:        "scheduled post",
+			Status:      domain.PostStatusScheduled,
+			ScheduledAt: scheduledAt,
+			MaxAttempts: 3,
+		},
+		MediaIDs: []string{initialMedia.ID},
+	})
+	if err != nil {
+		t.Fatalf("create post: %v", err)
+	}
+
+	call := mcpCallTool(t, mcpURL, sessionID, "publisher_edit_post", map[string]any{
+		"post_id":   created.Post.ID,
+		"text":      "scheduled post edited",
+		"media_ids": []string{replacementMedia.ID},
+	})
+	if call.Error != nil || call.Result.IsError {
+		t.Fatalf("expected successful edit, got error=%s raw_error=%s", mcpToolErrorMessage(call), callRawError(call))
+	}
+
+	updated, err := store.GetPost(t.Context(), created.Post.ID)
+	if err != nil {
+		t.Fatalf("get post: %v", err)
+	}
+	if updated.Status != domain.PostStatusScheduled {
+		t.Fatalf("expected scheduled status to be preserved, got %s", updated.Status)
+	}
+	if !updated.ScheduledAt.Equal(scheduledAt) {
+		t.Fatalf("expected scheduled_at %s, got %s", scheduledAt, updated.ScheduledAt)
 	}
 }
 

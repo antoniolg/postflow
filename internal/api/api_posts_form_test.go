@@ -80,7 +80,7 @@ func TestEditPostFromForm(t *testing.T) {
 	}
 
 	editForm := url.Values{}
-	editForm.Set("text", "edited as draft")
+	editForm.Set("text", "edited and keep schedule")
 	editReq := httptest.NewRequest(http.MethodPost, "/posts/"+postID+"/edit", bytes.NewBufferString(editForm.Encode()))
 	editReq.Header.Set("content-type", "application/x-www-form-urlencoded")
 	editW := httptest.NewRecorder()
@@ -93,11 +93,14 @@ func TestEditPostFromForm(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get post: %v", err)
 	}
-	if post.Text != "edited as draft" {
+	if post.Text != "edited and keep schedule" {
 		t.Fatalf("expected updated text, got %q", post.Text)
 	}
-	if status := string(post.Status); status != "draft" {
-		t.Fatalf("expected draft status after clearing date, got %s", status)
+	if status := string(post.Status); status != "scheduled" {
+		t.Fatalf("expected scheduled status to be preserved, got %s", status)
+	}
+	if post.ScheduledAt.IsZero() {
+		t.Fatalf("expected scheduled_at to be preserved")
 	}
 }
 

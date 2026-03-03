@@ -95,7 +95,7 @@ func (f *fakeMutationsStore) GetMediaByIDs(_ context.Context, ids []string) ([]d
 func TestResolveScheduledAtForEdit(t *testing.T) {
 	now := time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC)
 
-	draftAt, err := ResolveScheduledAtForEdit("draft", now.Add(10*time.Minute), nil)
+	draftAt, err := ResolveScheduledAtForEdit("draft", now.Add(10*time.Minute), time.Time{}, nil)
 	if err != nil {
 		t.Fatalf("draft resolve failed: %v", err)
 	}
@@ -103,7 +103,7 @@ func TestResolveScheduledAtForEdit(t *testing.T) {
 		t.Fatalf("expected zero scheduled_at for draft")
 	}
 
-	publishNowAt, err := ResolveScheduledAtForEdit("publish_now", time.Time{}, func() time.Time { return now })
+	publishNowAt, err := ResolveScheduledAtForEdit("publish_now", time.Time{}, time.Time{}, func() time.Time { return now })
 	if err != nil {
 		t.Fatalf("publish_now resolve failed: %v", err)
 	}
@@ -111,18 +111,26 @@ func TestResolveScheduledAtForEdit(t *testing.T) {
 		t.Fatalf("expected publish_now to default to now, got %s", publishNowAt)
 	}
 
-	_, err = ResolveScheduledAtForEdit("schedule", time.Time{}, nil)
+	_, err = ResolveScheduledAtForEdit("schedule", time.Time{}, time.Time{}, nil)
 	if !errors.Is(err, ErrScheduledAtNeeded) {
 		t.Fatalf("expected ErrScheduledAtNeeded, got %v", err)
 	}
 
 	explicit := now.Add(2 * time.Hour)
-	scheduledAt, err := ResolveScheduledAtForEdit("schedule", explicit, nil)
+	scheduledAt, err := ResolveScheduledAtForEdit("schedule", explicit, time.Time{}, nil)
 	if err != nil {
 		t.Fatalf("schedule resolve failed: %v", err)
 	}
 	if !scheduledAt.Equal(explicit.UTC()) {
 		t.Fatalf("expected explicit scheduled_at, got %s", scheduledAt)
+	}
+
+	preserved, err := ResolveScheduledAtForEdit("", time.Time{}, explicit, nil)
+	if err != nil {
+		t.Fatalf("preserve resolve failed: %v", err)
+	}
+	if !preserved.Equal(explicit.UTC()) {
+		t.Fatalf("expected preserved scheduled_at, got %s", preserved)
 	}
 }
 
@@ -196,6 +204,37 @@ func TestMutationsServiceScheduleAndUpdate(t *testing.T) {
 	}
 	if post.ID != "pst_1" {
 		t.Fatalf("expected updated post id pst_1, got %q", post.ID)
+	}
+}
+
+func TestMutationsServiceUpdateEditablePreservesScheduledAtByDefault(t *testing.T) {
+	originalScheduledAt := time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
+	store := &fakeMutationsStore{
+		post: domain.Post{
+			ID:          "pst_1",
+			AccountID:   "acc_1",
+			Platform:    domain.PlatformX,
+			Text:        "scheduled",
+			Status:      domain.PostStatusScheduled,
+			ScheduledAt: originalScheduledAt,
+		},
+		account: domain.SocialAccount{
+			ID:       "acc_1",
+			Platform: domain.PlatformX,
+			Status:   domain.AccountStatusConnected,
+		},
+	}
+	svc := MutationsService{Store: store}
+
+	_, err := svc.UpdateEditable(t.Context(), EditInput{
+		PostID: "pst_1",
+		Text:   "updated text",
+	}, nil)
+	if err != nil {
+		t.Fatalf("update failed: %v", err)
+	}
+	if !store.updateScheduledAt.Equal(originalScheduledAt) {
+		t.Fatalf("expected scheduled_at to be preserved (%s), got %s", originalScheduledAt, store.updateScheduledAt)
 	}
 }
 

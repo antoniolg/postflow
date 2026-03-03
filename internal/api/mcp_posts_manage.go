@@ -37,7 +37,7 @@ type mcpEditPostInput struct {
 	PostID      string   `json:"post_id" jsonschema:"Editable post ID."`
 	Text        string   `json:"text" jsonschema:"Updated post text content."`
 	Intent      string   `json:"intent,omitempty" jsonschema:"Optional intent: draft|schedule|publish_now."`
-	ScheduledAt string   `json:"scheduled_at,omitempty" jsonschema:"Optional RFC3339 or datetime-local value."`
+	ScheduledAt string   `json:"scheduled_at,omitempty" jsonschema:"Optional RFC3339 or datetime-local value. If omitted with empty intent, current scheduling is preserved."`
 	MediaIDs    []string `json:"media_ids,omitempty" jsonschema:"Optional replacement media IDs. Pass [] to remove all media."`
 }
 

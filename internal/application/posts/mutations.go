@@ -43,7 +43,7 @@ type EditInput struct {
 	Segments     []ThreadSegmentInput
 }
 
-func ResolveScheduledAtForEdit(intent string, scheduledAt time.Time, now func() time.Time) (time.Time, error) {
+func ResolveScheduledAtForEdit(intent string, scheduledAt time.Time, currentScheduledAt time.Time, now func() time.Time) (time.Time, error) {
 	intent = strings.ToLower(strings.TrimSpace(intent))
 	switch intent {
 	case "draft":
@@ -61,6 +61,12 @@ func ResolveScheduledAtForEdit(intent string, scheduledAt time.Time, now func() 
 		}
 	}
 	if scheduledAt.IsZero() {
+		if intent == "" {
+			if currentScheduledAt.IsZero() {
+				return time.Time{}, nil
+			}
+			return currentScheduledAt.UTC(), nil
+		}
 		return time.Time{}, nil
 	}
 	return scheduledAt.UTC(), nil
@@ -101,7 +107,11 @@ func (s MutationsService) UpdateEditable(ctx context.Context, in EditInput, now 
 	if postID == "" {
 		return domain.Post{}, ErrPostIDRequired
 	}
-	scheduledAt, err := ResolveScheduledAtForEdit(in.Intent, in.ScheduledAt, now)
+	current, err := s.Store.GetPost(ctx, postID)
+	if err != nil {
+		return domain.Post{}, err
+	}
+	scheduledAt, err := ResolveScheduledAtForEdit(in.Intent, in.ScheduledAt, current.ScheduledAt, now)
 	if err != nil {
 		return domain.Post{}, err
 	}
@@ -122,10 +132,6 @@ func (s MutationsService) UpdateEditable(ctx context.Context, in EditInput, now 
 				MediaIDs:    normalizeMediaIDs(segment.MediaIDs),
 			})
 		}
-		current, err := s.Store.GetPost(ctx, postID)
-		if err != nil {
-			return domain.Post{}, err
-		}
 		rootID := strings.TrimSpace(current.ID)
 		if current.RootPostID != nil && strings.TrimSpace(*current.RootPostID) != "" {
 			rootID = strings.TrimSpace(*current.RootPostID)
@@ -139,10 +145,6 @@ func (s MutationsService) UpdateEditable(ctx context.Context, in EditInput, now 
 	text := strings.TrimSpace(in.Text)
 	if text == "" {
 		return domain.Post{}, ErrTextRequired
-	}
-	current, err := s.Store.GetPost(ctx, postID)
-	if err != nil {
-		return domain.Post{}, err
 	}
 
 	mediaIDs := mediaIDsFromPost(current.Media)

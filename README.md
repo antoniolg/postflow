@@ -136,6 +136,7 @@ Thread payload support (same shape in API/MCP/CLI):
 - If `segments` is present, step `1` is the root post and steps `2..N` are follow-ups.
 - Backward compatibility is preserved for legacy `text` + `media_ids`.
 - `publisher_edit_post` accepts optional `media_ids` to replace media on editable posts (`[]` clears all media).
+- Editing without `intent` and without `scheduled_at` preserves the current scheduling state.
 
 ### Codex CLI
 
