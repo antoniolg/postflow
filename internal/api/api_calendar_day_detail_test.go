@@ -390,6 +390,17 @@ func TestCalendarCreateKeepsSelectedDayOnBack(t *testing.T) {
 	if returnTo != expectedReturnTo {
 		t.Fatalf("expected return_to %q, got %q", expectedReturnTo, returnTo)
 	}
+	scheduledLocalRaw := parsedCreateHref.Query().Get("scheduled_at_local")
+	if scheduledLocalRaw == "" {
+		t.Fatalf("expected scheduled_at_local in calendar create href")
+	}
+	scheduledLocal, err := time.ParseInLocation("2006-01-02T15:04", scheduledLocalRaw, time.UTC)
+	if err != nil {
+		t.Fatalf("parse scheduled_at_local: %v", err)
+	}
+	if scheduledLocal.Format("2006-01-02") != dayParam {
+		t.Fatalf("expected scheduled_at_local date %q, got %q", dayParam, scheduledLocal.Format("2006-01-02"))
+	}
 
 	createReq := httptest.NewRequest(http.MethodGet, createHref, nil)
 	createW := httptest.NewRecorder()
@@ -402,5 +413,8 @@ func TestCalendarCreateKeepsSelectedDayOnBack(t *testing.T) {
 	expectedBackHref := "<a class=\"title-back\" href=\"/?view=calendar&amp;month=" + monthParam + "&amp;day=" + dayParam + "\""
 	if !strings.Contains(createBody, expectedBackHref) {
 		t.Fatalf("expected create back button to return to selected calendar day")
+	}
+	if !strings.Contains(createBody, `id="create-scheduled-at" type="datetime-local" name="scheduled_at_local" data-date-picker value="`+scheduledLocalRaw+`"`) {
+		t.Fatalf("expected create view to prefill scheduled_at_local with calendar default")
 	}
 }

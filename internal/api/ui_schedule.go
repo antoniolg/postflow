@@ -317,6 +317,12 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	createViewURL := "/?view=create&return_to=" + url.QueryEscape(currentViewURL)
+	if view == "calendar" {
+		defaultScheduled := defaultCalendarCreateScheduledLocal(selectedDayLocal, nowLocal)
+		if defaultScheduled != "" {
+			createViewURL += "&scheduled_at_local=" + url.QueryEscape(defaultScheduled)
+		}
+	}
 	backURL := "/?view=calendar&month=" + currentMonthParam + "&day=" + selectedDayKey
 	if returnTo != "" {
 		backURL = returnTo
@@ -606,4 +612,25 @@ func formatThreadLabel(post domain.Post, totals map[string]int) string {
 		total = position
 	}
 	return fmt.Sprintf("#%d/%d", position, total)
+}
+
+func defaultCalendarCreateScheduledLocal(selectedDayLocal, nowLocal time.Time) string {
+	if selectedDayLocal.IsZero() || nowLocal.IsZero() {
+		return ""
+	}
+	loc := selectedDayLocal.Location()
+	if loc == nil {
+		loc = time.UTC
+	}
+	defaultTime := nowLocal.In(loc).Add(1 * time.Hour)
+	return time.Date(
+		selectedDayLocal.Year(),
+		selectedDayLocal.Month(),
+		selectedDayLocal.Day(),
+		defaultTime.Hour(),
+		defaultTime.Minute(),
+		0,
+		0,
+		loc,
+	).Format("2006-01-02T15:04")
 }
