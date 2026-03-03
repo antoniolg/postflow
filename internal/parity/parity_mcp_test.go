@@ -156,7 +156,19 @@ func (e *parityEnv) mcpDraftListIDs(limit int) []string {
 
 func (e *parityEnv) mcpCreatePost(text string) string {
 	e.t.Helper()
-	out := e.mcpCallTool("publisher_create_post", map[string]any{"account_id": e.account.ID, "text": text})
+	return e.mcpCreatePostForAccount(e.account.ID, text, nil)
+}
+
+func (e *parityEnv) mcpCreatePostForAccount(accountID, text string, mediaIDs []string) string {
+	e.t.Helper()
+	args := map[string]any{
+		"account_id": strings.TrimSpace(accountID),
+		"text":       text,
+	}
+	if len(mediaIDs) > 0 {
+		args["media_ids"] = mediaIDs
+	}
+	out := e.mcpCallTool("publisher_create_post", args)
 	post, _ := out["post"].(map[string]any)
 	return strings.TrimSpace(stringValue(post, "id"))
 }
@@ -231,6 +243,11 @@ func (e *parityEnv) mcpSchedulePost(id string, scheduledAt time.Time) {
 
 func (e *parityEnv) mcpEditPost(id, text, intent string, scheduledAt time.Time) {
 	e.t.Helper()
+	e.mcpEditPostWithMedia(id, text, intent, scheduledAt, nil, false)
+}
+
+func (e *parityEnv) mcpEditPostWithMedia(id, text, intent string, scheduledAt time.Time, mediaIDs []string, includeMediaIDs bool) {
+	e.t.Helper()
 	args := map[string]any{
 		"post_id": strings.TrimSpace(id),
 		"text":    strings.TrimSpace(text),
@@ -240,6 +257,9 @@ func (e *parityEnv) mcpEditPost(id, text, intent string, scheduledAt time.Time) 
 	}
 	if !scheduledAt.IsZero() {
 		args["scheduled_at"] = scheduledAt.UTC().Format(time.RFC3339)
+	}
+	if includeMediaIDs {
+		args["media_ids"] = append([]string{}, mediaIDs...)
 	}
 	_ = e.mcpCallTool("publisher_edit_post", args)
 }

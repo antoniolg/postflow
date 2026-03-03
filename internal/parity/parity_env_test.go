@@ -16,6 +16,7 @@ import (
 	"github.com/antoniolg/publisher/internal/cli"
 	"github.com/antoniolg/publisher/internal/db"
 	"github.com/antoniolg/publisher/internal/domain"
+	"github.com/antoniolg/publisher/internal/publisher"
 )
 
 type parityEnv struct {
@@ -56,6 +57,12 @@ func newParityEnv(t *testing.T) *parityEnv {
 		DataDir:           tempDir,
 		DefaultMaxRetries: 3,
 		APIToken:          token,
+		Registry: publisher.NewProviderRegistry(
+			publisher.NewXProvider(publisher.XConfig{}),
+			publisher.NewLinkedInProvider(publisher.LinkedInProviderConfig{}),
+			publisher.NewFacebookProvider(publisher.MetaProviderConfig{}),
+			publisher.NewInstagramProvider(publisher.MetaProviderConfig{}),
+		),
 	}
 	httpServer := httptest.NewServer(srv.Handler())
 	t.Cleanup(httpServer.Close)

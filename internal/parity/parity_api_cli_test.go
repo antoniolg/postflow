@@ -16,7 +16,12 @@ import (
 
 func (e *parityEnv) apiCreatePost(text string, scheduledAt time.Time, mediaIDs []string) string {
 	e.t.Helper()
-	body := map[string]any{"account_id": e.account.ID, "text": text}
+	return e.apiCreatePostForAccount(e.account.ID, text, scheduledAt, mediaIDs)
+}
+
+func (e *parityEnv) apiCreatePostForAccount(accountID, text string, scheduledAt time.Time, mediaIDs []string) string {
+	e.t.Helper()
+	body := map[string]any{"account_id": strings.TrimSpace(accountID), "text": text}
 	if !scheduledAt.IsZero() {
 		body["scheduled_at"] = scheduledAt.UTC().Format(time.RFC3339)
 	}
@@ -378,7 +383,16 @@ func (e *parityEnv) cliScheduleListIDs(from, to string) []string {
 
 func (e *parityEnv) cliCreatePost(text string) string {
 	e.t.Helper()
-	raw := e.runCLI("posts", "create", "--account-id", e.account.ID, "--text", text)
+	return e.cliCreatePostForAccount(e.account.ID, text, nil)
+}
+
+func (e *parityEnv) cliCreatePostForAccount(accountID, text string, mediaIDs []string) string {
+	e.t.Helper()
+	args := []string{"posts", "create", "--account-id", strings.TrimSpace(accountID), "--text", text}
+	for _, mediaID := range mediaIDs {
+		args = append(args, "--media-id", strings.TrimSpace(mediaID))
+	}
+	raw := e.runCLI(args...)
 	var out struct {
 		ID string `json:"id"`
 	}
@@ -524,12 +538,23 @@ func (e *parityEnv) cliSchedulePost(id string, scheduledAt time.Time) {
 
 func (e *parityEnv) cliEditPost(id, text, intent string, scheduledAt time.Time) {
 	e.t.Helper()
+	e.cliEditPostWithMedia(id, text, intent, scheduledAt, false, nil)
+}
+
+func (e *parityEnv) cliEditPostWithMedia(id, text, intent string, scheduledAt time.Time, replaceMedia bool, mediaIDs []string) {
+	e.t.Helper()
 	args := []string{"posts", "edit", "--id", strings.TrimSpace(id), "--text", strings.TrimSpace(text)}
 	if strings.TrimSpace(intent) != "" {
 		args = append(args, "--intent", strings.TrimSpace(intent))
 	}
 	if !scheduledAt.IsZero() {
 		args = append(args, "--scheduled-at", scheduledAt.UTC().Format(time.RFC3339))
+	}
+	if replaceMedia {
+		args = append(args, "--replace-media")
+		for _, mediaID := range mediaIDs {
+			args = append(args, "--media-id", strings.TrimSpace(mediaID))
+		}
 	}
 	_ = e.runCLI(args...)
 }
