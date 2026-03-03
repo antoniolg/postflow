@@ -12,6 +12,7 @@ import (
 
 type fakeStore struct {
 	duePosts            []domain.Post
+	postsByID           map[string]domain.Post
 	accountByID         map[string]domain.SocialAccount
 	recordFailureCalls  int
 	rescheduleCalls     int
@@ -35,6 +36,11 @@ func (f *fakeStore) GetAccount(_ context.Context, id string) (domain.SocialAccou
 }
 
 func (f *fakeStore) GetPost(_ context.Context, id string) (domain.Post, error) {
+	if f.postsByID != nil {
+		if post, ok := f.postsByID[id]; ok {
+			return post, nil
+		}
+	}
 	for _, post := range f.duePosts {
 		if post.ID == id {
 			return post, nil

@@ -285,3 +285,71 @@ func TestLinkedInRefreshOAuthAndCallbackFlows(t *testing.T) {
 		}
 	})
 }
+
+func TestLinkedInPublishCommentModeValidationErrors(t *testing.T) {
+	provider := NewLinkedInProvider(LinkedInProviderConfig{APIBaseURL: "https://api.example.com"})
+	account := domain.SocialAccount{
+		Platform:          domain.PlatformLinkedIn,
+		ExternalAccountID: "member_1",
+	}
+
+	_, err := provider.Publish(context.Background(), account, Credentials{AccessToken: "token-1"}, domain.Post{
+		Text: "comment with media",
+		Media: []domain.Media{{
+			ID:           "med_1",
+			OriginalName: "img.png",
+			MimeType:     "image/png",
+		}},
+	}, PublishOptions{
+		Mode:             PublishModeComment,
+		ParentExternalID: "root_post_1",
+	})
+	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "do not support media") {
+		t.Fatalf("expected comment mode media validation error, got %v", err)
+	}
+
+	_, err = provider.Publish(context.Background(), account, Credentials{AccessToken: "token-1"}, domain.Post{
+		Text: "comment missing parent",
+	}, PublishOptions{
+		Mode: PublishModeComment,
+	})
+	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "parent external id is required") {
+		t.Fatalf("expected missing parent error, got %v", err)
+	}
+}
+
+func TestLinkedInOAuthCallbackFailsWhenProfileEndpointsFail(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/oauth/v2/accessToken":
+			_, _ = io.WriteString(w, `{"access_token":"li-access","expires_in":3600}`)
+		case "/v2/userinfo":
+			w.WriteHeader(http.StatusBadGateway)
+			_, _ = io.WriteString(w, `{"message":"upstream error"}`)
+		case "/v2/me":
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = io.WriteString(w, `{"message":"profile lookup error"}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	provider := NewLinkedInProvider(LinkedInProviderConfig{
+		ClientID:     "client-id",
+		ClientSecret: "client-secret",
+		AuthBaseURL:  server.URL,
+		APIBaseURL:   server.URL,
+	})
+	_, err := provider.HandleOAuthCallback(context.Background(), OAuthCallbackInput{
+		Code:        "oauth-code",
+		RedirectURL: "https://app.example.com/callback",
+	})
+	if err == nil {
+		t.Fatalf("expected oauth callback to fail when both profile endpoints fail")
+	}
+	msg := strings.ToLower(err.Error())
+	if !strings.Contains(msg, "profile fetch failed") || !strings.Contains(msg, "userinfo_error") || !strings.Contains(msg, "me_error") {
+		t.Fatalf("expected composed profile failure details, got %q", err.Error())
+	}
+}
