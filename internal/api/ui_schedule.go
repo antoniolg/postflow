@@ -335,6 +335,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	}
 	mediaTotalSizeLabel := formatByteSize(mediaTotalBytes)
 	var editingPost *domain.Post
+	createInitialMedia := make([]createMediaAttachment, 0)
 	var createText string
 	var createScheduledLocal string
 	var createAccountID string
@@ -346,6 +347,20 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 			createAccountID = strings.TrimSpace(p.AccountID)
 			if !p.ScheduledAt.IsZero() {
 				createScheduledLocal = p.ScheduledAt.In(uiLoc).Format("2006-01-02T15:04")
+			}
+			createInitialMedia = make([]createMediaAttachment, 0, len(p.Media))
+			for _, media := range p.Media {
+				mediaID := strings.TrimSpace(media.ID)
+				if mediaID == "" {
+					continue
+				}
+				createInitialMedia = append(createInitialMedia, createMediaAttachment{
+					ID:         mediaID,
+					Name:       strings.TrimSpace(media.OriginalName),
+					Size:       media.SizeBytes,
+					Mime:       strings.TrimSpace(media.MimeType),
+					PreviewURL: mediaContentURL(mediaID),
+				})
 			}
 		}
 	}
@@ -413,6 +428,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		BackURL:                   backURL,
 		Accounts:                  connectedAccounts,
 		EditingPost:               editingPost,
+		CreateInitialMedia:        createInitialMedia,
 		CreateAccountID:           createAccountID,
 		CreateText:                createText,
 		CreateScheduledLocal:      createScheduledLocal,

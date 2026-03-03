@@ -366,6 +366,62 @@ func TestCreateAndSettingsViewsRenderMediaManagementSections(t *testing.T) {
 	}
 }
 
+func TestCreateEditViewHydratesInitialAttachments(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	mediaPath := filepath.Join(tempDir, "edit-preview.png")
+	if err := os.WriteFile(mediaPath, []byte("preview"), 0o644); err != nil {
+		t.Fatalf("seed media file: %v", err)
+	}
+	createdMedia, err := store.CreateMedia(t.Context(), domain.Media{
+		Kind:         "image",
+		OriginalName: "edit-preview.png",
+		StoragePath:  mediaPath,
+		MimeType:     "image/png",
+		SizeBytes:    7,
+	})
+	if err != nil {
+		t.Fatalf("create media: %v", err)
+	}
+
+	account := createTestAccount(t, store)
+	createdPost, err := store.CreatePost(t.Context(), db.CreatePostParams{
+		Post: domain.Post{
+			AccountID:   account.ID,
+			Text:        "post with existing media",
+			Status:      domain.PostStatusScheduled,
+			ScheduledAt: time.Now().UTC().Add(30 * time.Minute),
+			MaxAttempts: 3,
+		},
+		MediaIDs: []string{createdMedia.ID},
+	})
+	if err != nil {
+		t.Fatalf("create post with media: %v", err)
+	}
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	editReq := httptest.NewRequest(http.MethodGet, "/?view=create&edit_id="+createdPost.Post.ID, nil)
+	editW := httptest.NewRecorder()
+	h.ServeHTTP(editW, editReq)
+	if editW.Code != http.StatusOK {
+		t.Fatalf("expected edit create view status 200, got %d", editW.Code)
+	}
+	body := editW.Body.String()
+	if !strings.Contains(body, `const initialAttachments = [{"id":"`+createdMedia.ID+`"`) {
+		t.Fatalf("expected create edit view to include initial attachment hydration for media %q", createdMedia.ID)
+	}
+	if !strings.Contains(body, `"previewUrl":"`+mediaContentURL(createdMedia.ID)+`"`) {
+		t.Fatalf("expected create edit view to include preview url for media %q", createdMedia.ID)
+	}
+}
+
 func TestMediaPurgeFormDeletesOnlyPublishedCanceledOrUnusedMedia(t *testing.T) {
 	tempDir := t.TempDir()
 	store, err := db.Open(filepath.Join(tempDir, "test.db"))

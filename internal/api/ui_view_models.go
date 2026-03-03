@@ -58,6 +58,14 @@ type calendarDay struct {
 	Events         []calendarEvent
 }
 
+type createMediaAttachment struct {
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Size       int64  `json:"size"`
+	Mime       string `json:"mime"`
+	PreviewURL string `json:"previewUrl"`
+}
+
 type pageData struct {
 	Lang                      string
 	View                      string
@@ -81,6 +89,7 @@ type pageData struct {
 	BackURL                   string
 	Accounts                  []domain.SocialAccount
 	EditingPost               *domain.Post
+	CreateInitialMedia        []createMediaAttachment
 	CreateAccountID           string
 	CreateText                string
 	CreateScheduledLocal      string
