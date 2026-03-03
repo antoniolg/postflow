@@ -423,6 +423,64 @@ func TestMCPTrailingSlashEndpointAcceptsInitialize(t *testing.T) {
 	}
 }
 
+func TestMCPToolsListAcceptsInvalidSessionID(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	httpServer := httptest.NewServer(srv.Handler())
+	defer httpServer.Close()
+
+	mcpURL := httpServer.URL + "/mcp"
+	listToolsBody := `{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}`
+	listToolsResp, listToolsRaw := postMCPRequest(t, mcpURL, "invalid-session-id", listToolsBody)
+	if listToolsResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected tools/list status 200 with invalid session id, got %d: %s", listToolsResp.StatusCode, string(listToolsRaw))
+	}
+	if !strings.Contains(string(listToolsRaw), "publisher_health") {
+		t.Fatalf("expected tools/list response to include publisher_health")
+	}
+}
+
+func TestMCPGetWithoutSessionReturnsMethodNotAllowed(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	httpServer := httptest.NewServer(srv.Handler())
+	defer httpServer.Close()
+
+	req, err := http.NewRequest(http.MethodGet, httpServer.URL+"/mcp", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Accept", "text/event-stream")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("get mcp: %v", err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read response body: %v", err)
+	}
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Fatalf("expected status 405 for GET /mcp without session, got %d: %s", resp.StatusCode, string(body))
+	}
+	if !strings.Contains(resp.Header.Get("Allow"), http.MethodPost) {
+		t.Fatalf("expected Allow header to include POST, got %q", resp.Header.Get("Allow"))
+	}
+}
+
 func TestSettingsViewIncludesMCPURLAndConfig(t *testing.T) {
 	tempDir := t.TempDir()
 	store, err := db.Open(filepath.Join(tempDir, "test.db"))

@@ -211,7 +211,11 @@ func (s Server) newMCPHandler() http.Handler {
 
 	base := mcp.NewStreamableHTTPHandler(func(_ *http.Request) *mcp.Server {
 		return server
-	}, nil)
+	}, &mcp.StreamableHTTPOptions{
+		// Run MCP transport in stateless mode to avoid in-memory session affinity
+		// requirements behind load balancers/proxies.
+		Stateless: true,
+	})
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && !mcpAcceptHeaderSupportsJSONAndSSE(r.Header.Values("Accept")) {
