@@ -521,6 +521,11 @@
       margin-bottom: 4px;
       gap: 8px;
     }
+    .day-item-head-meta {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
     .day-item-time {
       color: #e0e0e0;
       font-size: 12px;
@@ -557,6 +562,24 @@
       color: #a8a8a8;
       text-transform: uppercase;
       letter-spacing: 0.04em;
+    }
+    .day-item-media-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: rgba(255, 255, 255, 0.04);
+      color: #d0d0d0;
+      font-size: 10px;
+      letter-spacing: 0.04em;
+      line-height: 1;
+    }
+    .day-item-media-indicator svg {
+      width: 12px;
+      height: 12px;
+      flex-shrink: 0;
     }
     .day-item-actions {
       display: flex;
@@ -2847,7 +2870,15 @@
           <article class="day-item {{.StatusClass}}" data-status="{{.StatusKey}}" {{if .Editable}}data-edit-url="/?view=create&edit_id={{.PostID}}&return_to={{urlquery $.CurrentViewURL}}"{{end}}>
             <div class="day-item-head">
               <span class="day-item-time">{{.TimeLabel}}</span>
-              <span class="day-item-platform">{{.Platform}}</span>
+              <span class="day-item-head-meta">
+                <span class="day-item-platform">{{.Platform}}</span>
+                {{if gt .MediaCount 0}}
+                <span class="day-item-media-indicator" title="{{t "common.media_count" .MediaCount}}" aria-label="{{t "common.media_count" .MediaCount}}">
+                  <svg data-lucide="image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="m21 15-5-5L5 21"></path></svg>
+                  <span>{{.MediaCount}}</span>
+                </span>
+                {{end}}
+              </span>
             </div>
             <div class="day-item-text">{{previewMarkdown .Text}}</div>
             <div class="day-item-actions">
@@ -2870,7 +2901,15 @@
           <article class="day-item {{.StatusClass}}" data-status="{{.StatusKey}}">
             <div class="day-item-head">
               <span class="day-item-time">{{.TimeLabel}}</span>
-              <span class="day-item-platform">{{.Platform}}</span>
+              <span class="day-item-head-meta">
+                <span class="day-item-platform">{{.Platform}}</span>
+                {{if gt .MediaCount 0}}
+                <span class="day-item-media-indicator" title="{{t "common.media_count" .MediaCount}}" aria-label="{{t "common.media_count" .MediaCount}}">
+                  <svg data-lucide="image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="m21 15-5-5L5 21"></path></svg>
+                  <span>{{.MediaCount}}</span>
+                </span>
+                {{end}}
+              </span>
             </div>
             <div class="day-item-text">{{previewMarkdown .Text}}</div>
           </article>

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/antoniolg/publisher/internal/db"
+	"github.com/antoniolg/publisher/internal/domain"
 )
 
 func TestCalendarDayDetailShowsPendingBeforePublished(t *testing.T) {
@@ -224,6 +225,81 @@ func TestCalendarDayDetailDeleteButtonVisibilityByStatus(t *testing.T) {
 	}
 	if strings.Contains(publishedPanel, "/posts/"+publishedID+"/delete") {
 		t.Fatalf("did not expect delete action for published post")
+	}
+}
+
+func TestCalendarDayDetailShowsMediaIndicatorWhenPostHasMedia(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	settingsForm := url.Values{}
+	settingsForm.Set("timezone", "UTC")
+	settingsReq := httptest.NewRequest(http.MethodPost, "/settings/timezone", bytes.NewBufferString(settingsForm.Encode()))
+	settingsReq.Header.Set("content-type", "application/x-www-form-urlencoded")
+	settingsW := httptest.NewRecorder()
+	h.ServeHTTP(settingsW, settingsReq)
+	if settingsW.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303 on timezone update, got %d", settingsW.Code)
+	}
+
+	media, err := store.CreateMedia(t.Context(), domain.Media{
+		Kind:         "image",
+		OriginalName: "cover.png",
+		StoragePath:  filepath.Join(tempDir, "cover.png"),
+		MimeType:     "image/png",
+		SizeBytes:    1234,
+	})
+	if err != nil {
+		t.Fatalf("create media: %v", err)
+	}
+
+	selectedDay := time.Date(2026, time.February, 26, 0, 0, 0, 0, time.UTC)
+	scheduledAt := selectedDay.Add(13*time.Hour + 24*time.Minute)
+	payload, _ := json.Marshal(map[string]any{
+		"account_id":   testAccountID(t, store),
+		"text":         "scheduled post with media indicator",
+		"scheduled_at": scheduledAt.Format(time.RFC3339),
+		"media_ids":    []string{media.ID},
+	})
+	createReq := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(payload))
+	createW := httptest.NewRecorder()
+	h.ServeHTTP(createW, createReq)
+	if createW.Code != http.StatusCreated {
+		t.Fatalf("expected 201 for scheduled post with media, got %d: %s", createW.Code, createW.Body.String())
+	}
+
+	monthParam := selectedDay.Format("2006-01")
+	dayParam := selectedDay.Format("2006-01-02")
+	calendarReq := httptest.NewRequest(http.MethodGet, "/?view=calendar&month="+monthParam+"&day="+dayParam, nil)
+	calendarW := httptest.NewRecorder()
+	h.ServeHTTP(calendarW, calendarReq)
+	if calendarW.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", calendarW.Code)
+	}
+
+	body := calendarW.Body.String()
+	panelStart := strings.Index(body, "<aside class=\"day-panel\" aria-label=\"Day detail\">")
+	if panelStart == -1 {
+		t.Fatalf("expected day panel in calendar view")
+	}
+	panelEndRel := strings.Index(body[panelStart:], "</aside>")
+	if panelEndRel == -1 {
+		t.Fatalf("expected day panel closing tag")
+	}
+	panel := body[panelStart : panelStart+panelEndRel]
+
+	if !strings.Contains(panel, "day-item-media-indicator") {
+		t.Fatalf("expected day panel to render media indicator for scheduled post with media")
+	}
+	if !strings.Contains(panel, "data-lucide=\"image\"") {
+		t.Fatalf("expected day panel media indicator to use lucide image icon")
 	}
 }
 
