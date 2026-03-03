@@ -51,3 +51,22 @@ func TestXProviderValidateDraftUsesPremiumLimit(t *testing.T) {
 		t.Fatalf("expected warning to mention 25000 chars, got %q", warnings[0])
 	}
 }
+
+func TestXProviderPlatformAndRefreshNoop(t *testing.T) {
+	provider := NewXProvider(XConfig{})
+	if provider.Platform() != domain.PlatformX {
+		t.Fatalf("expected platform x, got %s", provider.Platform())
+	}
+
+	original := Credentials{AccessToken: "token-1"}
+	updated, changed, err := provider.RefreshIfNeeded(context.Background(), domain.SocialAccount{}, original)
+	if err != nil {
+		t.Fatalf("refresh if needed: %v", err)
+	}
+	if changed {
+		t.Fatalf("expected x refresh noop")
+	}
+	if updated.AccessToken != original.AccessToken {
+		t.Fatalf("expected unchanged credentials, got %+v", updated)
+	}
+}
