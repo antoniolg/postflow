@@ -185,6 +185,32 @@ func (s Server) handleScheduleJSON(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s Server) handleListDraftsJSON(w http.ResponseWriter, r *http.Request) {
+	drafts, err := s.Store.ListDrafts(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	limit := defaultMCPListLimit
+	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+		var parsed int
+		if _, scanErr := fmt.Sscanf(raw, "%d", &parsed); scanErr != nil || parsed <= 0 {
+			writeError(w, http.StatusBadRequest, errors.New("limit must be a positive integer"))
+			return
+		}
+		limit = clampMCPListLimit(parsed)
+	}
+	if len(drafts) > limit {
+		drafts = drafts[:limit]
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"count":  len(drafts),
+		"drafts": drafts,
+	})
+}
+
 func (s Server) handlePostActions(w http.ResponseWriter, r *http.Request) {
 	if !strings.HasPrefix(r.URL.Path, "/posts/") {
 		writeError(w, http.StatusNotFound, errors.New("not found"))
@@ -334,14 +360,30 @@ func (s Server) handleEditPost(w http.ResponseWriter, r *http.Request) {
 	}
 	text := strings.TrimSpace(r.FormValue("text"))
 	intent := strings.ToLower(strings.TrimSpace(r.FormValue("intent")))
-	if text == "" {
+	scheduledAtRaw := strings.TrimSpace(r.FormValue("scheduled_at"))
+	if scheduledAtRaw == "" {
+		scheduledAtRaw = strings.TrimSpace(r.FormValue("scheduled_at_local"))
+	}
+	if !fromForm {
 		var body struct {
-			Text   string `json:"text"`
-			Intent string `json:"intent"`
+			Text             string `json:"text"`
+			Intent           string `json:"intent"`
+			ScheduledAt      string `json:"scheduled_at"`
+			ScheduledAtLocal string `json:"scheduled_at_local"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err == nil {
-			text = strings.TrimSpace(body.Text)
-			intent = strings.ToLower(strings.TrimSpace(body.Intent))
+			if text == "" {
+				text = strings.TrimSpace(body.Text)
+			}
+			if intent == "" {
+				intent = strings.ToLower(strings.TrimSpace(body.Intent))
+			}
+			if scheduledAtRaw == "" {
+				scheduledAtRaw = strings.TrimSpace(body.ScheduledAt)
+			}
+			if scheduledAtRaw == "" {
+				scheduledAtRaw = strings.TrimSpace(body.ScheduledAtLocal)
+			}
 		}
 	}
 	if text == "" {
@@ -351,10 +393,6 @@ func (s Server) handleEditPost(w http.ResponseWriter, r *http.Request) {
 		}
 		writeError(w, http.StatusBadRequest, errors.New("text is required"))
 		return
-	}
-	scheduledAtRaw := strings.TrimSpace(r.FormValue("scheduled_at"))
-	if scheduledAtRaw == "" {
-		scheduledAtRaw = strings.TrimSpace(r.FormValue("scheduled_at_local"))
 	}
 	var scheduledAt time.Time
 	if scheduledAtRaw != "" {

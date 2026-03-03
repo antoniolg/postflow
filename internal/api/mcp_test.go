@@ -46,16 +46,28 @@ func TestMCPStreamableHTTPExposesToolsAndCreatesPost(t *testing.T) {
 		t.Fatalf("expected tools/list status 200, got %d: %s", listToolsResp.StatusCode, string(listToolsRaw))
 	}
 	for _, expected := range []string{
+		"publisher_health",
 		"publisher_list_schedule",
 		"publisher_list_drafts",
+		"publisher_list_accounts",
+		"publisher_create_static_account",
+		"publisher_connect_account",
+		"publisher_disconnect_account",
+		"publisher_set_x_premium",
+		"publisher_delete_account",
 		"publisher_list_failed",
 		"publisher_create_post",
+		"publisher_cancel_post",
+		"publisher_schedule_post",
+		"publisher_edit_post",
+		"publisher_delete_post",
 		"publisher_validate_post",
 		"publisher_upload_media",
 		"publisher_list_media",
 		"publisher_delete_media",
 		"publisher_requeue_failed",
 		"publisher_delete_failed",
+		"publisher_set_timezone",
 	} {
 		if !strings.Contains(string(listToolsRaw), expected) {
 			t.Fatalf("expected tools/list to include %q", expected)

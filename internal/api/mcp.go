@@ -27,6 +27,15 @@ func (s Server) newMCPHandler() http.Handler {
 	}, nil)
 
 	mcp.AddTool(server, &mcp.Tool{
+		Name:        "publisher_health",
+		Description: "Health check for the Publisher service.",
+		Annotations: &mcp.ToolAnnotations{
+			ReadOnlyHint:   true,
+			IdempotentHint: true,
+		},
+	}, s.mcpHealthTool)
+
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "publisher_list_schedule",
 		Description: "List posts in the schedule window. Supports RFC3339 from/to filters.",
 		Annotations: &mcp.ToolAnnotations{
@@ -45,6 +54,55 @@ func (s Server) newMCPHandler() http.Handler {
 	}, s.mcpListDraftsTool)
 
 	mcp.AddTool(server, &mcp.Tool{
+		Name:        "publisher_list_accounts",
+		Description: "List connected/registered accounts.",
+		Annotations: &mcp.ToolAnnotations{
+			ReadOnlyHint:   true,
+			IdempotentHint: true,
+		},
+	}, s.mcpListAccountsTool)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "publisher_create_static_account",
+		Description: "Create or update a static account and store encrypted credentials.",
+		Annotations: &mcp.ToolAnnotations{
+			IdempotentHint: false,
+		},
+	}, s.mcpCreateStaticAccountTool)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "publisher_connect_account",
+		Description: "Mark account as connected if it has saved credentials.",
+		Annotations: &mcp.ToolAnnotations{
+			IdempotentHint: false,
+		},
+	}, s.mcpConnectAccountTool)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "publisher_disconnect_account",
+		Description: "Mark account as disconnected.",
+		Annotations: &mcp.ToolAnnotations{
+			IdempotentHint: false,
+		},
+	}, s.mcpDisconnectAccountTool)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "publisher_set_x_premium",
+		Description: "Set X premium flag for an X account.",
+		Annotations: &mcp.ToolAnnotations{
+			IdempotentHint: false,
+		},
+	}, s.mcpSetXPremiumTool)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "publisher_delete_account",
+		Description: "Delete a disconnected account with no linked posts.",
+		Annotations: &mcp.ToolAnnotations{
+			IdempotentHint: false,
+		},
+	}, s.mcpDeleteAccountTool)
+
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "publisher_list_failed",
 		Description: "List failed posts from dead letters with latest error details.",
 		Annotations: &mcp.ToolAnnotations{
@@ -60,6 +118,38 @@ func (s Server) newMCPHandler() http.Handler {
 			IdempotentHint: false,
 		},
 	}, s.mcpCreatePostTool)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "publisher_cancel_post",
+		Description: "Cancel a scheduled post.",
+		Annotations: &mcp.ToolAnnotations{
+			IdempotentHint: false,
+		},
+	}, s.mcpCancelPostTool)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "publisher_schedule_post",
+		Description: "Schedule a draft post by ID.",
+		Annotations: &mcp.ToolAnnotations{
+			IdempotentHint: false,
+		},
+	}, s.mcpSchedulePostTool)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "publisher_edit_post",
+		Description: "Edit a post text (and optional intent/scheduled date) while still editable.",
+		Annotations: &mcp.ToolAnnotations{
+			IdempotentHint: false,
+		},
+	}, s.mcpEditPostTool)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "publisher_delete_post",
+		Description: "Delete an editable post (draft/scheduled/failed/canceled).",
+		Annotations: &mcp.ToolAnnotations{
+			IdempotentHint: false,
+		},
+	}, s.mcpDeletePostTool)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "publisher_validate_post",
@@ -110,6 +200,14 @@ func (s Server) newMCPHandler() http.Handler {
 			IdempotentHint: false,
 		},
 	}, s.mcpDeleteFailedTool)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "publisher_set_timezone",
+		Description: "Set UI timezone (IANA name, e.g. Europe/Madrid).",
+		Annotations: &mcp.ToolAnnotations{
+			IdempotentHint: false,
+		},
+	}, s.mcpSetTimezoneTool)
 
 	base := mcp.NewStreamableHTTPHandler(func(_ *http.Request) *mcp.Server {
 		return server

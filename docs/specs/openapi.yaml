@@ -83,6 +83,59 @@ paths:
         '404':
           $ref: '#/components/responses/Error'
 
+  /accounts/{id}/connect:
+    post:
+      summary: Mark an account as connected
+      parameters:
+        - $ref: '#/components/parameters/AccountID'
+      responses:
+        '200':
+          description: Connected account
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  status:
+                    type: string
+                    example: connected
+        '404':
+          $ref: '#/components/responses/Error'
+
+  /accounts/{id}/x-premium:
+    post:
+      summary: Set X premium flag (X accounts only)
+      parameters:
+        - $ref: '#/components/parameters/AccountID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [x_premium]
+              properties:
+                x_premium:
+                  type: boolean
+      responses:
+        '200':
+          description: X premium updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  x_premium:
+                    type: boolean
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+
   /accounts/{id}:
     delete:
       summary: Delete a disconnected account with no linked posts
@@ -345,6 +398,142 @@ paths:
         '409':
           $ref: '#/components/responses/Error'
 
+  /posts/{id}/schedule:
+    post:
+      summary: Schedule a draft post
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [scheduled_at]
+              properties:
+                scheduled_at:
+                  type: string
+                  description: RFC3339 or datetime-local value in UI timezone
+      responses:
+        '200':
+          description: Post scheduled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  status:
+                    type: string
+                    example: scheduled
+                  post:
+                    $ref: '#/components/schemas/Post'
+        '400':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+
+  /posts/{id}/edit:
+    post:
+      summary: Edit an editable post
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text:
+                  type: string
+                intent:
+                  type: string
+                  description: Optional mode override (draft|schedule|publish_now)
+                scheduled_at:
+                  type: string
+                  description: Optional RFC3339 or datetime-local value in UI timezone
+      responses:
+        '200':
+          description: Post edited
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  status:
+                    type: string
+                  post:
+                    $ref: '#/components/schemas/Post'
+        '400':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+
+  /posts/{id}/delete:
+    post:
+      summary: Delete an editable post (not published/publishing)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Post deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  deleted:
+                    type: boolean
+        '400':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+
+  /drafts:
+    get:
+      summary: List draft posts (no scheduled date)
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 200
+      responses:
+        '200':
+          description: Draft list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                  drafts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Post'
+
   /schedule:
     get:
       summary: List posts by range
@@ -518,6 +707,33 @@ paths:
         '404':
           $ref: '#/components/responses/Error'
         '409':
+          $ref: '#/components/responses/Error'
+
+  /settings/timezone:
+    post:
+      summary: Set UI timezone
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [timezone]
+              properties:
+                timezone:
+                  type: string
+                  example: Europe/Madrid
+      responses:
+        '200':
+          description: Timezone updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  timezone:
+                    type: string
+        '400':
           $ref: '#/components/responses/Error'
 
 components:

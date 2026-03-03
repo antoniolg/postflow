@@ -1,6 +1,8 @@
 package parity_test
 
 import (
+	"database/sql"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -29,6 +31,67 @@ func TestRequiredCapabilitiesBehaviorParity(t *testing.T) {
 		assertPostText(t, env.store, apiID, "created via api")
 		assertPostText(t, env.store, cliID, "created via cli")
 		assertPostText(t, env.store, mcpID, "created via mcp")
+	})
+
+	t.Run("posts.schedule", func(t *testing.T) {
+		scheduledAt := time.Now().UTC().Add(40 * time.Minute).Round(time.Second)
+		apiID := env.apiCreatePost("schedule via api", time.Time{}, nil)
+		cliID := env.apiCreatePost("schedule via cli", time.Time{}, nil)
+		mcpID := env.apiCreatePost("schedule via mcp", time.Time{}, nil)
+
+		env.apiSchedulePost(apiID, scheduledAt)
+		env.cliSchedulePost(cliID, scheduledAt)
+		env.mcpSchedulePost(mcpID, scheduledAt)
+
+		for _, postID := range []string{apiID, cliID, mcpID} {
+			post, err := env.store.GetPost(t.Context(), postID)
+			if err != nil {
+				t.Fatalf("get post %s: %v", postID, err)
+			}
+			if got := string(post.Status); got != "scheduled" {
+				t.Fatalf("expected scheduled status for %s, got %s", postID, got)
+			}
+		}
+	})
+
+	t.Run("posts.edit", func(t *testing.T) {
+		scheduledAt := time.Now().UTC().Add(50 * time.Minute).Round(time.Second)
+		apiID := env.apiCreatePost("edit start api", time.Time{}, nil)
+		cliID := env.apiCreatePost("edit start cli", time.Time{}, nil)
+		mcpID := env.apiCreatePost("edit start mcp", time.Time{}, nil)
+
+		env.apiEditPost(apiID, "edit done api", "schedule", scheduledAt)
+		env.cliEditPost(cliID, "edit done cli", "schedule", scheduledAt)
+		env.mcpEditPost(mcpID, "edit done mcp", "schedule", scheduledAt)
+
+		assertPostText(t, env.store, apiID, "edit done api")
+		assertPostText(t, env.store, cliID, "edit done cli")
+		assertPostText(t, env.store, mcpID, "edit done mcp")
+		for _, postID := range []string{apiID, cliID, mcpID} {
+			post, err := env.store.GetPost(t.Context(), postID)
+			if err != nil {
+				t.Fatalf("get post %s: %v", postID, err)
+			}
+			if got := string(post.Status); got != "scheduled" {
+				t.Fatalf("expected scheduled status for %s, got %s", postID, got)
+			}
+		}
+	})
+
+	t.Run("posts.delete", func(t *testing.T) {
+		apiID := env.apiCreatePost("delete via api", time.Now().UTC().Add(20*time.Minute), nil)
+		cliID := env.apiCreatePost("delete via cli", time.Now().UTC().Add(21*time.Minute), nil)
+		mcpID := env.apiCreatePost("delete via mcp", time.Now().UTC().Add(22*time.Minute), nil)
+
+		env.apiDeletePost(apiID)
+		env.cliDeletePost(cliID)
+		env.mcpDeletePost(mcpID)
+
+		for _, postID := range []string{apiID, cliID, mcpID} {
+			if _, err := env.store.GetPost(t.Context(), postID); !errors.Is(err, sql.ErrNoRows) {
+				t.Fatalf("expected post %s to be deleted, err=%v", postID, err)
+			}
+		}
 	})
 
 	t.Run("posts.validate", func(t *testing.T) {

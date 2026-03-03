@@ -93,10 +93,18 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	case "help":
 		printHelp(stdout)
 		return 0
+	case "health":
+		return runHealth(ctx, client, cfg, rest[1:], stdout, stderr)
 	case "schedule":
 		return runSchedule(ctx, client, cfg, rest[1:], stdout, stderr)
+	case "drafts":
+		return runDrafts(ctx, client, cfg, rest[1:], stdout, stderr)
 	case "posts":
 		return runPosts(ctx, client, cfg, rest[1:], stdout, stderr)
+	case "accounts":
+		return runAccounts(ctx, client, cfg, rest[1:], stdout, stderr)
+	case "settings":
+		return runSettings(ctx, client, cfg, rest[1:], stdout, stderr)
 	case "dlq":
 		return runDLQ(ctx, client, cfg, rest[1:], stdout, stderr)
 	case "media":
@@ -179,7 +187,7 @@ func runSchedule(ctx context.Context, client *APIClient, cfg config, args []stri
 
 func runPosts(ctx context.Context, client *APIClient, cfg config, args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(stderr, "usage: postflow posts <create|validate> [flags]")
+		fmt.Fprintln(stderr, "usage: postflow posts <create|validate|schedule|edit|delete|cancel> [flags]")
 		return 2
 	}
 	switch args[0] {
@@ -187,6 +195,14 @@ func runPosts(ctx context.Context, client *APIClient, cfg config, args []string,
 		return runPostsCreate(ctx, client, cfg, args[1:], stdout, stderr)
 	case "validate":
 		return runPostsValidate(ctx, client, cfg, args[1:], stdout, stderr)
+	case "schedule":
+		return runPostsSchedule(ctx, client, cfg, args[1:], stdout, stderr)
+	case "edit":
+		return runPostsEdit(ctx, client, cfg, args[1:], stdout, stderr)
+	case "delete":
+		return runPostsDelete(ctx, client, cfg, args[1:], stdout, stderr)
+	case "cancel":
+		return runPostsCancel(ctx, client, cfg, args[1:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "unknown posts subcommand: %s\n", args[0])
 		return 2
@@ -496,9 +512,22 @@ Global flags:
   --help                 Show this help
 
 Commands:
+  health                 Check service health via /healthz
   schedule list          List scheduled posts from /schedule
+  drafts list            List drafts via /drafts
   posts create           Create post via /posts
   posts validate         Validate payload via /posts/validate
+  posts schedule         Schedule a draft via /posts/{id}/schedule
+  posts edit             Edit an editable post via /posts/{id}/edit
+  posts delete           Delete an editable post via /posts/{id}/delete
+  posts cancel           Cancel scheduled post via /posts/{id}/cancel
+  accounts list          List accounts via /accounts
+  accounts create-static Create/update static account via /accounts/static
+  accounts connect       Mark account connected via /accounts/{id}/connect
+  accounts disconnect    Mark account disconnected via /accounts/{id}/disconnect
+  accounts x-premium     Set X premium via /accounts/{id}/x-premium
+  accounts delete        Delete disconnected account via /accounts/{id}
+  settings set-timezone  Set UI timezone via /settings/timezone
   dlq list               List failed dead letters via /dlq
   dlq requeue            Requeue one dead letter via /dlq/{id}/requeue
   dlq delete             Delete one dead letter via /dlq/{id}/delete
@@ -510,6 +539,9 @@ Examples:
   postflow schedule list --from 2026-03-01T00:00:00Z --to 2026-03-31T23:59:59Z
   postflow posts create --account-id acc_abc123 --text "hello world" --scheduled-at 2026-03-01T10:00:00Z
   postflow posts validate --account-id acc_abc123 --text "draft check" --scheduled-at 2026-03-01T10:00:00Z
+  postflow posts schedule --id pst_abc123 --scheduled-at 2026-03-01T10:00:00Z
+  postflow posts edit --id pst_abc123 --text "updated copy" --intent schedule --scheduled-at 2026-03-01T10:30:00Z
+  postflow posts delete --id pst_abc123
   postflow dlq list --limit 50
   postflow dlq requeue --id dlq_abc123`)
 }

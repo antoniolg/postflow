@@ -56,6 +56,7 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("POST /oauth/", s.handleOAuthStart)
 	mux.HandleFunc("GET /oauth/", s.handleOAuthCallback)
 	mux.HandleFunc("GET /schedule", s.handleScheduleJSON)
+	mux.HandleFunc("GET /drafts", s.handleListDraftsJSON)
 	mux.HandleFunc("GET /dlq", s.handleListDLQ)
 	mux.HandleFunc("POST /dlq/requeue", s.handleBulkRequeueDLQ)
 	mux.HandleFunc("POST /dlq/delete", s.handleBulkDeleteDLQ)

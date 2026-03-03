@@ -51,6 +51,56 @@ func TestRequiredCapabilitiesFailureParity(t *testing.T) {
 		assertContainsAny(t, "mcp", msg, "account not found")
 	})
 
+	t.Run("posts.schedule missing scheduled_at", func(t *testing.T) {
+		postID := env.apiCreatePost("schedule missing date", time.Time{}, nil)
+
+		raw, status := env.apiJSON(http.MethodPost, "/posts/"+postID+"/schedule", map[string]any{}, "application/json")
+		if status != http.StatusBadRequest {
+			t.Fatalf("api expected 400, got %d body=%s", status, string(raw))
+		}
+		assertContainsAny(t, "api", apiErrorMessage(raw), "scheduled_at is required")
+
+		code, _, stderr := env.runCLIResult("posts", "schedule", "--id", postID)
+		if code == 0 {
+			t.Fatalf("cli expected non-zero exit for missing scheduled-at")
+		}
+		assertContainsAny(t, "cli", stderr, "--scheduled-at is required")
+
+		msg := env.mcpCallToolError("publisher_schedule_post", map[string]any{"post_id": postID})
+		assertContainsAny(t, "mcp", msg, "scheduled_at is required", "scheduled_at")
+	})
+
+	t.Run("posts.delete published not deletable", func(t *testing.T) {
+		apiID := env.apiCreatePost("published delete api", time.Now().UTC().Add(15*time.Minute), nil)
+		cliID := env.apiCreatePost("published delete cli", time.Now().UTC().Add(16*time.Minute), nil)
+		mcpID := env.apiCreatePost("published delete mcp", time.Now().UTC().Add(17*time.Minute), nil)
+
+		if err := env.store.MarkPublished(t.Context(), apiID, "x-api"); err != nil {
+			t.Fatalf("mark published api: %v", err)
+		}
+		if err := env.store.MarkPublished(t.Context(), cliID, "x-cli"); err != nil {
+			t.Fatalf("mark published cli: %v", err)
+		}
+		if err := env.store.MarkPublished(t.Context(), mcpID, "x-mcp"); err != nil {
+			t.Fatalf("mark published mcp: %v", err)
+		}
+
+		raw, status := env.apiJSON(http.MethodPost, "/posts/"+apiID+"/delete", map[string]any{}, "application/json")
+		if status != http.StatusConflict {
+			t.Fatalf("api expected 409, got %d body=%s", status, string(raw))
+		}
+		assertContainsAny(t, "api", apiErrorMessage(raw), "post not deletable")
+
+		code, _, stderr := env.runCLIResult("posts", "delete", "--id", cliID)
+		if code == 0 {
+			t.Fatalf("cli expected non-zero exit for published delete")
+		}
+		assertContainsAny(t, "cli", stderr, "post not deletable")
+
+		msg := env.mcpCallToolError("publisher_delete_post", map[string]any{"post_id": mcpID})
+		assertContainsAny(t, "mcp", msg, "post not deletable")
+	})
+
 	t.Run("schedule.list invalid from", func(t *testing.T) {
 		raw, status := env.apiJSON(http.MethodGet, "/schedule?from=invalid-time&to="+time.Now().UTC().Format(time.RFC3339), nil, "")
 		if status != http.StatusBadRequest {

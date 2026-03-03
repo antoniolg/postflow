@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func (e *parityEnv) mcpInitialize() string {
@@ -135,6 +136,24 @@ func (e *parityEnv) mcpScheduleListIDs(from, to string) []string {
 	return ids
 }
 
+func (e *parityEnv) mcpHealthStatus() string {
+	e.t.Helper()
+	out := e.mcpCallTool("publisher_health", map[string]any{})
+	return strings.TrimSpace(stringValue(out, "status"))
+}
+
+func (e *parityEnv) mcpDraftListIDs(limit int) []string {
+	e.t.Helper()
+	out := e.mcpCallTool("publisher_list_drafts", map[string]any{"limit": limit})
+	drafts, _ := out["drafts"].([]any)
+	ids := make([]string, 0, len(drafts))
+	for _, item := range drafts {
+		obj, _ := item.(map[string]any)
+		ids = append(ids, strings.TrimSpace(stringValue(obj, "id")))
+	}
+	return ids
+}
+
 func (e *parityEnv) mcpCreatePost(text string) string {
 	e.t.Helper()
 	out := e.mcpCallTool("publisher_create_post", map[string]any{"account_id": e.account.ID, "text": text})
@@ -147,6 +166,88 @@ func (e *parityEnv) mcpValidatePost(text string) bool {
 	out := e.mcpCallTool("publisher_validate_post", map[string]any{"account_id": e.account.ID, "text": text})
 	valid, _ := out["valid"].(bool)
 	return valid
+}
+
+func (e *parityEnv) mcpCancelPost(id string) {
+	e.t.Helper()
+	_ = e.mcpCallTool("publisher_cancel_post", map[string]any{"post_id": strings.TrimSpace(id)})
+}
+
+func (e *parityEnv) mcpSchedulePost(id string, scheduledAt time.Time) {
+	e.t.Helper()
+	_ = e.mcpCallTool("publisher_schedule_post", map[string]any{
+		"post_id":      strings.TrimSpace(id),
+		"scheduled_at": scheduledAt.UTC().Format(time.RFC3339),
+	})
+}
+
+func (e *parityEnv) mcpEditPost(id, text, intent string, scheduledAt time.Time) {
+	e.t.Helper()
+	args := map[string]any{
+		"post_id": strings.TrimSpace(id),
+		"text":    strings.TrimSpace(text),
+	}
+	if strings.TrimSpace(intent) != "" {
+		args["intent"] = strings.TrimSpace(intent)
+	}
+	if !scheduledAt.IsZero() {
+		args["scheduled_at"] = scheduledAt.UTC().Format(time.RFC3339)
+	}
+	_ = e.mcpCallTool("publisher_edit_post", args)
+}
+
+func (e *parityEnv) mcpDeletePost(id string) {
+	e.t.Helper()
+	_ = e.mcpCallTool("publisher_delete_post", map[string]any{"post_id": strings.TrimSpace(id)})
+}
+
+func (e *parityEnv) mcpListAccountIDs() []string {
+	e.t.Helper()
+	out := e.mcpCallTool("publisher_list_accounts", map[string]any{})
+	items, _ := out["items"].([]any)
+	ids := make([]string, 0, len(items))
+	for _, item := range items {
+		obj, _ := item.(map[string]any)
+		ids = append(ids, strings.TrimSpace(stringValue(obj, "id")))
+	}
+	return ids
+}
+
+func (e *parityEnv) mcpCreateStaticAccount(platform, externalID string, credentials map[string]any) string {
+	e.t.Helper()
+	out := e.mcpCallTool("publisher_create_static_account", map[string]any{
+		"platform":            strings.TrimSpace(platform),
+		"display_name":        "MCP " + strings.TrimSpace(platform),
+		"external_account_id": strings.TrimSpace(externalID),
+		"credentials":         credentials,
+	})
+	account, _ := out["account"].(map[string]any)
+	return strings.TrimSpace(stringValue(account, "id"))
+}
+
+func (e *parityEnv) mcpConnectAccount(id string) {
+	e.t.Helper()
+	_ = e.mcpCallTool("publisher_connect_account", map[string]any{"account_id": strings.TrimSpace(id)})
+}
+
+func (e *parityEnv) mcpDisconnectAccount(id string) {
+	e.t.Helper()
+	_ = e.mcpCallTool("publisher_disconnect_account", map[string]any{"account_id": strings.TrimSpace(id)})
+}
+
+func (e *parityEnv) mcpSetXPremium(id string, enabled bool) {
+	e.t.Helper()
+	_ = e.mcpCallTool("publisher_set_x_premium", map[string]any{"account_id": strings.TrimSpace(id), "x_premium": enabled})
+}
+
+func (e *parityEnv) mcpDeleteAccount(id string) {
+	e.t.Helper()
+	_ = e.mcpCallTool("publisher_delete_account", map[string]any{"account_id": strings.TrimSpace(id)})
+}
+
+func (e *parityEnv) mcpSetTimezone(timezone string) {
+	e.t.Helper()
+	_ = e.mcpCallTool("publisher_set_timezone", map[string]any{"timezone": strings.TrimSpace(timezone)})
 }
 
 func (e *parityEnv) mcpFailedListIDs() []string {

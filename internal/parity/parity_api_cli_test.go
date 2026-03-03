@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -173,6 +174,146 @@ func (e *parityEnv) apiDeleteMedia(id string) {
 	}
 }
 
+func (e *parityEnv) apiHealthStatus() string {
+	e.t.Helper()
+	raw, status := e.apiJSON(http.MethodGet, "/healthz", nil, "")
+	if status != http.StatusOK {
+		e.t.Fatalf("health status=%d body=%s", status, string(raw))
+	}
+	var out struct {
+		Status string `json:"status"`
+	}
+	mustJSON(e.t, raw, &out)
+	return strings.TrimSpace(out.Status)
+}
+
+func (e *parityEnv) apiDraftListIDs(limit int) []string {
+	e.t.Helper()
+	path := "/drafts"
+	if limit > 0 {
+		path += "?limit=" + url.QueryEscape(strconv.Itoa(limit))
+	}
+	raw, status := e.apiJSON(http.MethodGet, path, nil, "")
+	if status != http.StatusOK {
+		e.t.Fatalf("draft list status=%d body=%s", status, string(raw))
+	}
+	var out struct {
+		Drafts []struct {
+			ID string `json:"id"`
+		} `json:"drafts"`
+	}
+	mustJSON(e.t, raw, &out)
+	ids := make([]string, 0, len(out.Drafts))
+	for _, item := range out.Drafts {
+		ids = append(ids, strings.TrimSpace(item.ID))
+	}
+	return ids
+}
+
+func (e *parityEnv) apiCancelPost(id string) {
+	e.t.Helper()
+	raw, status := e.apiJSON(http.MethodPost, "/posts/"+strings.TrimSpace(id)+"/cancel", nil, "application/json")
+	if status != http.StatusOK {
+		e.t.Fatalf("cancel post status=%d body=%s", status, string(raw))
+	}
+}
+
+func (e *parityEnv) apiSchedulePost(id string, scheduledAt time.Time) {
+	e.t.Helper()
+	raw, status := e.apiJSON(http.MethodPost, "/posts/"+strings.TrimSpace(id)+"/schedule", map[string]any{
+		"scheduled_at": scheduledAt.UTC().Format(time.RFC3339),
+	}, "application/json")
+	if status != http.StatusOK {
+		e.t.Fatalf("schedule post status=%d body=%s", status, string(raw))
+	}
+}
+
+func (e *parityEnv) apiEditPost(id, text, intent string, scheduledAt time.Time) {
+	e.t.Helper()
+	payload := map[string]any{
+		"text": strings.TrimSpace(text),
+	}
+	if strings.TrimSpace(intent) != "" {
+		payload["intent"] = strings.TrimSpace(intent)
+	}
+	if !scheduledAt.IsZero() {
+		payload["scheduled_at"] = scheduledAt.UTC().Format(time.RFC3339)
+	}
+	raw, status := e.apiJSON(http.MethodPost, "/posts/"+strings.TrimSpace(id)+"/edit", payload, "application/json")
+	if status != http.StatusOK {
+		e.t.Fatalf("edit post status=%d body=%s", status, string(raw))
+	}
+}
+
+func (e *parityEnv) apiDeletePost(id string) {
+	e.t.Helper()
+	raw, status := e.apiJSON(http.MethodPost, "/posts/"+strings.TrimSpace(id)+"/delete", map[string]any{}, "application/json")
+	if status != http.StatusOK {
+		e.t.Fatalf("delete post status=%d body=%s", status, string(raw))
+	}
+}
+
+func (e *parityEnv) apiCreateStaticAccount(platform, externalID string, credentials map[string]any) string {
+	e.t.Helper()
+	if credentials == nil {
+		credentials = map[string]any{"access_token": "tok_" + externalID}
+	}
+	raw, status := e.apiJSON(http.MethodPost, "/accounts/static", map[string]any{
+		"platform":            platform,
+		"display_name":        "Parity " + platform,
+		"external_account_id": externalID,
+		"credentials":         credentials,
+	}, "application/json")
+	if status != http.StatusCreated && status != http.StatusOK {
+		e.t.Fatalf("create static account status=%d body=%s", status, string(raw))
+	}
+	var out struct {
+		ID string `json:"id"`
+	}
+	mustJSON(e.t, raw, &out)
+	return strings.TrimSpace(out.ID)
+}
+
+func (e *parityEnv) apiConnectAccount(id string) {
+	e.t.Helper()
+	raw, status := e.apiJSON(http.MethodPost, "/accounts/"+strings.TrimSpace(id)+"/connect", nil, "application/json")
+	if status != http.StatusOK {
+		e.t.Fatalf("connect account status=%d body=%s", status, string(raw))
+	}
+}
+
+func (e *parityEnv) apiDisconnectAccount(id string) {
+	e.t.Helper()
+	raw, status := e.apiJSON(http.MethodPost, "/accounts/"+strings.TrimSpace(id)+"/disconnect", nil, "application/json")
+	if status != http.StatusOK {
+		e.t.Fatalf("disconnect account status=%d body=%s", status, string(raw))
+	}
+}
+
+func (e *parityEnv) apiDeleteAccount(id string) {
+	e.t.Helper()
+	raw, status := e.apiJSON(http.MethodDelete, "/accounts/"+strings.TrimSpace(id), nil, "")
+	if status != http.StatusOK {
+		e.t.Fatalf("delete account status=%d body=%s", status, string(raw))
+	}
+}
+
+func (e *parityEnv) apiSetXPremium(id string, enabled bool) {
+	e.t.Helper()
+	raw, status := e.apiJSON(http.MethodPost, "/accounts/"+strings.TrimSpace(id)+"/x-premium", map[string]any{"x_premium": enabled}, "application/json")
+	if status != http.StatusOK {
+		e.t.Fatalf("set x premium status=%d body=%s", status, string(raw))
+	}
+}
+
+func (e *parityEnv) apiSetTimezone(timezone string) {
+	e.t.Helper()
+	raw, status := e.apiJSON(http.MethodPost, "/settings/timezone", map[string]any{"timezone": strings.TrimSpace(timezone)}, "application/json")
+	if status != http.StatusOK {
+		e.t.Fatalf("set timezone status=%d body=%s", status, string(raw))
+	}
+}
+
 func (e *parityEnv) cliScheduleListIDs(from, to string) []string {
 	e.t.Helper()
 	raw := e.runCLI("schedule", "list", "--from", from, "--to", to)
@@ -260,6 +401,102 @@ func (e *parityEnv) cliListMediaIDs() []string {
 func (e *parityEnv) cliDeleteMedia(id string) {
 	e.t.Helper()
 	_ = e.runCLI("media", "delete", "--id", id)
+}
+
+func (e *parityEnv) cliHealthStatus() string {
+	e.t.Helper()
+	raw := e.runCLI("health")
+	var out struct {
+		Status string `json:"status"`
+	}
+	mustJSON(e.t, raw, &out)
+	return strings.TrimSpace(out.Status)
+}
+
+func (e *parityEnv) cliDraftListIDs(limit int) []string {
+	e.t.Helper()
+	args := []string{"drafts", "list"}
+	if limit > 0 {
+		args = append(args, "--limit", strconv.Itoa(limit))
+	}
+	raw := e.runCLI(args...)
+	var out struct {
+		Drafts []struct {
+			ID string `json:"id"`
+		} `json:"drafts"`
+	}
+	mustJSON(e.t, raw, &out)
+	ids := make([]string, 0, len(out.Drafts))
+	for _, item := range out.Drafts {
+		ids = append(ids, strings.TrimSpace(item.ID))
+	}
+	return ids
+}
+
+func (e *parityEnv) cliCancelPost(id string) {
+	e.t.Helper()
+	_ = e.runCLI("posts", "cancel", "--id", strings.TrimSpace(id))
+}
+
+func (e *parityEnv) cliSchedulePost(id string, scheduledAt time.Time) {
+	e.t.Helper()
+	_ = e.runCLI("posts", "schedule", "--id", strings.TrimSpace(id), "--scheduled-at", scheduledAt.UTC().Format(time.RFC3339))
+}
+
+func (e *parityEnv) cliEditPost(id, text, intent string, scheduledAt time.Time) {
+	e.t.Helper()
+	args := []string{"posts", "edit", "--id", strings.TrimSpace(id), "--text", strings.TrimSpace(text)}
+	if strings.TrimSpace(intent) != "" {
+		args = append(args, "--intent", strings.TrimSpace(intent))
+	}
+	if !scheduledAt.IsZero() {
+		args = append(args, "--scheduled-at", scheduledAt.UTC().Format(time.RFC3339))
+	}
+	_ = e.runCLI(args...)
+}
+
+func (e *parityEnv) cliDeletePost(id string) {
+	e.t.Helper()
+	_ = e.runCLI("posts", "delete", "--id", strings.TrimSpace(id))
+}
+
+func (e *parityEnv) cliCreateStaticAccount(platform, externalID string, credentials map[string]string) string {
+	e.t.Helper()
+	args := []string{"accounts", "create-static", "--platform", platform, "--external-account-id", externalID}
+	for key, value := range credentials {
+		args = append(args, "--credential", key+"="+value)
+	}
+	raw := e.runCLI(args...)
+	var out struct {
+		ID string `json:"id"`
+	}
+	mustJSON(e.t, raw, &out)
+	return strings.TrimSpace(out.ID)
+}
+
+func (e *parityEnv) cliConnectAccount(id string) {
+	e.t.Helper()
+	_ = e.runCLI("accounts", "connect", "--id", strings.TrimSpace(id))
+}
+
+func (e *parityEnv) cliDisconnectAccount(id string) {
+	e.t.Helper()
+	_ = e.runCLI("accounts", "disconnect", "--id", strings.TrimSpace(id))
+}
+
+func (e *parityEnv) cliDeleteAccount(id string) {
+	e.t.Helper()
+	_ = e.runCLI("accounts", "delete", "--id", strings.TrimSpace(id))
+}
+
+func (e *parityEnv) cliSetXPremium(id string, enabled bool) {
+	e.t.Helper()
+	_ = e.runCLI("accounts", "x-premium", "--id", strings.TrimSpace(id), "--enabled", strconv.FormatBool(enabled))
+}
+
+func (e *parityEnv) cliSetTimezone(timezone string) {
+	e.t.Helper()
+	_ = e.runCLI("settings", "set-timezone", "--timezone", strings.TrimSpace(timezone))
 }
 
 func (e *parityEnv) apiJSON(method, path string, body any, contentType string) ([]byte, int) {

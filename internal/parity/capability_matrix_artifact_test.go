@@ -2,6 +2,7 @@ package parity_test
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/antoniolg/publisher/internal/capabilities"
+	"github.com/antoniolg/publisher/internal/domain"
 )
 
 type matrixSurfaceResult struct {
@@ -98,6 +100,26 @@ func TestCapabilityMatrixArtifact(t *testing.T) {
 
 func capabilityChecks() map[string]map[capabilities.Surface]parityCheck {
 	return map[string]map[capabilities.Surface]parityCheck{
+		capabilities.CapabilityHealthCheck: {
+			capabilities.SurfaceAPI: func(env *parityEnv) error {
+				if got := env.apiHealthStatus(); got != "ok" {
+					return fmt.Errorf("expected status ok, got %q", got)
+				}
+				return nil
+			},
+			capabilities.SurfaceCLI: func(env *parityEnv) error {
+				if got := env.cliHealthStatus(); got != "ok" {
+					return fmt.Errorf("expected status ok, got %q", got)
+				}
+				return nil
+			},
+			capabilities.SurfaceMCP: func(env *parityEnv) error {
+				if got := env.mcpHealthStatus(); got != "ok" {
+					return fmt.Errorf("expected status ok, got %q", got)
+				}
+				return nil
+			},
+		},
 		capabilities.CapabilityScheduleList: {
 			capabilities.SurfaceAPI: func(env *parityEnv) error {
 				from := time.Now().UTC().Add(-1 * time.Hour).Format(time.RFC3339)
@@ -126,6 +148,32 @@ func capabilityChecks() map[string]map[capabilities.Surface]parityCheck {
 				return nil
 			},
 		},
+		capabilities.CapabilityDraftsList: {
+			capabilities.SurfaceAPI: func(env *parityEnv) error {
+				postID := env.apiCreatePost("matrix draft api", time.Time{}, nil)
+				ids := env.apiDraftListIDs(200)
+				if !containsID(ids, postID) {
+					return fmt.Errorf("expected draft id %s in api response", postID)
+				}
+				return nil
+			},
+			capabilities.SurfaceCLI: func(env *parityEnv) error {
+				postID := env.apiCreatePost("matrix draft cli", time.Time{}, nil)
+				ids := env.cliDraftListIDs(200)
+				if !containsID(ids, postID) {
+					return fmt.Errorf("expected draft id %s in cli response", postID)
+				}
+				return nil
+			},
+			capabilities.SurfaceMCP: func(env *parityEnv) error {
+				postID := env.apiCreatePost("matrix draft mcp", time.Time{}, nil)
+				ids := env.mcpDraftListIDs(200)
+				if !containsID(ids, postID) {
+					return fmt.Errorf("expected draft id %s in mcp response", postID)
+				}
+				return nil
+			},
+		},
 		capabilities.CapabilityPostsCreate: {
 			capabilities.SurfaceAPI: func(env *parityEnv) error {
 				_, status := env.apiJSON(http.MethodPost, "/posts", map[string]any{"account_id": env.account.ID, "text": "matrix create api"}, "application/json")
@@ -144,6 +192,155 @@ func capabilityChecks() map[string]map[capabilities.Surface]parityCheck {
 			capabilities.SurfaceMCP: func(env *parityEnv) error {
 				if msg := env.mcpCallToolError("publisher_create_post", map[string]any{"account_id": env.account.ID, "text": "matrix create mcp"}); msg != "" {
 					return errors.New(msg)
+				}
+				return nil
+			},
+		},
+		capabilities.CapabilityPostsSchedule: {
+			capabilities.SurfaceAPI: func(env *parityEnv) error {
+				postID := env.apiCreatePost("matrix schedule api", time.Time{}, nil)
+				env.apiSchedulePost(postID, time.Now().UTC().Add(45*time.Minute))
+				post, err := env.store.GetPost(env.t.Context(), postID)
+				if err != nil {
+					return err
+				}
+				if post.Status != domain.PostStatusScheduled {
+					return fmt.Errorf("expected scheduled status, got %s", post.Status)
+				}
+				return nil
+			},
+			capabilities.SurfaceCLI: func(env *parityEnv) error {
+				postID := env.apiCreatePost("matrix schedule cli", time.Time{}, nil)
+				env.cliSchedulePost(postID, time.Now().UTC().Add(45*time.Minute))
+				post, err := env.store.GetPost(env.t.Context(), postID)
+				if err != nil {
+					return err
+				}
+				if post.Status != domain.PostStatusScheduled {
+					return fmt.Errorf("expected scheduled status, got %s", post.Status)
+				}
+				return nil
+			},
+			capabilities.SurfaceMCP: func(env *parityEnv) error {
+				postID := env.apiCreatePost("matrix schedule mcp", time.Time{}, nil)
+				env.mcpSchedulePost(postID, time.Now().UTC().Add(45*time.Minute))
+				post, err := env.store.GetPost(env.t.Context(), postID)
+				if err != nil {
+					return err
+				}
+				if post.Status != domain.PostStatusScheduled {
+					return fmt.Errorf("expected scheduled status, got %s", post.Status)
+				}
+				return nil
+			},
+		},
+		capabilities.CapabilityPostsEdit: {
+			capabilities.SurfaceAPI: func(env *parityEnv) error {
+				postID := env.apiCreatePost("matrix edit start api", time.Time{}, nil)
+				env.apiEditPost(postID, "matrix edit api", "schedule", time.Now().UTC().Add(70*time.Minute))
+				post, err := env.store.GetPost(env.t.Context(), postID)
+				if err != nil {
+					return err
+				}
+				if post.Status != domain.PostStatusScheduled {
+					return fmt.Errorf("expected scheduled status, got %s", post.Status)
+				}
+				if strings.TrimSpace(post.Text) != "matrix edit api" {
+					return fmt.Errorf("expected updated text, got %q", post.Text)
+				}
+				return nil
+			},
+			capabilities.SurfaceCLI: func(env *parityEnv) error {
+				postID := env.apiCreatePost("matrix edit start cli", time.Time{}, nil)
+				env.cliEditPost(postID, "matrix edit cli", "schedule", time.Now().UTC().Add(70*time.Minute))
+				post, err := env.store.GetPost(env.t.Context(), postID)
+				if err != nil {
+					return err
+				}
+				if post.Status != domain.PostStatusScheduled {
+					return fmt.Errorf("expected scheduled status, got %s", post.Status)
+				}
+				if strings.TrimSpace(post.Text) != "matrix edit cli" {
+					return fmt.Errorf("expected updated text, got %q", post.Text)
+				}
+				return nil
+			},
+			capabilities.SurfaceMCP: func(env *parityEnv) error {
+				postID := env.apiCreatePost("matrix edit start mcp", time.Time{}, nil)
+				env.mcpEditPost(postID, "matrix edit mcp", "schedule", time.Now().UTC().Add(70*time.Minute))
+				post, err := env.store.GetPost(env.t.Context(), postID)
+				if err != nil {
+					return err
+				}
+				if post.Status != domain.PostStatusScheduled {
+					return fmt.Errorf("expected scheduled status, got %s", post.Status)
+				}
+				if strings.TrimSpace(post.Text) != "matrix edit mcp" {
+					return fmt.Errorf("expected updated text, got %q", post.Text)
+				}
+				return nil
+			},
+		},
+		capabilities.CapabilityPostsDelete: {
+			capabilities.SurfaceAPI: func(env *parityEnv) error {
+				postID := env.apiCreatePost("matrix delete api", time.Now().UTC().Add(35*time.Minute), nil)
+				env.apiDeletePost(postID)
+				if _, err := env.store.GetPost(env.t.Context(), postID); !errors.Is(err, sql.ErrNoRows) {
+					return fmt.Errorf("expected deleted post, err=%v", err)
+				}
+				return nil
+			},
+			capabilities.SurfaceCLI: func(env *parityEnv) error {
+				postID := env.apiCreatePost("matrix delete cli", time.Now().UTC().Add(35*time.Minute), nil)
+				env.cliDeletePost(postID)
+				if _, err := env.store.GetPost(env.t.Context(), postID); !errors.Is(err, sql.ErrNoRows) {
+					return fmt.Errorf("expected deleted post, err=%v", err)
+				}
+				return nil
+			},
+			capabilities.SurfaceMCP: func(env *parityEnv) error {
+				postID := env.apiCreatePost("matrix delete mcp", time.Now().UTC().Add(35*time.Minute), nil)
+				env.mcpDeletePost(postID)
+				if _, err := env.store.GetPost(env.t.Context(), postID); !errors.Is(err, sql.ErrNoRows) {
+					return fmt.Errorf("expected deleted post, err=%v", err)
+				}
+				return nil
+			},
+		},
+		capabilities.CapabilityPostsCancel: {
+			capabilities.SurfaceAPI: func(env *parityEnv) error {
+				postID := env.apiCreatePost("matrix cancel api", time.Now().UTC().Add(30*time.Minute), nil)
+				env.apiCancelPost(postID)
+				post, err := env.store.GetPost(env.t.Context(), postID)
+				if err != nil {
+					return err
+				}
+				if post.Status != domain.PostStatusCanceled {
+					return fmt.Errorf("expected canceled status, got %s", post.Status)
+				}
+				return nil
+			},
+			capabilities.SurfaceCLI: func(env *parityEnv) error {
+				postID := env.apiCreatePost("matrix cancel cli", time.Now().UTC().Add(30*time.Minute), nil)
+				env.cliCancelPost(postID)
+				post, err := env.store.GetPost(env.t.Context(), postID)
+				if err != nil {
+					return err
+				}
+				if post.Status != domain.PostStatusCanceled {
+					return fmt.Errorf("expected canceled status, got %s", post.Status)
+				}
+				return nil
+			},
+			capabilities.SurfaceMCP: func(env *parityEnv) error {
+				postID := env.apiCreatePost("matrix cancel mcp", time.Now().UTC().Add(30*time.Minute), nil)
+				env.mcpCancelPost(postID)
+				post, err := env.store.GetPost(env.t.Context(), postID)
+				if err != nil {
+					return err
+				}
+				if post.Status != domain.PostStatusCanceled {
+					return fmt.Errorf("expected canceled status, got %s", post.Status)
 				}
 				return nil
 			},
@@ -167,6 +364,126 @@ func capabilityChecks() map[string]map[capabilities.Surface]parityCheck {
 				if msg := env.mcpCallToolError("publisher_validate_post", map[string]any{"account_id": env.account.ID, "text": "matrix validate mcp"}); msg != "" {
 					return errors.New(msg)
 				}
+				return nil
+			},
+		},
+		capabilities.CapabilityAccountsList: {
+			capabilities.SurfaceAPI: func(env *parityEnv) error {
+				_, status := env.apiJSON(http.MethodGet, "/accounts", nil, "")
+				if status != http.StatusOK {
+					return fmt.Errorf("expected 200, got %d", status)
+				}
+				return nil
+			},
+			capabilities.SurfaceCLI: func(env *parityEnv) error {
+				code, _, stderr := env.runCLIResult("accounts", "list")
+				if code != 0 {
+					return fmt.Errorf("exit %d: %s", code, strings.TrimSpace(stderr))
+				}
+				return nil
+			},
+			capabilities.SurfaceMCP: func(env *parityEnv) error {
+				ids := env.mcpListAccountIDs()
+				if len(ids) == 0 {
+					return errors.New("expected at least one account")
+				}
+				return nil
+			},
+		},
+		capabilities.CapabilityAccountsCreateStatic: {
+			capabilities.SurfaceAPI: func(env *parityEnv) error {
+				id := env.apiCreateStaticAccount("linkedin", "matrix_static_api", map[string]any{"access_token": "tok_matrix_api"})
+				if strings.TrimSpace(id) == "" {
+					return errors.New("empty account id")
+				}
+				return nil
+			},
+			capabilities.SurfaceCLI: func(env *parityEnv) error {
+				id := env.cliCreateStaticAccount("linkedin", "matrix_static_cli", map[string]string{"access_token": "tok_matrix_cli"})
+				if strings.TrimSpace(id) == "" {
+					return errors.New("empty account id")
+				}
+				return nil
+			},
+			capabilities.SurfaceMCP: func(env *parityEnv) error {
+				id := env.mcpCreateStaticAccount("linkedin", "matrix_static_mcp", map[string]any{"access_token": "tok_matrix_mcp"})
+				if strings.TrimSpace(id) == "" {
+					return errors.New("empty account id")
+				}
+				return nil
+			},
+		},
+		capabilities.CapabilityAccountsConnect: {
+			capabilities.SurfaceAPI: func(env *parityEnv) error {
+				id := env.apiCreateStaticAccount("linkedin", "matrix_connect_api", map[string]any{"access_token": "tok_connect_api"})
+				env.apiDisconnectAccount(id)
+				env.apiConnectAccount(id)
+				return nil
+			},
+			capabilities.SurfaceCLI: func(env *parityEnv) error {
+				id := env.apiCreateStaticAccount("linkedin", "matrix_connect_cli", map[string]any{"access_token": "tok_connect_cli"})
+				env.apiDisconnectAccount(id)
+				env.cliConnectAccount(id)
+				return nil
+			},
+			capabilities.SurfaceMCP: func(env *parityEnv) error {
+				id := env.apiCreateStaticAccount("linkedin", "matrix_connect_mcp", map[string]any{"access_token": "tok_connect_mcp"})
+				env.apiDisconnectAccount(id)
+				env.mcpConnectAccount(id)
+				return nil
+			},
+		},
+		capabilities.CapabilityAccountsDisconnect: {
+			capabilities.SurfaceAPI: func(env *parityEnv) error {
+				id := env.apiCreateStaticAccount("linkedin", "matrix_disconnect_api", map[string]any{"access_token": "tok_disconnect_api"})
+				env.apiDisconnectAccount(id)
+				return nil
+			},
+			capabilities.SurfaceCLI: func(env *parityEnv) error {
+				id := env.apiCreateStaticAccount("linkedin", "matrix_disconnect_cli", map[string]any{"access_token": "tok_disconnect_cli"})
+				env.cliDisconnectAccount(id)
+				return nil
+			},
+			capabilities.SurfaceMCP: func(env *parityEnv) error {
+				id := env.apiCreateStaticAccount("linkedin", "matrix_disconnect_mcp", map[string]any{"access_token": "tok_disconnect_mcp"})
+				env.mcpDisconnectAccount(id)
+				return nil
+			},
+		},
+		capabilities.CapabilityAccountsDelete: {
+			capabilities.SurfaceAPI: func(env *parityEnv) error {
+				id := env.apiCreateStaticAccount("linkedin", "matrix_delete_api", map[string]any{"access_token": "tok_delete_api"})
+				env.apiDisconnectAccount(id)
+				env.apiDeleteAccount(id)
+				return nil
+			},
+			capabilities.SurfaceCLI: func(env *parityEnv) error {
+				id := env.apiCreateStaticAccount("linkedin", "matrix_delete_cli", map[string]any{"access_token": "tok_delete_cli"})
+				env.apiDisconnectAccount(id)
+				env.cliDeleteAccount(id)
+				return nil
+			},
+			capabilities.SurfaceMCP: func(env *parityEnv) error {
+				id := env.apiCreateStaticAccount("linkedin", "matrix_delete_mcp", map[string]any{"access_token": "tok_delete_mcp"})
+				env.apiDisconnectAccount(id)
+				env.mcpDeleteAccount(id)
+				return nil
+			},
+		},
+		capabilities.CapabilityAccountsSetXPremium: {
+			capabilities.SurfaceAPI: func(env *parityEnv) error {
+				id := env.apiCreateStaticAccount("x", "matrix_xpremium_api", map[string]any{"access_token": "tok_xpremium_api", "access_token_secret": "sec_xpremium_api"})
+				env.apiSetXPremium(id, true)
+				return nil
+			},
+			capabilities.SurfaceCLI: func(env *parityEnv) error {
+				id := env.apiCreateStaticAccount("x", "matrix_xpremium_cli", map[string]any{"access_token": "tok_xpremium_cli", "access_token_secret": "sec_xpremium_cli"})
+				env.cliSetXPremium(id, true)
+				return nil
+			},
+			capabilities.SurfaceMCP: func(env *parityEnv) error {
+				id := env.apiCreateStaticAccount("x", "matrix_xpremium_mcp", map[string]any{"access_token": "tok_xpremium_mcp", "access_token_secret": "sec_xpremium_mcp"})
+				env.mcpSetXPremium(id, true)
 				return nil
 			},
 		},
@@ -323,6 +640,20 @@ func capabilityChecks() map[string]map[capabilities.Surface]parityCheck {
 				return nil
 			},
 		},
+		capabilities.CapabilitySettingsTimezone: {
+			capabilities.SurfaceAPI: func(env *parityEnv) error {
+				env.apiSetTimezone("Europe/Madrid")
+				return nil
+			},
+			capabilities.SurfaceCLI: func(env *parityEnv) error {
+				env.cliSetTimezone("Europe/Madrid")
+				return nil
+			},
+			capabilities.SurfaceMCP: func(env *parityEnv) error {
+				env.mcpSetTimezone("Europe/Madrid")
+				return nil
+			},
+		},
 	}
 }
 
@@ -374,4 +705,17 @@ func uploadMediaViaAPI(env *parityEnv, filePath string) (string, error) {
 		return "", fmt.Errorf("upload response missing id")
 	}
 	return id, nil
+}
+
+func containsID(ids []string, target string) bool {
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return false
+	}
+	for _, id := range ids {
+		if strings.TrimSpace(id) == target {
+			return true
+		}
+	}
+	return false
 }

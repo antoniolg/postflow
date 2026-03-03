@@ -108,16 +108,28 @@ Authorization: Bearer <API_TOKEN>
 ```
 
 Main MCP tools available:
+- `publisher_health`
 - `publisher_list_schedule`
 - `publisher_list_drafts`
+- `publisher_list_accounts`
+- `publisher_create_static_account`
+- `publisher_connect_account`
+- `publisher_disconnect_account`
+- `publisher_set_x_premium`
+- `publisher_delete_account`
 - `publisher_list_failed`
 - `publisher_create_post`
+- `publisher_cancel_post`
+- `publisher_schedule_post`
+- `publisher_edit_post`
+- `publisher_delete_post`
 - `publisher_validate_post`
 - `publisher_upload_media`
 - `publisher_list_media`
 - `publisher_delete_media`
 - `publisher_requeue_failed`
 - `publisher_delete_failed`
+- `publisher_set_timezone`
 
 ### Codex CLI
 
@@ -175,8 +187,17 @@ export PUBLISHER_API_TOKEN="<API_TOKEN>"
 Common commands:
 
 ```bash
+postflow health
 postflow schedule list --from 2026-03-01T00:00:00Z --to 2026-03-31T23:59:59Z
+postflow drafts list --limit 20
 postflow posts validate --account-id acc_xxx --text "hello"
+postflow posts schedule --id pst_xxx --scheduled-at 2026-03-01T10:00:00Z
+postflow posts edit --id pst_xxx --text "copy updated" --intent schedule --scheduled-at 2026-03-01T10:30:00Z
+postflow posts delete --id pst_xxx
+postflow posts cancel --id pst_xxx
+postflow accounts list
+postflow accounts create-static --platform x --external-account-id x-default --credential access_token=... --credential access_token_secret=...
+postflow settings set-timezone --timezone Europe/Madrid
 postflow media list --limit 20
 ```
 
