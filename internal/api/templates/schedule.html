@@ -528,11 +528,29 @@
       letter-spacing: 0.06em;
     }
     .day-item-text {
+      --day-item-line-height: 1.35;
+      --day-item-max-lines: 4;
       font-size: 13px;
-      line-height: 1.35;
+      line-height: var(--day-item-line-height);
       color: #ffffff;
       margin-bottom: 5px;
       word-break: break-word;
+      max-height: calc(1em * var(--day-item-line-height) * var(--day-item-max-lines));
+      overflow: hidden;
+    }
+    .day-item-text p,
+    .day-item-text ul,
+    .day-item-text ol,
+    .day-item-text blockquote {
+      margin: 0;
+    }
+    .day-item-text p + p,
+    .day-item-text p + ul,
+    .day-item-text p + ol,
+    .day-item-text ul + p,
+    .day-item-text ol + p,
+    .day-item-text blockquote + p {
+      margin-top: 0.35em;
     }
     .day-item-platform {
       font-size: 11px;
