@@ -1,10 +1,10 @@
-package publisher
+package postflow
 
 import (
 	"regexp"
 	"strings"
 
-	"github.com/antoniolg/publisher/internal/textfmt"
+	"github.com/antoniolg/postflow/internal/textfmt"
 )
 
 func formatPostTextForPublish(raw string) string {

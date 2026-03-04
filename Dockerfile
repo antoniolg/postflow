@@ -16,23 +16,23 @@ RUN set -eux; \
 	goarch="${TARGETARCH:-amd64}"; \
 	goarm=""; \
 	if [ "$goarch" = "arm" ] && [ -n "${TARGETVARIANT:-}" ]; then goarm="${TARGETVARIANT#v}"; fi; \
-	CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" GOARM="$goarm" go build -trimpath -ldflags "-s -w -X github.com/antoniolg/publisher/cmd/publisher.Version=${APP_VERSION}" -o /out/publisher ./cmd/publisher
+	CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" GOARM="$goarm" go build -trimpath -ldflags "-s -w -X github.com/antoniolg/postflow/cmd/postflow-server.Version=${APP_VERSION}" -o /out/postflow-server ./cmd/postflow-server
 
 FROM alpine:3.21
 RUN apk add --no-cache ca-certificates tzdata && adduser -D -u 10001 app
 WORKDIR /srv
 
-COPY --from=builder /out/publisher /usr/local/bin/publisher
+COPY --from=builder /out/postflow-server /usr/local/bin/postflow-server
 RUN mkdir -p /srv/data && chown -R app:app /srv
 
 USER app
 
 ENV PORT=8080 \
-    DATABASE_PATH=/srv/data/publisher.db \
+    DATABASE_PATH=/srv/data/postflow.db \
     DATA_DIR=/srv/data/media \
     LOG_LEVEL=info \
-    PUBLISHER_DRIVER=mock \
-    PUBLISHER_MASTER_KEY= \
+    POSTFLOW_DRIVER=mock \
+    POSTFLOW_MASTER_KEY= \
     PUBLIC_BASE_URL= \
     LINKEDIN_CLIENT_ID= \
     LINKEDIN_CLIENT_SECRET= \
@@ -46,4 +46,4 @@ ENV PORT=8080 \
     X_ACCESS_TOKEN_SECRET=
 
 EXPOSE 8080
-ENTRYPOINT ["/usr/local/bin/publisher"]
+ENTRYPOINT ["/usr/local/bin/postflow-server"]

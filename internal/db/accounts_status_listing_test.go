@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/antoniolg/publisher/internal/domain"
+	"github.com/antoniolg/postflow/internal/domain"
 )
 
 func TestListAccountsAndUpdateStatus(t *testing.T) {

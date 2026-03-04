@@ -1,4 +1,4 @@
-package publisher
+package postflow
 
 import (
 	"bytes"
@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/antoniolg/publisher/internal/domain"
+	"github.com/antoniolg/postflow/internal/domain"
 )
 
 type LinkedInProviderConfig struct {

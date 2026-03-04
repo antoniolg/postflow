@@ -11,11 +11,11 @@ import (
 	"strings"
 	"time"
 
-	dlqapp "github.com/antoniolg/publisher/internal/application/dlq"
-	"github.com/antoniolg/publisher/internal/db"
-	"github.com/antoniolg/publisher/internal/domain"
-	"github.com/antoniolg/publisher/internal/publisher"
-	"github.com/antoniolg/publisher/internal/secure"
+	dlqapp "github.com/antoniolg/postflow/internal/application/dlq"
+	"github.com/antoniolg/postflow/internal/db"
+	"github.com/antoniolg/postflow/internal/domain"
+	"github.com/antoniolg/postflow/internal/postflow"
+	"github.com/antoniolg/postflow/internal/secure"
 )
 
 type Server struct {
@@ -26,7 +26,7 @@ type Server struct {
 	APIToken          string
 	UIBasicUser       string
 	UIBasicPass       string
-	Registry          *publisher.ProviderRegistry
+	Registry          *postflow.ProviderRegistry
 	Cipher            *secure.Cipher
 	PublicBaseURL     string
 	AppVersion        string

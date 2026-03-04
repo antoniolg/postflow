@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/antoniolg/publisher/internal/db"
+	"github.com/antoniolg/postflow/internal/db"
 )
 
 func TestValidatePostEndpoint(t *testing.T) {

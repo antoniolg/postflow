@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/antoniolg/publisher/internal/domain"
+	"github.com/antoniolg/postflow/internal/domain"
 )
 
 func TestPlatformRulesParityInstagramRequiresMediaOnCreate(t *testing.T) {
@@ -30,7 +30,7 @@ func TestPlatformRulesParityInstagramRequiresMediaOnCreate(t *testing.T) {
 	}
 	assertContainsAny(t, "cli", stderr, "instagram", "media")
 
-	msg := env.mcpCallToolError("publisher_create_post", map[string]any{
+	msg := env.mcpCallToolError("postflow_create_post", map[string]any{
 		"account_id": instagramAccountID,
 		"text":       "instagram without media",
 	})
@@ -63,7 +63,7 @@ func TestPlatformRulesParityInstagramRejectsEditRemovingMedia(t *testing.T) {
 	}
 	assertContainsAny(t, "cli", stderr, "instagram", "media")
 
-	msg := env.mcpCallToolError("publisher_edit_post", map[string]any{
+	msg := env.mcpCallToolError("postflow_edit_post", map[string]any{
 		"post_id":   mcpPostID,
 		"text":      "caption mcp edited",
 		"media_ids": []string{},

@@ -13,14 +13,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/antoniolg/publisher/internal/api"
-	"github.com/antoniolg/publisher/internal/config"
-	"github.com/antoniolg/publisher/internal/db"
-	"github.com/antoniolg/publisher/internal/domain"
-	"github.com/antoniolg/publisher/internal/observability"
-	"github.com/antoniolg/publisher/internal/publisher"
-	"github.com/antoniolg/publisher/internal/secure"
-	"github.com/antoniolg/publisher/internal/worker"
+	"github.com/antoniolg/postflow/internal/api"
+	"github.com/antoniolg/postflow/internal/config"
+	"github.com/antoniolg/postflow/internal/db"
+	"github.com/antoniolg/postflow/internal/domain"
+	"github.com/antoniolg/postflow/internal/observability"
+	"github.com/antoniolg/postflow/internal/postflow"
+	"github.com/antoniolg/postflow/internal/secure"
+	"github.com/antoniolg/postflow/internal/worker"
 )
 
 var Version = "dev"
@@ -102,25 +102,25 @@ func main() {
 		_ = httpServer.Shutdown(shutdownCtx)
 	}()
 
-	slog.Info("publisher listening", "addr", ":"+cfg.Port, "log_level", cfg.LogLevel)
+	slog.Info("postflow listening", "addr", ":"+cfg.Port, "log_level", cfg.LogLevel)
 	if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		slog.Error("http server failed", "error", err)
 		os.Exit(1)
 	}
 }
 
-func buildProviderRegistry(cfg config.Config, cipher *secure.Cipher) (*publisher.ProviderRegistry, error) {
-	driver := strings.ToLower(strings.TrimSpace(cfg.PublisherDriver))
+func buildProviderRegistry(cfg config.Config, cipher *secure.Cipher) (*postflow.ProviderRegistry, error) {
+	driver := strings.ToLower(strings.TrimSpace(cfg.PostflowDriver))
 	switch driver {
 	case "", "mock":
-		return publisher.NewProviderRegistry(
-			publisher.NewMockProvider(domain.PlatformX),
-			publisher.NewMockProvider(domain.PlatformLinkedIn),
-			publisher.NewMockProvider(domain.PlatformFacebook),
-			publisher.NewMockProvider(domain.PlatformInstagram),
+		return postflow.NewProviderRegistry(
+			postflow.NewMockProvider(domain.PlatformX),
+			postflow.NewMockProvider(domain.PlatformLinkedIn),
+			postflow.NewMockProvider(domain.PlatformFacebook),
+			postflow.NewMockProvider(domain.PlatformInstagram),
 		), nil
 	case "live", "real", "x":
-		xProvider := publisher.NewXProvider(publisher.XConfig{
+		xProvider := postflow.NewXProvider(postflow.XConfig{
 			APIBaseURL:        cfg.X.APIBaseURL,
 			UploadBaseURL:     cfg.X.UploadBaseURL,
 			APIKey:            cfg.X.APIKey,
@@ -128,20 +128,20 @@ func buildProviderRegistry(cfg config.Config, cipher *secure.Cipher) (*publisher
 			AccessToken:       cfg.X.AccessToken,
 			AccessTokenSecret: cfg.X.AccessTokenSecret,
 		})
-		linkedinProvider := publisher.NewLinkedInProvider(publisher.LinkedInProviderConfig{
+		linkedinProvider := postflow.NewLinkedInProvider(postflow.LinkedInProviderConfig{
 			ClientID:     cfg.LinkedIn.ClientID,
 			ClientSecret: cfg.LinkedIn.ClientSecret,
 		})
-		metaCfg := publisher.MetaProviderConfig{
+		metaCfg := postflow.MetaProviderConfig{
 			AppID:           cfg.Meta.AppID,
 			AppSecret:       cfg.Meta.AppSecret,
 			MediaURLBuilder: buildSignedMediaURLBuilder(cfg.PublicBaseURL, cipher),
 		}
-		facebookProvider := publisher.NewFacebookProvider(metaCfg)
-		instagramProvider := publisher.NewInstagramProvider(metaCfg)
-		return publisher.NewProviderRegistry(xProvider, linkedinProvider, facebookProvider, instagramProvider), nil
+		facebookProvider := postflow.NewFacebookProvider(metaCfg)
+		instagramProvider := postflow.NewInstagramProvider(metaCfg)
+		return postflow.NewProviderRegistry(xProvider, linkedinProvider, facebookProvider, instagramProvider), nil
 	default:
-		return nil, fmt.Errorf("unsupported PUBLISHER_DRIVER=%q (valid: mock, live)", cfg.PublisherDriver)
+		return nil, fmt.Errorf("unsupported POSTFLOW_DRIVER=%q (valid: mock, live)", cfg.PostflowDriver)
 	}
 }
 
@@ -185,7 +185,7 @@ func bootstrapXAccount(ctx context.Context, store *db.Store, cipher *secure.Ciph
 	if err != nil {
 		return err
 	}
-	sealed, nonce, err := cipher.EncryptJSON(publisher.Credentials{
+	sealed, nonce, err := cipher.EncryptJSON(postflow.Credentials{
 		AccessToken:       strings.TrimSpace(cfg.X.AccessToken),
 		AccessTokenSecret: strings.TrimSpace(cfg.X.AccessTokenSecret),
 		TokenType:         "oauth1",

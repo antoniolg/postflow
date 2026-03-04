@@ -19,7 +19,7 @@ jobs:
       COVERAGE_MIN_API: "60"
       COVERAGE_MIN_CLI: "40"
       COVERAGE_MIN_DB: "55"
-      COVERAGE_MIN_PUBLISHER: "50"
+      COVERAGE_MIN_POSTFLOW: "50"
     steps:
       - name: Checkout
         uses: actions/checkout@v4

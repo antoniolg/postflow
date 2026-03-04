@@ -1,8 +1,11 @@
 .git
 .gitignore
-publisher
-publisher.db
-publisher.db-*
+/postflow
+/postflow-server
+/postflow.db
+/postflow.db-*
+/*.db
+/*.db-*
 data/
 .tmp/
 .DS_Store

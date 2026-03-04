@@ -34,12 +34,12 @@
 Set these in Coolify:
 
 - `PORT=8080`
-- `DATABASE_PATH=/srv/data/publisher.db`
+- `DATABASE_PATH=/srv/data/postflow.db`
 - `DATA_DIR=/srv/data/media`
 - `API_TOKEN=<long-random-token>`
 - `UI_BASIC_USER=<your-user>`
 - `UI_BASIC_PASS=<long-password>`
-- `PUBLISHER_MASTER_KEY=<base64-32-bytes>`
+- `POSTFLOW_MASTER_KEY=<base64-32-bytes>`
 - `PUBLIC_BASE_URL=https://<your-coolify-domain>`
 
 Optional recommended:
@@ -52,7 +52,7 @@ Optional recommended:
 
 For real X publishing:
 
-- `PUBLISHER_DRIVER=live` (`x` also works as a legacy alias)
+- `POSTFLOW_DRIVER=live` (`x` also works as a legacy alias)
 - `X_API_KEY=...`
 - `X_API_SECRET=...`
 - `X_ACCESS_TOKEN=...`
@@ -101,7 +101,7 @@ Because this app uses SQLite + local media files:
 
 - Schema upgrades run automatically at startup using non-destructive migrations.
 - When there are pending migrations on an existing DB, the app creates a local snapshot first:
-  - `/srv/data/publisher.db.bak-YYYYMMDDTHHMMSSZ` (and `-wal`/`-shm` if present).
+  - `/srv/data/postflow.db.bak-YYYYMMDDTHHMMSSZ` (and `-wal`/`-shm` if present).
 
 - Keep `/srv/data` as persistent volume.
 - Backup both database and media using scripts:
@@ -114,7 +114,7 @@ DATA_ROOT=/srv/data BACKUP_DIR=/srv/backups ./scripts/backup.sh
 - Restore:
 
 ```bash
-./scripts/restore.sh /srv/backups/publisher-backup-YYYYMMDDTHHMMSSZ.tar.gz /srv/data
+./scripts/restore.sh /srv/backups/postflow-backup-YYYYMMDDTHHMMSSZ.tar.gz /srv/data
 ```
 
 Recommended cadence:

@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/antoniolg/publisher/internal/publisher"
-	"github.com/antoniolg/publisher/internal/secure"
+	"github.com/antoniolg/postflow/internal/postflow"
+	"github.com/antoniolg/postflow/internal/secure"
 )
 
 func TestLoadCredentialsReturnsDecryptErrorOnCipherMismatch(t *testing.T) {
@@ -14,7 +14,7 @@ func TestLoadCredentialsReturnsDecryptErrorOnCipherMismatch(t *testing.T) {
 
 	encryptCipher := newWorkerTestCipher(t)
 	saveWorker := Worker{Store: store, Cipher: encryptCipher}
-	if err := (workerCredentialsStore{worker: saveWorker}).SaveCredentials(t.Context(), account.ID, publisher.Credentials{
+	if err := (workerCredentialsStore{worker: saveWorker}).SaveCredentials(t.Context(), account.ID, postflow.Credentials{
 		AccessToken:       "access_mismatch",
 		AccessTokenSecret: "secret_mismatch",
 		TokenType:         "oauth1",

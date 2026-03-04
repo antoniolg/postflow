@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/antoniolg/publisher/internal/application/ports"
-	"github.com/antoniolg/publisher/internal/domain"
-	"github.com/antoniolg/publisher/internal/publisher"
+	"github.com/antoniolg/postflow/internal/application/ports"
+	"github.com/antoniolg/postflow/internal/domain"
+	"github.com/antoniolg/postflow/internal/postflow"
 )
 
 type Store interface {
@@ -86,8 +86,8 @@ func (r Runner) RunOnce(ctx context.Context) {
 			continue
 		}
 
-		publishOpts := publisher.PublishOptions{
-			Mode: publisher.PublishModeRoot,
+		publishOpts := postflow.PublishOptions{
+			Mode: postflow.PublishModeRoot,
 		}
 		if post.ParentPostID != nil && strings.TrimSpace(*post.ParentPostID) != "" {
 			parent, err := r.Store.GetPost(ctx, strings.TrimSpace(*post.ParentPostID))
@@ -104,9 +104,9 @@ func (r Runner) RunOnce(ctx context.Context) {
 			}
 			publishOpts.ParentExternalID = strings.TrimSpace(*parent.ExternalID)
 			if post.Platform == domain.PlatformX {
-				publishOpts.Mode = publisher.PublishModeReply
+				publishOpts.Mode = postflow.PublishModeReply
 			} else {
-				publishOpts.Mode = publisher.PublishModeComment
+				publishOpts.Mode = postflow.PublishModeComment
 			}
 		}
 
@@ -140,18 +140,18 @@ func (r Runner) RunOnce(ctx context.Context) {
 	}
 }
 
-func (r Runner) refreshIfNeeded(ctx context.Context, provider publisher.Provider, account domain.SocialAccount, credentials publisher.Credentials, force bool) (publisher.Credentials, error) {
+func (r Runner) refreshIfNeeded(ctx context.Context, provider postflow.Provider, account domain.SocialAccount, credentials postflow.Credentials, force bool) (postflow.Credentials, error) {
 	if force {
 		now := time.Now().UTC().Add(-1 * time.Minute)
 		credentials.ExpiresAt = &now
 	}
 	updated, changed, err := provider.RefreshIfNeeded(ctx, account, credentials)
 	if err != nil {
-		return publisher.Credentials{}, err
+		return postflow.Credentials{}, err
 	}
 	if changed {
 		if err := r.Credentials.SaveCredentials(ctx, account.ID, updated); err != nil {
-			return publisher.Credentials{}, err
+			return postflow.Credentials{}, err
 		}
 	}
 	return updated, nil

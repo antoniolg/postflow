@@ -27,7 +27,7 @@ func TestRequiredCapabilitiesFailureParity(t *testing.T) {
 		}
 		assertContainsAny(t, "cli", stderr, "account not found")
 
-		msg := env.mcpCallToolError("publisher_create_post", map[string]any{"account_id": "acc_missing", "text": "fail me"})
+		msg := env.mcpCallToolError("postflow_create_post", map[string]any{"account_id": "acc_missing", "text": "fail me"})
 		assertContainsAny(t, "mcp", msg, "account not found")
 	})
 
@@ -47,7 +47,7 @@ func TestRequiredCapabilitiesFailureParity(t *testing.T) {
 		}
 		assertContainsAny(t, "cli", stderr, "account not found")
 
-		msg := env.mcpCallToolError("publisher_validate_post", map[string]any{"account_id": "acc_missing", "text": "fail me"})
+		msg := env.mcpCallToolError("postflow_validate_post", map[string]any{"account_id": "acc_missing", "text": "fail me"})
 		assertContainsAny(t, "mcp", msg, "account not found")
 	})
 
@@ -66,7 +66,7 @@ func TestRequiredCapabilitiesFailureParity(t *testing.T) {
 		}
 		assertContainsAny(t, "cli", stderr, "--scheduled-at is required")
 
-		msg := env.mcpCallToolError("publisher_schedule_post", map[string]any{"post_id": postID})
+		msg := env.mcpCallToolError("postflow_schedule_post", map[string]any{"post_id": postID})
 		assertContainsAny(t, "mcp", msg, "scheduled_at is required", "scheduled_at")
 	})
 
@@ -97,7 +97,7 @@ func TestRequiredCapabilitiesFailureParity(t *testing.T) {
 		}
 		assertContainsAny(t, "cli", stderr, "post not deletable")
 
-		msg := env.mcpCallToolError("publisher_delete_post", map[string]any{"post_id": mcpID})
+		msg := env.mcpCallToolError("postflow_delete_post", map[string]any{"post_id": mcpID})
 		assertContainsAny(t, "mcp", msg, "post not deletable")
 	})
 
@@ -114,7 +114,7 @@ func TestRequiredCapabilitiesFailureParity(t *testing.T) {
 		}
 		assertContainsAny(t, "cli", stderr, "RFC3339", "from must", "invalid from", "cannot parse")
 
-		msg := env.mcpCallToolError("publisher_list_schedule", map[string]any{"from": "invalid-time", "to": time.Now().UTC().Format(time.RFC3339)})
+		msg := env.mcpCallToolError("postflow_list_schedule", map[string]any{"from": "invalid-time", "to": time.Now().UTC().Format(time.RFC3339)})
 		assertContainsAny(t, "mcp", msg, "RFC3339", "from must", "invalid from", "cannot parse")
 	})
 
@@ -131,7 +131,7 @@ func TestRequiredCapabilitiesFailureParity(t *testing.T) {
 		}
 		assertContainsAny(t, "cli", stderr, "not found", "no rows")
 
-		msg := env.mcpCallToolError("publisher_requeue_failed", map[string]any{"dead_letter_id": "dlq_missing"})
+		msg := env.mcpCallToolError("postflow_requeue_failed", map[string]any{"dead_letter_id": "dlq_missing"})
 		assertContainsAny(t, "mcp", msg, "not found", "no rows")
 	})
 
@@ -148,7 +148,7 @@ func TestRequiredCapabilitiesFailureParity(t *testing.T) {
 		}
 		assertContainsAny(t, "cli", stderr, "media not found")
 
-		msg := env.mcpCallToolError("publisher_delete_media", map[string]any{"media_id": "med_missing"})
+		msg := env.mcpCallToolError("postflow_delete_media", map[string]any{"media_id": "med_missing"})
 		assertContainsAny(t, "mcp", msg, "media not found")
 	})
 }

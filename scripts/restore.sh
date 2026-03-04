@@ -24,14 +24,14 @@ trap cleanup EXIT
 
 tar -xzf "$ARCHIVE" -C "$TMP_DIR"
 
-if [ -f "$TMP_DIR/publisher.db" ]; then
-  cp "$TMP_DIR/publisher.db" "$DATA_ROOT/publisher.db"
+if [ -f "$TMP_DIR/postflow.db" ]; then
+  cp "$TMP_DIR/postflow.db" "$DATA_ROOT/postflow.db"
 fi
-if [ -f "$TMP_DIR/publisher.db-wal" ]; then
-  cp "$TMP_DIR/publisher.db-wal" "$DATA_ROOT/publisher.db-wal"
+if [ -f "$TMP_DIR/postflow.db-wal" ]; then
+  cp "$TMP_DIR/postflow.db-wal" "$DATA_ROOT/postflow.db-wal"
 fi
-if [ -f "$TMP_DIR/publisher.db-shm" ]; then
-  cp "$TMP_DIR/publisher.db-shm" "$DATA_ROOT/publisher.db-shm"
+if [ -f "$TMP_DIR/postflow.db-shm" ]; then
+  cp "$TMP_DIR/postflow.db-shm" "$DATA_ROOT/postflow.db-shm"
 fi
 if [ -d "$TMP_DIR/media" ]; then
   rm -rf "$DATA_ROOT/media"

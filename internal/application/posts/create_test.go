@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/antoniolg/publisher/internal/db"
-	"github.com/antoniolg/publisher/internal/domain"
-	"github.com/antoniolg/publisher/internal/publisher"
+	"github.com/antoniolg/postflow/internal/db"
+	"github.com/antoniolg/postflow/internal/domain"
+	"github.com/antoniolg/postflow/internal/postflow"
 )
 
 type fakeStore struct {
@@ -115,10 +115,10 @@ func (f *fakeStore) DeletePostEditable(_ context.Context, id string) error {
 }
 
 type fakeRegistry struct {
-	providers map[domain.Platform]publisher.Provider
+	providers map[domain.Platform]postflow.Provider
 }
 
-func (f fakeRegistry) Get(platform domain.Platform) (publisher.Provider, bool) {
+func (f fakeRegistry) Get(platform domain.Platform) (postflow.Provider, bool) {
 	provider, ok := f.providers[platform]
 	return provider, ok
 }
@@ -132,26 +132,26 @@ func (f fakeProvider) Platform() domain.Platform {
 	return f.platform
 }
 
-func (f fakeProvider) ValidateDraft(context.Context, domain.SocialAccount, publisher.Draft) ([]string, error) {
+func (f fakeProvider) ValidateDraft(context.Context, domain.SocialAccount, postflow.Draft) ([]string, error) {
 	if f.validateErr != nil {
 		return nil, f.validateErr
 	}
 	return nil, nil
 }
 
-func (f fakeProvider) Publish(context.Context, domain.SocialAccount, publisher.Credentials, domain.Post, publisher.PublishOptions) (string, error) {
+func (f fakeProvider) Publish(context.Context, domain.SocialAccount, postflow.Credentials, domain.Post, postflow.PublishOptions) (string, error) {
 	return "", nil
 }
 
-func (f fakeProvider) RefreshIfNeeded(context.Context, domain.SocialAccount, publisher.Credentials) (publisher.Credentials, bool, error) {
-	return publisher.Credentials{}, false, nil
+func (f fakeProvider) RefreshIfNeeded(context.Context, domain.SocialAccount, postflow.Credentials) (postflow.Credentials, bool, error) {
+	return postflow.Credentials{}, false, nil
 }
 
 func TestCreateValidationErrors(t *testing.T) {
 	service := CreateService{
 		Store: &fakeStore{},
 		Registry: fakeRegistry{
-			providers: map[domain.Platform]publisher.Provider{
+			providers: map[domain.Platform]postflow.Provider{
 				domain.PlatformX: fakeProvider{platform: domain.PlatformX},
 			},
 		},
@@ -199,7 +199,7 @@ func TestCreateMultipleAccountsScopedIdempotency(t *testing.T) {
 	service := CreateService{
 		Store: store,
 		Registry: fakeRegistry{
-			providers: map[domain.Platform]publisher.Provider{
+			providers: map[domain.Platform]postflow.Provider{
 				domain.PlatformX: fakeProvider{platform: domain.PlatformX},
 			},
 		},
@@ -247,7 +247,7 @@ func TestCreateRollbackOnSecondAccountFailure(t *testing.T) {
 	service := CreateService{
 		Store: store,
 		Registry: fakeRegistry{
-			providers: map[domain.Platform]publisher.Provider{
+			providers: map[domain.Platform]postflow.Provider{
 				domain.PlatformX: fakeProvider{platform: domain.PlatformX},
 			},
 		},
@@ -278,7 +278,7 @@ func TestCreatePropagatesProviderValidationErrorsAsValidation(t *testing.T) {
 	service := CreateService{
 		Store: store,
 		Registry: fakeRegistry{
-			providers: map[domain.Platform]publisher.Provider{
+			providers: map[domain.Platform]postflow.Provider{
 				domain.PlatformX: fakeProvider{
 					platform:    domain.PlatformX,
 					validateErr: errors.New("post text too long"),
@@ -312,7 +312,7 @@ func TestCreateRejectsTooManySegments(t *testing.T) {
 	service := CreateService{
 		Store: store,
 		Registry: fakeRegistry{
-			providers: map[domain.Platform]publisher.Provider{
+			providers: map[domain.Platform]postflow.Provider{
 				domain.PlatformX: fakeProvider{platform: domain.PlatformX},
 			},
 		},

@@ -17,7 +17,7 @@ if [[ -n "${UI_BASIC_USER:-}" && -n "${UI_BASIC_PASS:-}" ]]; then
 fi
 
 VIEWS=("calendar" "publications" "drafts" "failed" "create" "settings")
-OUT_DIR="${A11Y_OUT_DIR:-/tmp/publisher-a11y}"
+OUT_DIR="${A11Y_OUT_DIR:-/tmp/postflow-a11y}"
 mkdir -p "$OUT_DIR"
 
 echo "Running axe accessibility checks against: $BASE_URL"

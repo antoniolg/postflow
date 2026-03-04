@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/antoniolg/publisher/internal/db"
-	"github.com/antoniolg/publisher/internal/domain"
-	"github.com/antoniolg/publisher/internal/publisher"
+	"github.com/antoniolg/postflow/internal/db"
+	"github.com/antoniolg/postflow/internal/domain"
+	"github.com/antoniolg/postflow/internal/postflow"
 )
 
 type oauthReplayTestProvider struct {
@@ -24,29 +24,29 @@ func (p *oauthReplayTestProvider) Platform() domain.Platform {
 	return domain.PlatformLinkedIn
 }
 
-func (p *oauthReplayTestProvider) ValidateDraft(_ context.Context, _ domain.SocialAccount, _ publisher.Draft) ([]string, error) {
+func (p *oauthReplayTestProvider) ValidateDraft(_ context.Context, _ domain.SocialAccount, _ postflow.Draft) ([]string, error) {
 	return nil, nil
 }
 
-func (p *oauthReplayTestProvider) Publish(_ context.Context, _ domain.SocialAccount, _ publisher.Credentials, _ domain.Post, _ publisher.PublishOptions) (string, error) {
+func (p *oauthReplayTestProvider) Publish(_ context.Context, _ domain.SocialAccount, _ postflow.Credentials, _ domain.Post, _ postflow.PublishOptions) (string, error) {
 	return "ok", nil
 }
 
-func (p *oauthReplayTestProvider) RefreshIfNeeded(_ context.Context, _ domain.SocialAccount, credentials publisher.Credentials) (publisher.Credentials, bool, error) {
+func (p *oauthReplayTestProvider) RefreshIfNeeded(_ context.Context, _ domain.SocialAccount, credentials postflow.Credentials) (postflow.Credentials, bool, error) {
 	return credentials, false, nil
 }
 
-func (p *oauthReplayTestProvider) StartOAuth(_ context.Context, in publisher.OAuthStartInput) (publisher.OAuthStartOutput, error) {
-	return publisher.OAuthStartOutput{AuthURL: "https://example.com/oauth?state=" + url.QueryEscape(in.State)}, nil
+func (p *oauthReplayTestProvider) StartOAuth(_ context.Context, in postflow.OAuthStartInput) (postflow.OAuthStartOutput, error) {
+	return postflow.OAuthStartOutput{AuthURL: "https://example.com/oauth?state=" + url.QueryEscape(in.State)}, nil
 }
 
-func (p *oauthReplayTestProvider) HandleOAuthCallback(_ context.Context, _ publisher.OAuthCallbackInput) ([]publisher.ConnectedAccount, error) {
-	return []publisher.ConnectedAccount{
+func (p *oauthReplayTestProvider) HandleOAuthCallback(_ context.Context, _ postflow.OAuthCallbackInput) ([]postflow.ConnectedAccount, error) {
+	return []postflow.ConnectedAccount{
 		{
 			Platform:          domain.PlatformLinkedIn,
 			DisplayName:       "LinkedIn Test",
 			ExternalAccountID: "linkedin_test_id",
-			Credentials: publisher.Credentials{
+			Credentials: postflow.Credentials{
 				AccessToken: "token",
 				TokenType:   "Bearer",
 			},
@@ -67,7 +67,7 @@ func TestOAuthCallbackReplayInHTMLFlowReturnsSuccess(t *testing.T) {
 		Store:             store,
 		DataDir:           tempDir,
 		DefaultMaxRetries: 3,
-		Registry:          publisher.NewProviderRegistry(provider),
+		Registry:          postflow.NewProviderRegistry(provider),
 		PublicBaseURL:     "https://postflow.example",
 	}
 	h := srv.Handler()

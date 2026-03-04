@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/antoniolg/publisher/internal/domain"
+	"github.com/antoniolg/postflow/internal/domain"
 )
 
 func TestCreatePostWithIdempotencyKeyReturnsExisting(t *testing.T) {

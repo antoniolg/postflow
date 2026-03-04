@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/antoniolg/publisher/internal/domain"
-	"github.com/antoniolg/publisher/internal/publisher"
+	"github.com/antoniolg/postflow/internal/domain"
+	"github.com/antoniolg/postflow/internal/postflow"
 )
 
 func TestRunnerRecordsFailureWhenParentLookupFails(t *testing.T) {
@@ -27,7 +27,7 @@ func TestRunnerRecordsFailureWhenParentLookupFails(t *testing.T) {
 	provider := &fakeProvider{platform: domain.PlatformX, publishExternalID: "ext_unused"}
 	runner := Runner{
 		Store:       store,
-		Registry:    fakeRegistry{providers: map[domain.Platform]publisher.Provider{domain.PlatformX: provider}},
+		Registry:    fakeRegistry{providers: map[domain.Platform]postflow.Provider{domain.PlatformX: provider}},
 		Credentials: &fakeCredentialsStore{},
 	}
 
@@ -65,7 +65,7 @@ func TestRunnerRecordsFailureWhenParentExternalIDMissing(t *testing.T) {
 	provider := &fakeProvider{platform: domain.PlatformLinkedIn, publishExternalID: "ext_unused"}
 	runner := Runner{
 		Store:       store,
-		Registry:    fakeRegistry{providers: map[domain.Platform]publisher.Provider{domain.PlatformLinkedIn: provider}},
+		Registry:    fakeRegistry{providers: map[domain.Platform]postflow.Provider{domain.PlatformLinkedIn: provider}},
 		Credentials: &fakeCredentialsStore{},
 	}
 
@@ -94,7 +94,7 @@ func TestRunnerAuthFailureAfterRetryMarksAccountError(t *testing.T) {
 	provider := &alwaysAuthFailureProvider{platform: domain.PlatformX}
 	runner := Runner{
 		Store:       store,
-		Registry:    fakeRegistry{providers: map[domain.Platform]publisher.Provider{domain.PlatformX: provider}},
+		Registry:    fakeRegistry{providers: map[domain.Platform]postflow.Provider{domain.PlatformX: provider}},
 		Credentials: &fakeCredentialsStore{},
 	}
 
@@ -141,15 +141,15 @@ func (p *alwaysAuthFailureProvider) Platform() domain.Platform {
 	return p.platform
 }
 
-func (p *alwaysAuthFailureProvider) ValidateDraft(context.Context, domain.SocialAccount, publisher.Draft) ([]string, error) {
+func (p *alwaysAuthFailureProvider) ValidateDraft(context.Context, domain.SocialAccount, postflow.Draft) ([]string, error) {
 	return nil, nil
 }
 
-func (p *alwaysAuthFailureProvider) Publish(context.Context, domain.SocialAccount, publisher.Credentials, domain.Post, publisher.PublishOptions) (string, error) {
+func (p *alwaysAuthFailureProvider) Publish(context.Context, domain.SocialAccount, postflow.Credentials, domain.Post, postflow.PublishOptions) (string, error) {
 	p.publishCalls++
 	return "", errors.New("401 unauthorized")
 }
 
-func (p *alwaysAuthFailureProvider) RefreshIfNeeded(context.Context, domain.SocialAccount, publisher.Credentials) (publisher.Credentials, bool, error) {
-	return publisher.Credentials{}, false, nil
+func (p *alwaysAuthFailureProvider) RefreshIfNeeded(context.Context, domain.SocialAccount, postflow.Credentials) (postflow.Credentials, bool, error) {
+	return postflow.Credentials{}, false, nil
 }

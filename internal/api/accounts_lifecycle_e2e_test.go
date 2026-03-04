@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/antoniolg/publisher/internal/db"
-	"github.com/antoniolg/publisher/internal/domain"
-	"github.com/antoniolg/publisher/internal/publisher"
+	"github.com/antoniolg/postflow/internal/db"
+	"github.com/antoniolg/postflow/internal/domain"
+	"github.com/antoniolg/postflow/internal/postflow"
 )
 
 type oauthLifecycleProvider struct {
@@ -26,31 +26,31 @@ func (p *oauthLifecycleProvider) Platform() domain.Platform {
 	return domain.PlatformLinkedIn
 }
 
-func (p *oauthLifecycleProvider) ValidateDraft(_ context.Context, _ domain.SocialAccount, _ publisher.Draft) ([]string, error) {
+func (p *oauthLifecycleProvider) ValidateDraft(_ context.Context, _ domain.SocialAccount, _ postflow.Draft) ([]string, error) {
 	return nil, nil
 }
 
-func (p *oauthLifecycleProvider) Publish(_ context.Context, _ domain.SocialAccount, _ publisher.Credentials, _ domain.Post, _ publisher.PublishOptions) (string, error) {
+func (p *oauthLifecycleProvider) Publish(_ context.Context, _ domain.SocialAccount, _ postflow.Credentials, _ domain.Post, _ postflow.PublishOptions) (string, error) {
 	return "ok", nil
 }
 
-func (p *oauthLifecycleProvider) RefreshIfNeeded(_ context.Context, _ domain.SocialAccount, credentials publisher.Credentials) (publisher.Credentials, bool, error) {
+func (p *oauthLifecycleProvider) RefreshIfNeeded(_ context.Context, _ domain.SocialAccount, credentials postflow.Credentials) (postflow.Credentials, bool, error) {
 	return credentials, false, nil
 }
 
-func (p *oauthLifecycleProvider) StartOAuth(_ context.Context, in publisher.OAuthStartInput) (publisher.OAuthStartOutput, error) {
-	return publisher.OAuthStartOutput{
+func (p *oauthLifecycleProvider) StartOAuth(_ context.Context, in postflow.OAuthStartInput) (postflow.OAuthStartOutput, error) {
+	return postflow.OAuthStartOutput{
 		AuthURL: "https://oauth.example/auth?state=" + url.QueryEscape(in.State),
 	}, nil
 }
 
-func (p *oauthLifecycleProvider) HandleOAuthCallback(_ context.Context, _ publisher.OAuthCallbackInput) ([]publisher.ConnectedAccount, error) {
-	return []publisher.ConnectedAccount{
+func (p *oauthLifecycleProvider) HandleOAuthCallback(_ context.Context, _ postflow.OAuthCallbackInput) ([]postflow.ConnectedAccount, error) {
+	return []postflow.ConnectedAccount{
 		{
 			Platform:          domain.PlatformLinkedIn,
 			DisplayName:       "LinkedIn OAuth",
 			ExternalAccountID: "li-oauth-e2e",
-			Credentials: publisher.Credentials{
+			Credentials: postflow.Credentials{
 				AccessToken:  "oauth_access_token",
 				RefreshToken: "oauth_refresh_token",
 				TokenType:    "Bearer",
@@ -74,7 +74,7 @@ func TestAccountsStaticLifecycleJSON(t *testing.T) {
 		Store:             store,
 		DataDir:           tempDir,
 		DefaultMaxRetries: 3,
-		Registry:          publisher.NewProviderRegistry(publisher.NewMockProvider(domain.PlatformX)),
+		Registry:          postflow.NewProviderRegistry(postflow.NewMockProvider(domain.PlatformX)),
 	}
 	h := srv.Handler()
 
@@ -192,7 +192,7 @@ func TestOAuthJSONLifecycleIncludesReplayInvalidAndExpiredState(t *testing.T) {
 		Store:             store,
 		DataDir:           tempDir,
 		DefaultMaxRetries: 3,
-		Registry:          publisher.NewProviderRegistry(provider),
+		Registry:          postflow.NewProviderRegistry(provider),
 		PublicBaseURL:     "https://postflow.example",
 	}
 	h := srv.Handler()

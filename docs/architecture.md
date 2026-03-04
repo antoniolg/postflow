@@ -7,14 +7,14 @@ Read when:
 
 ## Current style
 
-`publisher` uses a **modular monolith** with clear boundaries:
+`postflow` uses a **modular monolith** with clear boundaries:
 
 - `cmd/`: entrypoints (`server`, `worker`, `cli`).
 - `internal/api`: HTTP/MCP adapters (parsing, HTTP status, redirects, render).
 - `internal/worker`: runtime adapter for background execution.
 - `internal/cli`: CLI adapter.
 - `internal/application`: use cases and orchestration.
-- `internal/db`, `internal/publisher`, `internal/secure`: infrastructure.
+- `internal/db`, `internal/postflow`, `internal/secure`: infrastructure.
 - `internal/domain`: entities and status enums.
 
 ## Layer rules

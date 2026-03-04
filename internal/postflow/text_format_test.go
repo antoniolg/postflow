@@ -1,4 +1,4 @@
-package publisher
+package postflow
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/antoniolg/publisher/internal/domain"
+	"github.com/antoniolg/postflow/internal/domain"
 )
 
 func TestFormatPostTextForPublishKeepsPlainMarkdownText(t *testing.T) {

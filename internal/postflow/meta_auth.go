@@ -1,4 +1,4 @@
-package publisher
+package postflow
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/antoniolg/publisher/internal/domain"
+	"github.com/antoniolg/postflow/internal/domain"
 )
 
 func (p *FacebookProvider) RefreshIfNeeded(ctx context.Context, _ domain.SocialAccount, credentials Credentials) (Credentials, bool, error) {

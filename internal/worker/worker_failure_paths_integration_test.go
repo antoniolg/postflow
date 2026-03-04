@@ -7,11 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/antoniolg/publisher/internal/application/ports"
-	publishcycle "github.com/antoniolg/publisher/internal/application/publishcycle"
-	"github.com/antoniolg/publisher/internal/db"
-	"github.com/antoniolg/publisher/internal/domain"
-	"github.com/antoniolg/publisher/internal/publisher"
+	"github.com/antoniolg/postflow/internal/application/ports"
+	publishcycle "github.com/antoniolg/postflow/internal/application/publishcycle"
+	"github.com/antoniolg/postflow/internal/db"
+	"github.com/antoniolg/postflow/internal/domain"
+	"github.com/antoniolg/postflow/internal/postflow"
 )
 
 func TestWorkerFailurePathMissingProviderMovesPostToFailed(t *testing.T) {
@@ -20,7 +20,7 @@ func TestWorkerFailurePathMissingProviderMovesPostToFailed(t *testing.T) {
 	post := createWorkerDuePost(t, store, account.ID, "missing provider", 1)
 
 	creds := workerCredentialsStore{worker: Worker{Store: store, Cipher: newWorkerTestCipher(t)}}
-	runPublishCycleOnce(t, store, publisher.NewProviderRegistry(), creds, 5*time.Second, 1*time.Second)
+	runPublishCycleOnce(t, store, postflow.NewProviderRegistry(), creds, 5*time.Second, 1*time.Second)
 
 	got, err := store.GetPost(t.Context(), post.ID)
 	if err != nil {
@@ -63,7 +63,7 @@ func TestWorkerFailurePathAccountLookupFailureRecordsFailure(t *testing.T) {
 		base:       store,
 		accountErr: errors.New("account lookup failed: temporary db outage"),
 	}
-	runPublishCycleOnce(t, failingStore, publisher.NewProviderRegistry(publisher.NewMockProvider(domain.PlatformX)), creds, 5*time.Second, 1*time.Second)
+	runPublishCycleOnce(t, failingStore, postflow.NewProviderRegistry(postflow.NewMockProvider(domain.PlatformX)), creds, 5*time.Second, 1*time.Second)
 
 	got, err := store.GetPost(t.Context(), post.ID)
 	if err != nil {
@@ -95,12 +95,12 @@ func TestWorkerFailurePathRefreshFailureMarksAccountError(t *testing.T) {
 
 	provider := &workerScenarioProvider{
 		platform: domain.PlatformX,
-		refreshFn: func(context.Context, domain.SocialAccount, publisher.Credentials) (publisher.Credentials, bool, error) {
-			return publisher.Credentials{}, false, errors.New("401 unauthorized: refresh token revoked")
+		refreshFn: func(context.Context, domain.SocialAccount, postflow.Credentials) (postflow.Credentials, bool, error) {
+			return postflow.Credentials{}, false, errors.New("401 unauthorized: refresh token revoked")
 		},
 	}
 	creds := workerCredentialsStore{worker: Worker{Store: store, Cipher: newWorkerTestCipher(t)}}
-	runPublishCycleOnce(t, store, publisher.NewProviderRegistry(provider), creds, 5*time.Second, 1*time.Second)
+	runPublishCycleOnce(t, store, postflow.NewProviderRegistry(provider), creds, 5*time.Second, 1*time.Second)
 
 	got, err := store.GetPost(t.Context(), post.ID)
 	if err != nil {
@@ -133,7 +133,7 @@ func TestWorkerFailurePathCredentialsLoadFailureMovesPostToFailed(t *testing.T) 
 	creds := forcedCredentialsStore{
 		loadErr: errors.New("decrypt credentials failed"),
 	}
-	runPublishCycleOnce(t, store, publisher.NewProviderRegistry(publisher.NewMockProvider(domain.PlatformX)), creds, 5*time.Second, 1*time.Second)
+	runPublishCycleOnce(t, store, postflow.NewProviderRegistry(postflow.NewMockProvider(domain.PlatformX)), creds, 5*time.Second, 1*time.Second)
 
 	got, err := store.GetPost(t.Context(), post.ID)
 	if err != nil {
@@ -165,8 +165,8 @@ func TestWorkerFailurePathCredentialsSaveFailureMarksAccountError(t *testing.T) 
 
 	provider := &workerScenarioProvider{
 		platform: domain.PlatformX,
-		refreshFn: func(_ context.Context, _ domain.SocialAccount, _ publisher.Credentials) (publisher.Credentials, bool, error) {
-			return publisher.Credentials{
+		refreshFn: func(_ context.Context, _ domain.SocialAccount, _ postflow.Credentials) (postflow.Credentials, bool, error) {
+			return postflow.Credentials{
 				AccessToken: "updated-token",
 				TokenType:   "Bearer",
 			}, true, nil
@@ -176,7 +176,7 @@ func TestWorkerFailurePathCredentialsSaveFailureMarksAccountError(t *testing.T) 
 		delegate: workerCredentialsStore{worker: Worker{Store: store, Cipher: newWorkerTestCipher(t)}},
 		saveErr:  errors.New("save credentials failed"),
 	}
-	runPublishCycleOnce(t, store, publisher.NewProviderRegistry(provider), creds, 5*time.Second, 1*time.Second)
+	runPublishCycleOnce(t, store, postflow.NewProviderRegistry(provider), creds, 5*time.Second, 1*time.Second)
 
 	got, err := store.GetPost(t.Context(), post.ID)
 	if err != nil {
@@ -211,12 +211,12 @@ func TestWorkerFailurePathTransientMediaDeferralReschedules(t *testing.T) {
 
 	provider := &workerScenarioProvider{
 		platform: domain.PlatformInstagram,
-		publishFn: func(context.Context, domain.SocialAccount, publisher.Credentials, domain.Post, publisher.PublishOptions) (string, error) {
+		publishFn: func(context.Context, domain.SocialAccount, postflow.Credentials, domain.Post, postflow.PublishOptions) (string, error) {
 			return "", errors.New("instagram error 2207027: media id is not available")
 		},
 	}
 	creds := workerCredentialsStore{worker: Worker{Store: store, Cipher: newWorkerTestCipher(t)}}
-	runPublishCycleOnce(t, store, publisher.NewProviderRegistry(provider), creds, 7*time.Second, 1*time.Second)
+	runPublishCycleOnce(t, store, postflow.NewProviderRegistry(provider), creds, 7*time.Second, 1*time.Second)
 
 	got, err := store.GetPost(t.Context(), post.ID)
 	if err != nil {
@@ -283,17 +283,17 @@ type forcedCredentialsStore struct {
 	saveErr  error
 }
 
-func (s forcedCredentialsStore) LoadCredentials(ctx context.Context, accountID string) (publisher.Credentials, error) {
+func (s forcedCredentialsStore) LoadCredentials(ctx context.Context, accountID string) (postflow.Credentials, error) {
 	if s.loadErr != nil {
-		return publisher.Credentials{}, s.loadErr
+		return postflow.Credentials{}, s.loadErr
 	}
 	if s.delegate == nil {
-		return publisher.Credentials{}, nil
+		return postflow.Credentials{}, nil
 	}
 	return s.delegate.LoadCredentials(ctx, accountID)
 }
 
-func (s forcedCredentialsStore) SaveCredentials(ctx context.Context, accountID string, credentials publisher.Credentials) error {
+func (s forcedCredentialsStore) SaveCredentials(ctx context.Context, accountID string, credentials postflow.Credentials) error {
 	if s.saveErr != nil {
 		return s.saveErr
 	}
@@ -305,26 +305,26 @@ func (s forcedCredentialsStore) SaveCredentials(ctx context.Context, accountID s
 
 type workerScenarioProvider struct {
 	platform  domain.Platform
-	publishFn func(context.Context, domain.SocialAccount, publisher.Credentials, domain.Post, publisher.PublishOptions) (string, error)
-	refreshFn func(context.Context, domain.SocialAccount, publisher.Credentials) (publisher.Credentials, bool, error)
+	publishFn func(context.Context, domain.SocialAccount, postflow.Credentials, domain.Post, postflow.PublishOptions) (string, error)
+	refreshFn func(context.Context, domain.SocialAccount, postflow.Credentials) (postflow.Credentials, bool, error)
 }
 
 func (p *workerScenarioProvider) Platform() domain.Platform {
 	return p.platform
 }
 
-func (p *workerScenarioProvider) ValidateDraft(context.Context, domain.SocialAccount, publisher.Draft) ([]string, error) {
+func (p *workerScenarioProvider) ValidateDraft(context.Context, domain.SocialAccount, postflow.Draft) ([]string, error) {
 	return nil, nil
 }
 
-func (p *workerScenarioProvider) Publish(ctx context.Context, account domain.SocialAccount, credentials publisher.Credentials, post domain.Post, opts publisher.PublishOptions) (string, error) {
+func (p *workerScenarioProvider) Publish(ctx context.Context, account domain.SocialAccount, credentials postflow.Credentials, post domain.Post, opts postflow.PublishOptions) (string, error) {
 	if p.publishFn != nil {
 		return p.publishFn(ctx, account, credentials, post, opts)
 	}
 	return "ext_" + post.ID, nil
 }
 
-func (p *workerScenarioProvider) RefreshIfNeeded(ctx context.Context, account domain.SocialAccount, credentials publisher.Credentials) (publisher.Credentials, bool, error) {
+func (p *workerScenarioProvider) RefreshIfNeeded(ctx context.Context, account domain.SocialAccount, credentials postflow.Credentials) (postflow.Credentials, bool, error) {
 	if p.refreshFn != nil {
 		return p.refreshFn(ctx, account, credentials)
 	}

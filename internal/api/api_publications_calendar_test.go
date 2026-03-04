@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/antoniolg/publisher/internal/db"
+	"github.com/antoniolg/postflow/internal/db"
 )
 
 func TestPublicationsViewShowsOnlyScheduledInNext14Days(t *testing.T) {

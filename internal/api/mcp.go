@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	dlqapp "github.com/antoniolg/publisher/internal/application/dlq"
-	postsapp "github.com/antoniolg/publisher/internal/application/posts"
-	"github.com/antoniolg/publisher/internal/domain"
+	dlqapp "github.com/antoniolg/postflow/internal/application/dlq"
+	postsapp "github.com/antoniolg/postflow/internal/application/posts"
+	"github.com/antoniolg/postflow/internal/domain"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -22,13 +22,13 @@ const (
 
 func (s Server) newMCPHandler() http.Handler {
 	server := mcp.NewServer(&mcp.Implementation{
-		Name:    "publisher-mcp",
+		Name:    "postflow-mcp",
 		Version: s.appVersion(),
 	}, nil)
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "publisher_health",
-		Description: "Health check for the Publisher service.",
+		Name:        "postflow_health",
+		Description: "Health check for the PostFlow service.",
 		Annotations: &mcp.ToolAnnotations{
 			ReadOnlyHint:   true,
 			IdempotentHint: true,
@@ -36,7 +36,7 @@ func (s Server) newMCPHandler() http.Handler {
 	}, s.mcpHealthTool)
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "publisher_list_schedule",
+		Name:        "postflow_list_schedule",
 		Description: "List posts in the schedule window. Supports RFC3339 from/to filters.",
 		Annotations: &mcp.ToolAnnotations{
 			ReadOnlyHint:   true,
@@ -45,7 +45,7 @@ func (s Server) newMCPHandler() http.Handler {
 	}, s.mcpListScheduleTool)
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "publisher_list_drafts",
+		Name:        "postflow_list_drafts",
 		Description: "List draft posts (no scheduled date).",
 		Annotations: &mcp.ToolAnnotations{
 			ReadOnlyHint:   true,
@@ -54,7 +54,7 @@ func (s Server) newMCPHandler() http.Handler {
 	}, s.mcpListDraftsTool)
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "publisher_list_accounts",
+		Name:        "postflow_list_accounts",
 		Description: "List connected/registered accounts.",
 		Annotations: &mcp.ToolAnnotations{
 			ReadOnlyHint:   true,
@@ -63,7 +63,7 @@ func (s Server) newMCPHandler() http.Handler {
 	}, s.mcpListAccountsTool)
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "publisher_create_static_account",
+		Name:        "postflow_create_static_account",
 		Description: "Create or update a static account and store encrypted credentials.",
 		Annotations: &mcp.ToolAnnotations{
 			IdempotentHint: false,
@@ -71,7 +71,7 @@ func (s Server) newMCPHandler() http.Handler {
 	}, s.mcpCreateStaticAccountTool)
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "publisher_connect_account",
+		Name:        "postflow_connect_account",
 		Description: "Mark account as connected if it has saved credentials.",
 		Annotations: &mcp.ToolAnnotations{
 			IdempotentHint: false,
@@ -79,7 +79,7 @@ func (s Server) newMCPHandler() http.Handler {
 	}, s.mcpConnectAccountTool)
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "publisher_disconnect_account",
+		Name:        "postflow_disconnect_account",
 		Description: "Mark account as disconnected.",
 		Annotations: &mcp.ToolAnnotations{
 			IdempotentHint: false,
@@ -87,7 +87,7 @@ func (s Server) newMCPHandler() http.Handler {
 	}, s.mcpDisconnectAccountTool)
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "publisher_set_x_premium",
+		Name:        "postflow_set_x_premium",
 		Description: "Set X premium flag for an X account.",
 		Annotations: &mcp.ToolAnnotations{
 			IdempotentHint: false,
@@ -95,7 +95,7 @@ func (s Server) newMCPHandler() http.Handler {
 	}, s.mcpSetXPremiumTool)
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "publisher_delete_account",
+		Name:        "postflow_delete_account",
 		Description: "Delete a disconnected account with no linked posts.",
 		Annotations: &mcp.ToolAnnotations{
 			IdempotentHint: false,
@@ -103,7 +103,7 @@ func (s Server) newMCPHandler() http.Handler {
 	}, s.mcpDeleteAccountTool)
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "publisher_list_failed",
+		Name:        "postflow_list_failed",
 		Description: "List failed posts from dead letters with latest error details.",
 		Annotations: &mcp.ToolAnnotations{
 			ReadOnlyHint:   true,
@@ -112,7 +112,7 @@ func (s Server) newMCPHandler() http.Handler {
 	}, s.mcpListFailedTool)
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "publisher_create_post",
+		Name:        "postflow_create_post",
 		Description: "Create a post as draft (no scheduled_at) or scheduled (with scheduled_at).",
 		Annotations: &mcp.ToolAnnotations{
 			IdempotentHint: false,
@@ -120,7 +120,7 @@ func (s Server) newMCPHandler() http.Handler {
 	}, s.mcpCreatePostTool)
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "publisher_cancel_post",
+		Name:        "postflow_cancel_post",
 		Description: "Cancel a scheduled post.",
 		Annotations: &mcp.ToolAnnotations{
 			IdempotentHint: false,
@@ -128,7 +128,7 @@ func (s Server) newMCPHandler() http.Handler {
 	}, s.mcpCancelPostTool)
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "publisher_schedule_post",
+		Name:        "postflow_schedule_post",
 		Description: "Schedule a draft post by ID.",
 		Annotations: &mcp.ToolAnnotations{
 			IdempotentHint: false,
@@ -136,7 +136,7 @@ func (s Server) newMCPHandler() http.Handler {
 	}, s.mcpSchedulePostTool)
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "publisher_edit_post",
+		Name:        "postflow_edit_post",
 		Description: "Edit post text and optionally replace media_ids (pass [] to clear), plus optional intent/scheduled date, while still editable.",
 		Annotations: &mcp.ToolAnnotations{
 			IdempotentHint: false,
@@ -144,7 +144,7 @@ func (s Server) newMCPHandler() http.Handler {
 	}, s.mcpEditPostTool)
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "publisher_delete_post",
+		Name:        "postflow_delete_post",
 		Description: "Delete an editable post (draft/scheduled/failed/canceled).",
 		Annotations: &mcp.ToolAnnotations{
 			IdempotentHint: false,
@@ -152,7 +152,7 @@ func (s Server) newMCPHandler() http.Handler {
 	}, s.mcpDeletePostTool)
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "publisher_validate_post",
+		Name:        "postflow_validate_post",
 		Description: "Validate a post payload without creating it.",
 		Annotations: &mcp.ToolAnnotations{
 			ReadOnlyHint:   true,
@@ -161,7 +161,7 @@ func (s Server) newMCPHandler() http.Handler {
 	}, s.mcpValidatePostTool)
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "publisher_upload_media",
+		Name:        "postflow_upload_media",
 		Description: "Upload media and return media_id. Provide content_base64.",
 		Annotations: &mcp.ToolAnnotations{
 			IdempotentHint: false,
@@ -169,7 +169,7 @@ func (s Server) newMCPHandler() http.Handler {
 	}, s.mcpUploadMediaTool)
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "publisher_list_media",
+		Name:        "postflow_list_media",
 		Description: "List uploaded media with usage status (in use or deletable).",
 		Annotations: &mcp.ToolAnnotations{
 			ReadOnlyHint:   true,
@@ -178,7 +178,7 @@ func (s Server) newMCPHandler() http.Handler {
 	}, s.mcpListMediaTool)
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "publisher_delete_media",
+		Name:        "postflow_delete_media",
 		Description: "Delete an uploaded media item if it is not attached to any post.",
 		Annotations: &mcp.ToolAnnotations{
 			IdempotentHint: false,
@@ -186,7 +186,7 @@ func (s Server) newMCPHandler() http.Handler {
 	}, s.mcpDeleteMediaTool)
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "publisher_requeue_failed",
+		Name:        "postflow_requeue_failed",
 		Description: "Requeue one failed dead-letter post back to scheduled.",
 		Annotations: &mcp.ToolAnnotations{
 			IdempotentHint: false,
@@ -194,7 +194,7 @@ func (s Server) newMCPHandler() http.Handler {
 	}, s.mcpRequeueFailedTool)
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "publisher_delete_failed",
+		Name:        "postflow_delete_failed",
 		Description: "Delete one failed dead-letter post entry.",
 		Annotations: &mcp.ToolAnnotations{
 			IdempotentHint: false,
@@ -202,7 +202,7 @@ func (s Server) newMCPHandler() http.Handler {
 	}, s.mcpDeleteFailedTool)
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "publisher_set_timezone",
+		Name:        "postflow_set_timezone",
 		Description: "Set UI timezone (IANA name, e.g. Europe/Madrid).",
 		Annotations: &mcp.ToolAnnotations{
 			IdempotentHint: false,
@@ -646,11 +646,11 @@ func (s Server) mcpSettingsInfo(r *http.Request) (url string, authHint string, c
 		authHint = "auth: endpoint abierto. Recomendado configurar API_TOKEN."
 	}
 
-	claudeCommand = fmt.Sprintf("claude mcp add -t http publisher %s", url)
+	claudeCommand = fmt.Sprintf("claude mcp add -t http postflow %s", url)
 	if authHeader != "" {
 		claudeCommand = fmt.Sprintf(`%s --header "Authorization: %s"`, claudeCommand, authHeader)
 	}
-	codexCommand = fmt.Sprintf("codex mcp add publisher --url %s", url)
+	codexCommand = fmt.Sprintf("codex mcp add postflow --url %s", url)
 
 	serverCfg := map[string]any{
 		"transport": "streamable_http",
@@ -663,24 +663,24 @@ func (s Server) mcpSettingsInfo(r *http.Request) (url string, authHint string, c
 	}
 	raw, err := json.MarshalIndent(map[string]any{
 		"mcpServers": map[string]any{
-			"publisher": serverCfg,
+			"postflow": serverCfg,
 		},
 	}, "", "  ")
 	if err != nil {
-		configJSON = `{"mcpServers":{"publisher":{"transport":"streamable_http","url":"` + url + `"}}}`
+		configJSON = `{"mcpServers":{"postflow":{"transport":"streamable_http","url":"` + url + `"}}}`
 	} else {
 		configJSON = string(raw)
 	}
 
 	if apiTokenConfigured {
 		codexConfigTOML = strings.TrimSpace(fmt.Sprintf(`
-[mcp_servers.publisher]
+[mcp_servers.postflow]
 url = %q
-bearer_token_env_var = "PUBLISHER_API_TOKEN"
+bearer_token_env_var = "POSTFLOW_API_TOKEN"
 `, url))
 	} else {
 		codexConfigTOML = strings.TrimSpace(fmt.Sprintf(`
-[mcp_servers.publisher]
+[mcp_servers.postflow]
 url = %q
 `, url))
 	}

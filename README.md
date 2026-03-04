@@ -37,18 +37,18 @@ openssl rand -hex 32
 Put those values in `.env`:
 
 ```dotenv
-PUBLISHER_MASTER_KEY=<base64-from-openssl>
+POSTFLOW_MASTER_KEY=<base64-from-openssl>
 API_TOKEN=<hex-token>
 PUBLIC_BASE_URL=http://localhost:8080
 UI_BASIC_USER=admin
 UI_BASIC_PASS=<strong-password>
-PUBLISHER_DRIVER=mock
+POSTFLOW_DRIVER=mock
 ```
 
 Run:
 
 ```bash
-go run ./cmd/publisher
+go run ./cmd/postflow-server
 ```
 
 Open:
@@ -65,7 +65,7 @@ Use `.env.example` as template. These are the key ones:
 
 | Variable | Required | Where it comes from |
 |---|---:|---|
-| `PUBLISHER_MASTER_KEY` | Yes | Generate locally: `openssl rand -base64 32` |
+| `POSTFLOW_MASTER_KEY` | Yes | Generate locally: `openssl rand -base64 32` |
 | `API_TOKEN` | Recommended | Generate locally (random token), used for API/MCP auth |
 | `PUBLIC_BASE_URL` | Yes for OAuth | Your app URL (`http://localhost:8080` locally, your domain in prod) |
 | `UI_BASIC_USER` / `UI_BASIC_PASS` | Recommended | Values you define for UI basic auth |
@@ -75,7 +75,7 @@ Use `.env.example` as template. These are the key ones:
 | Variable | Default | Notes |
 |---|---|---|
 | `PORT` | `8080` | HTTP port |
-| `DATABASE_PATH` | `publisher.db` | SQLite DB path |
+| `DATABASE_PATH` | `postflow.db` | SQLite DB path |
 | `DATA_DIR` | `data` | Uploaded media path |
 
 ### Network credentials (only if you use that network)
@@ -87,8 +87,8 @@ Use `.env.example` as template. These are the key ones:
 | Facebook/Instagram | `META_APP_ID`, `META_APP_SECRET` | Meta Developers app |
 
 Important:
-- If you want real publishing, set `PUBLISHER_DRIVER=live`.
-- For local testing without real publishing, keep `PUBLISHER_DRIVER=mock`.
+- If you want real publishing, set `POSTFLOW_DRIVER=live`.
+- For local testing without real publishing, keep `POSTFLOW_DRIVER=mock`.
 - In production (Coolify), set secrets in the platform UI, not in committed files.
 
 ---
@@ -108,60 +108,60 @@ Authorization: Bearer <API_TOKEN>
 ```
 
 Main MCP tools available:
-- `publisher_health`
-- `publisher_list_schedule`
-- `publisher_list_drafts`
-- `publisher_list_accounts`
-- `publisher_create_static_account`
-- `publisher_connect_account`
-- `publisher_disconnect_account`
-- `publisher_set_x_premium`
-- `publisher_delete_account`
-- `publisher_list_failed`
-- `publisher_create_post`
-- `publisher_cancel_post`
-- `publisher_schedule_post`
-- `publisher_edit_post`
-- `publisher_delete_post`
-- `publisher_validate_post`
-- `publisher_upload_media`
-- `publisher_list_media`
-- `publisher_delete_media`
-- `publisher_requeue_failed`
-- `publisher_delete_failed`
-- `publisher_set_timezone`
+- `postflow_health`
+- `postflow_list_schedule`
+- `postflow_list_drafts`
+- `postflow_list_accounts`
+- `postflow_create_static_account`
+- `postflow_connect_account`
+- `postflow_disconnect_account`
+- `postflow_set_x_premium`
+- `postflow_delete_account`
+- `postflow_list_failed`
+- `postflow_create_post`
+- `postflow_cancel_post`
+- `postflow_schedule_post`
+- `postflow_edit_post`
+- `postflow_delete_post`
+- `postflow_validate_post`
+- `postflow_upload_media`
+- `postflow_list_media`
+- `postflow_delete_media`
+- `postflow_requeue_failed`
+- `postflow_delete_failed`
+- `postflow_set_timezone`
 
 Thread payload support (same shape in API/MCP/CLI):
 - `segments`: `[{ "text": "...", "media_ids": ["med_x"] }]`
 - If `segments` is present, step `1` is the root post and steps `2..N` are follow-ups.
 - Backward compatibility is preserved for legacy `text` + `media_ids`.
-- `publisher_edit_post` accepts optional `media_ids` to replace media on editable posts (`[]` clears all media).
+- `postflow_edit_post` accepts optional `media_ids` to replace media on editable posts (`[]` clears all media).
 - Editing without `intent` and without `scheduled_at` preserves the current scheduling state.
 
 ### Codex CLI
 
 ```bash
-codex mcp add publisher --url http://localhost:8080/mcp
+codex mcp add postflow --url http://localhost:8080/mcp
 ```
 
 `~/.codex/config.toml` example:
 
 ```toml
-[mcp_servers.publisher]
+[mcp_servers.postflow]
 url = "http://localhost:8080/mcp"
-bearer_token_env_var = "PUBLISHER_API_TOKEN"
+bearer_token_env_var = "POSTFLOW_API_TOKEN"
 ```
 
 Then:
 
 ```bash
-export PUBLISHER_API_TOKEN="<same-value-as-API_TOKEN>"
+export POSTFLOW_API_TOKEN="<same-value-as-API_TOKEN>"
 ```
 
 ### Claude Code
 
 ```bash
-claude mcp add -t http publisher http://localhost:8080/mcp --header "Authorization: Bearer <API_TOKEN>"
+claude mcp add -t http postflow http://localhost:8080/mcp --header "Authorization: Bearer <API_TOKEN>"
 ```
 
 Tip: in the app UI (`settings`) you can copy ready-to-use MCP snippets for Claude and Codex.
@@ -187,8 +187,8 @@ go run ./cmd/postflow --help
 Configure CLI env:
 
 ```bash
-export PUBLISHER_BASE_URL="http://localhost:8080"
-export PUBLISHER_API_TOKEN="<API_TOKEN>"
+export POSTFLOW_BASE_URL="http://localhost:8080"
+export POSTFLOW_API_TOKEN="<API_TOKEN>"
 ```
 
 Common commands:
@@ -242,7 +242,7 @@ Full production runbook:
 - OAuth callback errors:
   - verify `PUBLIC_BASE_URL` matches your real public domain
 - CLI auth errors:
-  - verify `PUBLISHER_API_TOKEN` matches server `API_TOKEN`
+  - verify `POSTFLOW_API_TOKEN` matches server `API_TOKEN`
 
 ---
 

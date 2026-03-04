@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/antoniolg/publisher/internal/domain"
+	"github.com/antoniolg/postflow/internal/domain"
 )
 
 type fakeStore struct {

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	postsapp "github.com/antoniolg/publisher/internal/application/posts"
+	postsapp "github.com/antoniolg/postflow/internal/application/posts"
 )
 
 const maxPostRequestBodyBytes = 4 * 1024 * 1024

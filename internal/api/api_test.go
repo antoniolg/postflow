@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/antoniolg/publisher/internal/db"
+	"github.com/antoniolg/postflow/internal/db"
 )
 
 func TestCreatePostValidation(t *testing.T) {

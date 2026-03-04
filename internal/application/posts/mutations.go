@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/antoniolg/publisher/internal/application/ports"
-	"github.com/antoniolg/publisher/internal/db"
-	"github.com/antoniolg/publisher/internal/domain"
-	"github.com/antoniolg/publisher/internal/publisher"
+	"github.com/antoniolg/postflow/internal/application/ports"
+	"github.com/antoniolg/postflow/internal/db"
+	"github.com/antoniolg/postflow/internal/domain"
+	"github.com/antoniolg/postflow/internal/postflow"
 )
 
 var (
@@ -182,7 +182,7 @@ func (s MutationsService) validateEditableDraft(ctx context.Context, post domain
 			return ValidationError{Err: err}
 		}
 	}
-	if _, err := provider.ValidateDraft(ctx, account, publisher.Draft{
+	if _, err := provider.ValidateDraft(ctx, account, postflow.Draft{
 		Text:  text,
 		Media: media,
 	}); err != nil {

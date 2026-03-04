@@ -7,15 +7,15 @@ import (
 	"log/slog"
 	"time"
 
-	publishcycle "github.com/antoniolg/publisher/internal/application/publishcycle"
-	"github.com/antoniolg/publisher/internal/db"
-	"github.com/antoniolg/publisher/internal/publisher"
-	"github.com/antoniolg/publisher/internal/secure"
+	publishcycle "github.com/antoniolg/postflow/internal/application/publishcycle"
+	"github.com/antoniolg/postflow/internal/db"
+	"github.com/antoniolg/postflow/internal/postflow"
+	"github.com/antoniolg/postflow/internal/secure"
 )
 
 type Worker struct {
 	Store        *db.Store
-	Registry     *publisher.ProviderRegistry
+	Registry     *postflow.ProviderRegistry
 	Cipher       *secure.Cipher
 	Interval     time.Duration
 	RetryBackoff time.Duration
@@ -54,17 +54,17 @@ func (w Worker) runOnce(ctx context.Context) {
 	runner.RunOnce(ctx)
 }
 
-func (w Worker) loadCredentials(ctx context.Context, accountID string) (publisher.Credentials, error) {
+func (w Worker) loadCredentials(ctx context.Context, accountID string) (postflow.Credentials, error) {
 	encrypted, err := w.Store.GetAccountCredentials(ctx, accountID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return publisher.Credentials{}, nil
+			return postflow.Credentials{}, nil
 		}
-		return publisher.Credentials{}, err
+		return postflow.Credentials{}, err
 	}
-	var credentials publisher.Credentials
+	var credentials postflow.Credentials
 	if err := w.Cipher.DecryptJSON(encrypted.Ciphertext, encrypted.Nonce, &credentials); err != nil {
-		return publisher.Credentials{}, err
+		return postflow.Credentials{}, err
 	}
 	if credentials.Extra == nil {
 		credentials.Extra = make(map[string]string)
@@ -76,11 +76,11 @@ type workerCredentialsStore struct {
 	worker Worker
 }
 
-func (w workerCredentialsStore) LoadCredentials(ctx context.Context, accountID string) (publisher.Credentials, error) {
+func (w workerCredentialsStore) LoadCredentials(ctx context.Context, accountID string) (postflow.Credentials, error) {
 	return w.worker.loadCredentials(ctx, accountID)
 }
 
-func (w workerCredentialsStore) SaveCredentials(ctx context.Context, accountID string, credentials publisher.Credentials) error {
+func (w workerCredentialsStore) SaveCredentials(ctx context.Context, accountID string, credentials postflow.Credentials) error {
 	sealed, nonce, err := w.worker.Cipher.EncryptJSON(credentials)
 	if err != nil {
 		return err

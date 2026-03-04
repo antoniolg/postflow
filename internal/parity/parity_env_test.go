@@ -12,11 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/antoniolg/publisher/internal/api"
-	"github.com/antoniolg/publisher/internal/cli"
-	"github.com/antoniolg/publisher/internal/db"
-	"github.com/antoniolg/publisher/internal/domain"
-	"github.com/antoniolg/publisher/internal/publisher"
+	"github.com/antoniolg/postflow/internal/api"
+	"github.com/antoniolg/postflow/internal/cli"
+	"github.com/antoniolg/postflow/internal/db"
+	"github.com/antoniolg/postflow/internal/domain"
+	"github.com/antoniolg/postflow/internal/postflow"
 )
 
 type parityEnv struct {
@@ -57,11 +57,11 @@ func newParityEnv(t *testing.T) *parityEnv {
 		DataDir:           tempDir,
 		DefaultMaxRetries: 3,
 		APIToken:          token,
-		Registry: publisher.NewProviderRegistry(
-			publisher.NewXProvider(publisher.XConfig{}),
-			publisher.NewLinkedInProvider(publisher.LinkedInProviderConfig{}),
-			publisher.NewFacebookProvider(publisher.MetaProviderConfig{}),
-			publisher.NewInstagramProvider(publisher.MetaProviderConfig{}),
+		Registry: postflow.NewProviderRegistry(
+			postflow.NewXProvider(postflow.XConfig{}),
+			postflow.NewLinkedInProvider(postflow.LinkedInProviderConfig{}),
+			postflow.NewFacebookProvider(postflow.MetaProviderConfig{}),
+			postflow.NewInstagramProvider(postflow.MetaProviderConfig{}),
 		),
 	}
 	httpServer := httptest.NewServer(srv.Handler())

@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/antoniolg/publisher/internal/domain"
-	"github.com/antoniolg/publisher/internal/textfmt"
+	"github.com/antoniolg/postflow/internal/domain"
+	"github.com/antoniolg/postflow/internal/textfmt"
 )
 
 func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {

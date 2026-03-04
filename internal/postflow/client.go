@@ -1,11 +1,11 @@
-package publisher
+package postflow
 
 import (
 	"context"
 	"fmt"
 	"time"
 
-	"github.com/antoniolg/publisher/internal/domain"
+	"github.com/antoniolg/postflow/internal/domain"
 )
 
 type Draft struct {

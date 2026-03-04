@@ -4,19 +4,19 @@ This file defines the working contract for any coding agent in this repository.
 
 Project: **PostFlow**  
 Stack: **Go + SQLite**  
-Primary goal: **LLM-first publisher with consistent behavior across API, MCP, CLI, and worker**
+Primary goal: **LLM-first PostFlow with consistent behavior across API, MCP, CLI, and worker**
 
 ## 1) Architecture (must follow)
 
 PostFlow uses a **modular monolith** with an application layer.
 
-- `cmd/`: executable entrypoints (`publisher`, `postflow`)
+- `cmd/`: executable entrypoints (`postflow-server`, `postflow`)
 - `internal/api`: HTTP + MCP adapters (request parsing, transport mapping, HTML rendering)
 - `internal/cli`: CLI adapter
 - `internal/worker`: runtime adapter for background execution
 - `internal/application`: business use cases/orchestration
 - `internal/application/ports`: contracts for infra dependencies
-- `internal/db`, `internal/publisher`, `internal/secure`: infrastructure implementations
+- `internal/db`, `internal/postflow`, `internal/secure`: infrastructure implementations
 - `internal/domain`: entities/status enums
 - `internal/parity`: cross-surface parity tests/contracts
 
@@ -77,7 +77,7 @@ Coverage thresholds (from CI):
 - `internal/api`: `60%`
 - `internal/cli`: `40%`
 - `internal/db`: `55%`
-- `internal/publisher`: `50%`
+- `internal/postflow`: `50%`
 
 ## 4) API / MCP / CLI Parity Rules (critical)
 

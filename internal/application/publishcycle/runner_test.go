@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/antoniolg/publisher/internal/domain"
-	"github.com/antoniolg/publisher/internal/publisher"
+	"github.com/antoniolg/postflow/internal/domain"
+	"github.com/antoniolg/postflow/internal/postflow"
 )
 
 type fakeStore struct {
@@ -73,24 +73,24 @@ func (f *fakeStore) UpdateAccountStatus(_ context.Context, _ string, status doma
 }
 
 type fakeRegistry struct {
-	providers map[domain.Platform]publisher.Provider
+	providers map[domain.Platform]postflow.Provider
 }
 
-func (f fakeRegistry) Get(platform domain.Platform) (publisher.Provider, bool) {
+func (f fakeRegistry) Get(platform domain.Platform) (postflow.Provider, bool) {
 	p, ok := f.providers[platform]
 	return p, ok
 }
 
 type fakeCredentialsStore struct {
-	load publisher.Credentials
+	load postflow.Credentials
 	save int
 }
 
-func (f *fakeCredentialsStore) LoadCredentials(context.Context, string) (publisher.Credentials, error) {
+func (f *fakeCredentialsStore) LoadCredentials(context.Context, string) (postflow.Credentials, error) {
 	return f.load, nil
 }
 
-func (f *fakeCredentialsStore) SaveCredentials(context.Context, string, publisher.Credentials) error {
+func (f *fakeCredentialsStore) SaveCredentials(context.Context, string, postflow.Credentials) error {
 	f.save++
 	return nil
 }
@@ -100,7 +100,7 @@ type fakeProvider struct {
 	publishErr        error
 	publishExternalID string
 	publishCalls      int
-	refreshUpdated    publisher.Credentials
+	refreshUpdated    postflow.Credentials
 	refreshChanged    bool
 	refreshErr        error
 }
@@ -109,11 +109,11 @@ func (f *fakeProvider) Platform() domain.Platform {
 	return f.platform
 }
 
-func (f *fakeProvider) ValidateDraft(context.Context, domain.SocialAccount, publisher.Draft) ([]string, error) {
+func (f *fakeProvider) ValidateDraft(context.Context, domain.SocialAccount, postflow.Draft) ([]string, error) {
 	return nil, nil
 }
 
-func (f *fakeProvider) Publish(context.Context, domain.SocialAccount, publisher.Credentials, domain.Post, publisher.PublishOptions) (string, error) {
+func (f *fakeProvider) Publish(context.Context, domain.SocialAccount, postflow.Credentials, domain.Post, postflow.PublishOptions) (string, error) {
 	f.publishCalls++
 	if f.publishErr != nil {
 		return "", f.publishErr
@@ -121,9 +121,9 @@ func (f *fakeProvider) Publish(context.Context, domain.SocialAccount, publisher.
 	return f.publishExternalID, nil
 }
 
-func (f *fakeProvider) RefreshIfNeeded(context.Context, domain.SocialAccount, publisher.Credentials) (publisher.Credentials, bool, error) {
+func (f *fakeProvider) RefreshIfNeeded(context.Context, domain.SocialAccount, postflow.Credentials) (postflow.Credentials, bool, error) {
 	if f.refreshErr != nil {
-		return publisher.Credentials{}, false, f.refreshErr
+		return postflow.Credentials{}, false, f.refreshErr
 	}
 	return f.refreshUpdated, f.refreshChanged, nil
 }
@@ -143,7 +143,7 @@ func TestRunnerPublishesAndMarksAccountConnected(t *testing.T) {
 	}
 	runner := Runner{
 		Store:        store,
-		Registry:     fakeRegistry{providers: map[domain.Platform]publisher.Provider{domain.PlatformX: provider}},
+		Registry:     fakeRegistry{providers: map[domain.Platform]postflow.Provider{domain.PlatformX: provider}},
 		Credentials:  &fakeCredentialsStore{},
 		RetryBackoff: 30 * time.Second,
 		Interval:     1 * time.Second,
@@ -176,7 +176,7 @@ func TestRunnerRecordsFailureWhenProviderMissing(t *testing.T) {
 	}
 	runner := Runner{
 		Store:        store,
-		Registry:     fakeRegistry{providers: map[domain.Platform]publisher.Provider{}},
+		Registry:     fakeRegistry{providers: map[domain.Platform]postflow.Provider{}},
 		Credentials:  &fakeCredentialsStore{},
 		RetryBackoff: 30 * time.Second,
 		Interval:     1 * time.Second,
@@ -207,7 +207,7 @@ func TestRunnerDefersTransientMediaProcessingErrors(t *testing.T) {
 	}
 	runner := Runner{
 		Store:        store,
-		Registry:     fakeRegistry{providers: map[domain.Platform]publisher.Provider{domain.PlatformInstagram: provider}},
+		Registry:     fakeRegistry{providers: map[domain.Platform]postflow.Provider{domain.PlatformInstagram: provider}},
 		Credentials:  &fakeCredentialsStore{},
 		RetryBackoff: 30 * time.Second,
 		Interval:     5 * time.Second,
@@ -243,7 +243,7 @@ func TestRunnerAuthFailureRefreshesAndRetries(t *testing.T) {
 	credsStore := &fakeCredentialsStore{}
 	runner := Runner{
 		Store:        store,
-		Registry:     fakeRegistry{providers: map[domain.Platform]publisher.Provider{domain.PlatformX: firstFailThenSuccess}},
+		Registry:     fakeRegistry{providers: map[domain.Platform]postflow.Provider{domain.PlatformX: firstFailThenSuccess}},
 		Credentials:  credsStore,
 		RetryBackoff: 30 * time.Second,
 		Interval:     5 * time.Second,
@@ -266,7 +266,7 @@ type authRetryProvider struct {
 	fakeProvider
 }
 
-func (p *authRetryProvider) Publish(context.Context, domain.SocialAccount, publisher.Credentials, domain.Post, publisher.PublishOptions) (string, error) {
+func (p *authRetryProvider) Publish(context.Context, domain.SocialAccount, postflow.Credentials, domain.Post, postflow.PublishOptions) (string, error) {
 	p.publishCalls++
 	if p.publishCalls == 1 {
 		return "", errors.New("401 unauthorized")

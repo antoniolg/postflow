@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/antoniolg/publisher/internal/db"
-	"github.com/antoniolg/publisher/internal/domain"
-	"github.com/antoniolg/publisher/internal/publisher"
+	"github.com/antoniolg/postflow/internal/db"
+	"github.com/antoniolg/postflow/internal/domain"
+	"github.com/antoniolg/postflow/internal/postflow"
 )
 
 func TestAccountReturnToSanitizesUnsafeTargets(t *testing.T) {
@@ -68,7 +68,7 @@ func TestOAuthCallbackHTMLMissingCodeUsesSafeRedirect(t *testing.T) {
 	srv := Server{
 		Store:             store,
 		DefaultMaxRetries: 3,
-		Registry:          publisher.NewProviderRegistry(&oauthReplayTestProvider{}),
+		Registry:          postflow.NewProviderRegistry(&oauthReplayTestProvider{}),
 	}
 	handler := srv.Handler()
 

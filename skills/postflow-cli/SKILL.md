@@ -1,16 +1,16 @@
 ---
 name: postflow-cli
-description: Use the postflow CLI to manage scheduled posts, validate/create posts, and operate DLQ entries against the Publisher HTTP API. Use when the user asks to inspect schedule, create posts, or requeue failed publications quickly from terminal.
+description: Use the postflow CLI to manage scheduled posts, validate/create posts, and operate DLQ entries against the PostFlow HTTP API. Use when the user asks to inspect schedule, create posts, or requeue failed publications quickly from terminal.
 ---
 
-# Publisher CLI
+# PostFlow CLI
 
-Use this skill to operate Publisher from terminal via `postflow` (HTTP API, no MCP required).
+Use this skill to operate PostFlow from terminal via `postflow` (HTTP API, no MCP required).
 
 ## Requirements
 
 - Server reachable (default `http://localhost:8080`)
-- Optional auth token in `PUBLISHER_API_TOKEN`
+- Optional auth token in `POSTFLOW_API_TOKEN`
 
 ## Quick Start
 
@@ -19,8 +19,8 @@ go run ./cmd/postflow --help
 ```
 
 Global defaults:
-- Base URL: `PUBLISHER_BASE_URL` or `http://localhost:8080`
-- Token: `PUBLISHER_API_TOKEN`
+- Base URL: `POSTFLOW_BASE_URL` or `http://localhost:8080`
+- Token: `POSTFLOW_API_TOKEN`
 
 ## Core Commands
 

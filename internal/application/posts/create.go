@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/antoniolg/publisher/internal/application/ports"
-	"github.com/antoniolg/publisher/internal/db"
-	"github.com/antoniolg/publisher/internal/domain"
-	"github.com/antoniolg/publisher/internal/publisher"
+	"github.com/antoniolg/postflow/internal/application/ports"
+	"github.com/antoniolg/postflow/internal/db"
+	"github.com/antoniolg/postflow/internal/domain"
+	"github.com/antoniolg/postflow/internal/postflow"
 )
 
 var (
@@ -169,7 +169,7 @@ func (s CreateService) Create(ctx context.Context, in CreateInput) (CreateOutput
 				return CreateOutput{}, ValidationError{Err: err}
 			}
 			if idx == 0 {
-				if _, err := provider.ValidateDraft(ctx, account, publisher.Draft{Text: segment.Text, Media: stepMedia}); err != nil {
+				if _, err := provider.ValidateDraft(ctx, account, postflow.Draft{Text: segment.Text, Media: stepMedia}); err != nil {
 					return CreateOutput{}, ValidationError{Err: err}
 				}
 				continue

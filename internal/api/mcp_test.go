@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/antoniolg/publisher/internal/db"
-	"github.com/antoniolg/publisher/internal/domain"
+	"github.com/antoniolg/postflow/internal/db"
+	"github.com/antoniolg/postflow/internal/domain"
 )
 
 func TestMCPStreamableHTTPExposesToolsAndCreatesPost(t *testing.T) {
@@ -36,8 +36,8 @@ func TestMCPStreamableHTTPExposesToolsAndCreatesPost(t *testing.T) {
 		t.Fatalf("expected initialize status 200, got %d: %s", initializeResp.StatusCode, string(initializeRaw))
 	}
 	sessionID := strings.TrimSpace(initializeResp.Header.Get("Mcp-Session-Id"))
-	if !strings.Contains(string(initializeRaw), "publisher-mcp") {
-		t.Fatalf("expected initialize response to include publisher server info")
+	if !strings.Contains(string(initializeRaw), "postflow-mcp") {
+		t.Fatalf("expected initialize response to include postflow server info")
 	}
 
 	listToolsBody := `{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}`
@@ -46,35 +46,35 @@ func TestMCPStreamableHTTPExposesToolsAndCreatesPost(t *testing.T) {
 		t.Fatalf("expected tools/list status 200, got %d: %s", listToolsResp.StatusCode, string(listToolsRaw))
 	}
 	for _, expected := range []string{
-		"publisher_health",
-		"publisher_list_schedule",
-		"publisher_list_drafts",
-		"publisher_list_accounts",
-		"publisher_create_static_account",
-		"publisher_connect_account",
-		"publisher_disconnect_account",
-		"publisher_set_x_premium",
-		"publisher_delete_account",
-		"publisher_list_failed",
-		"publisher_create_post",
-		"publisher_cancel_post",
-		"publisher_schedule_post",
-		"publisher_edit_post",
-		"publisher_delete_post",
-		"publisher_validate_post",
-		"publisher_upload_media",
-		"publisher_list_media",
-		"publisher_delete_media",
-		"publisher_requeue_failed",
-		"publisher_delete_failed",
-		"publisher_set_timezone",
+		"postflow_health",
+		"postflow_list_schedule",
+		"postflow_list_drafts",
+		"postflow_list_accounts",
+		"postflow_create_static_account",
+		"postflow_connect_account",
+		"postflow_disconnect_account",
+		"postflow_set_x_premium",
+		"postflow_delete_account",
+		"postflow_list_failed",
+		"postflow_create_post",
+		"postflow_cancel_post",
+		"postflow_schedule_post",
+		"postflow_edit_post",
+		"postflow_delete_post",
+		"postflow_validate_post",
+		"postflow_upload_media",
+		"postflow_list_media",
+		"postflow_delete_media",
+		"postflow_requeue_failed",
+		"postflow_delete_failed",
+		"postflow_set_timezone",
 	} {
 		if !strings.Contains(string(listToolsRaw), expected) {
 			t.Fatalf("expected tools/list to include %q", expected)
 		}
 	}
 
-	uploadBody := `{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"publisher_upload_media","arguments":{"kind":"image","original_name":"hello.txt","content_base64":"aGVsbG8gd29ybGQ="}}}`
+	uploadBody := `{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"postflow_upload_media","arguments":{"kind":"image","original_name":"hello.txt","content_base64":"aGVsbG8gd29ybGQ="}}}`
 	uploadResp, uploadRaw := postMCPRequest(t, mcpURL, sessionID, uploadBody)
 	if uploadResp.StatusCode != http.StatusOK {
 		t.Fatalf("expected upload tools/call status 200, got %d: %s", uploadResp.StatusCode, string(uploadRaw))
@@ -87,7 +87,7 @@ func TestMCPStreamableHTTPExposesToolsAndCreatesPost(t *testing.T) {
 		t.Fatalf("expected media_id in upload tool response: %s", string(uploadRaw))
 	}
 
-	createPostBody := `{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"publisher_create_post","arguments":{"account_id":"` + account.ID + `","text":"draft from mcp tool","media_ids":["` + mediaID + `"]}}}`
+	createPostBody := `{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"postflow_create_post","arguments":{"account_id":"` + account.ID + `","text":"draft from mcp tool","media_ids":["` + mediaID + `"]}}}`
 	createPostResp, createPostRaw := postMCPRequest(t, mcpURL, sessionID, createPostBody)
 	if createPostResp.StatusCode != http.StatusOK {
 		t.Fatalf("expected tools/call status 200, got %d: %s", createPostResp.StatusCode, string(createPostRaw))
@@ -118,7 +118,7 @@ func TestMCPStreamableHTTPExposesToolsAndCreatesPost(t *testing.T) {
 	}
 
 	scheduledAt := time.Now().UTC().Add(10 * time.Minute).Format(time.RFC3339)
-	schedulePostBody := `{"jsonrpc":"2.0","id":4.6,"method":"tools/call","params":{"name":"publisher_schedule_post","arguments":{"post_id":"` + draftID + `","scheduled_at":"` + scheduledAt + `"}}}`
+	schedulePostBody := `{"jsonrpc":"2.0","id":4.6,"method":"tools/call","params":{"name":"postflow_schedule_post","arguments":{"post_id":"` + draftID + `","scheduled_at":"` + scheduledAt + `"}}}`
 	schedulePostResp, schedulePostRaw := postMCPRequest(t, mcpURL, sessionID, schedulePostBody)
 	if schedulePostResp.StatusCode != http.StatusOK {
 		t.Fatalf("expected schedule post tools/call status 200, got %d: %s", schedulePostResp.StatusCode, string(schedulePostRaw))
@@ -135,7 +135,7 @@ func TestMCPStreamableHTTPExposesToolsAndCreatesPost(t *testing.T) {
 	}
 
 	rescheduledAt := time.Now().UTC().Add(15 * time.Minute).Format(time.RFC3339)
-	editPostBody := `{"jsonrpc":"2.0","id":4.7,"method":"tools/call","params":{"name":"publisher_edit_post","arguments":{"post_id":"` + draftID + `","text":"edited from mcp tool","intent":"schedule","scheduled_at":"` + rescheduledAt + `"}}}`
+	editPostBody := `{"jsonrpc":"2.0","id":4.7,"method":"tools/call","params":{"name":"postflow_edit_post","arguments":{"post_id":"` + draftID + `","text":"edited from mcp tool","intent":"schedule","scheduled_at":"` + rescheduledAt + `"}}}`
 	editPostResp, editPostRaw := postMCPRequest(t, mcpURL, sessionID, editPostBody)
 	if editPostResp.StatusCode != http.StatusOK {
 		t.Fatalf("expected edit post tools/call status 200, got %d: %s", editPostResp.StatusCode, string(editPostRaw))
@@ -151,7 +151,7 @@ func TestMCPStreamableHTTPExposesToolsAndCreatesPost(t *testing.T) {
 		t.Fatalf("expected edited text, got %q", afterEdit.Text)
 	}
 
-	createDeletablePostBody := `{"jsonrpc":"2.0","id":4.8,"method":"tools/call","params":{"name":"publisher_create_post","arguments":{"account_id":"` + account.ID + `","text":"delete from mcp tool"}}}`
+	createDeletablePostBody := `{"jsonrpc":"2.0","id":4.8,"method":"tools/call","params":{"name":"postflow_create_post","arguments":{"account_id":"` + account.ID + `","text":"delete from mcp tool"}}}`
 	createDeletablePostResp, createDeletablePostRaw := postMCPRequest(t, mcpURL, sessionID, createDeletablePostBody)
 	if createDeletablePostResp.StatusCode != http.StatusOK {
 		t.Fatalf("expected deletable create tools/call status 200, got %d: %s", createDeletablePostResp.StatusCode, string(createDeletablePostRaw))
@@ -173,7 +173,7 @@ func TestMCPStreamableHTTPExposesToolsAndCreatesPost(t *testing.T) {
 	if deleteDraftID == "" {
 		t.Fatalf("expected to find deletable draft id")
 	}
-	deletePostBody := `{"jsonrpc":"2.0","id":4.9,"method":"tools/call","params":{"name":"publisher_delete_post","arguments":{"post_id":"` + deleteDraftID + `"}}}`
+	deletePostBody := `{"jsonrpc":"2.0","id":4.9,"method":"tools/call","params":{"name":"postflow_delete_post","arguments":{"post_id":"` + deleteDraftID + `"}}}`
 	deletePostResp, deletePostRaw := postMCPRequest(t, mcpURL, sessionID, deletePostBody)
 	if deletePostResp.StatusCode != http.StatusOK {
 		t.Fatalf("expected delete post tools/call status 200, got %d: %s", deletePostResp.StatusCode, string(deletePostRaw))
@@ -188,7 +188,7 @@ func TestMCPStreamableHTTPExposesToolsAndCreatesPost(t *testing.T) {
 		t.Fatalf("expected deleted post %q to be absent", deleteDraftID)
 	}
 
-	validateBody := `{"jsonrpc":"2.0","id":4.5,"method":"tools/call","params":{"name":"publisher_validate_post","arguments":{"account_id":"` + account.ID + `","text":"validate from mcp tool"}}}`
+	validateBody := `{"jsonrpc":"2.0","id":4.5,"method":"tools/call","params":{"name":"postflow_validate_post","arguments":{"account_id":"` + account.ID + `","text":"validate from mcp tool"}}}`
 	validateResp, validateRaw := postMCPRequest(t, mcpURL, sessionID, validateBody)
 	if validateResp.StatusCode != http.StatusOK {
 		t.Fatalf("expected validate tools/call status 200, got %d: %s", validateResp.StatusCode, string(validateRaw))
@@ -200,7 +200,7 @@ func TestMCPStreamableHTTPExposesToolsAndCreatesPost(t *testing.T) {
 		t.Fatalf("expected validate tool response to confirm valid payload: %s", string(validateRaw))
 	}
 
-	listMediaBody := `{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"publisher_list_media","arguments":{"limit":50}}}`
+	listMediaBody := `{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"postflow_list_media","arguments":{"limit":50}}}`
 	listMediaResp, listMediaRaw := postMCPRequest(t, mcpURL, sessionID, listMediaBody)
 	if listMediaResp.StatusCode != http.StatusOK {
 		t.Fatalf("expected list media status 200, got %d: %s", listMediaResp.StatusCode, string(listMediaRaw))
@@ -212,7 +212,7 @@ func TestMCPStreamableHTTPExposesToolsAndCreatesPost(t *testing.T) {
 		t.Fatalf("expected media list to include uploaded media id %q", mediaID)
 	}
 
-	uploadDeletableBody := `{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"publisher_upload_media","arguments":{"kind":"image","original_name":"delete-me.txt","content_base64":"ZGVsZXRlLW1l"}}}`
+	uploadDeletableBody := `{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"postflow_upload_media","arguments":{"kind":"image","original_name":"delete-me.txt","content_base64":"ZGVsZXRlLW1l"}}}`
 	uploadDeletableResp, uploadDeletableRaw := postMCPRequest(t, mcpURL, sessionID, uploadDeletableBody)
 	if uploadDeletableResp.StatusCode != http.StatusOK {
 		t.Fatalf("expected second upload tools/call status 200, got %d: %s", uploadDeletableResp.StatusCode, string(uploadDeletableRaw))
@@ -225,7 +225,7 @@ func TestMCPStreamableHTTPExposesToolsAndCreatesPost(t *testing.T) {
 		t.Fatalf("expected media_id in second upload tool response: %s", string(uploadDeletableRaw))
 	}
 
-	deleteBody := `{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"publisher_delete_media","arguments":{"media_id":"` + deletableMediaID + `"}}}`
+	deleteBody := `{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"postflow_delete_media","arguments":{"media_id":"` + deletableMediaID + `"}}}`
 	deleteResp, deleteRaw := postMCPRequest(t, mcpURL, sessionID, deleteBody)
 	if deleteResp.StatusCode != http.StatusOK {
 		t.Fatalf("expected delete media status 200, got %d: %s", deleteResp.StatusCode, string(deleteRaw))
@@ -262,7 +262,7 @@ func TestMCPStreamableHTTPExposesToolsAndCreatesPost(t *testing.T) {
 	}
 	failedID := dlqItems[0].ID
 
-	requeueBody := `{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"publisher_requeue_failed","arguments":{"dead_letter_id":"` + failedID + `"}}}`
+	requeueBody := `{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"postflow_requeue_failed","arguments":{"dead_letter_id":"` + failedID + `"}}}`
 	requeueResp, requeueRaw := postMCPRequest(t, mcpURL, sessionID, requeueBody)
 	if requeueResp.StatusCode != http.StatusOK {
 		t.Fatalf("expected requeue failed status 200, got %d: %s", requeueResp.StatusCode, string(requeueRaw))
@@ -295,7 +295,7 @@ func TestMCPStreamableHTTPExposesToolsAndCreatesPost(t *testing.T) {
 		t.Fatalf("expected dead letter to delete")
 	}
 	deleteFailedID := dlqItems[0].ID
-	deleteFailedBody := `{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"publisher_delete_failed","arguments":{"dead_letter_id":"` + deleteFailedID + `"}}}`
+	deleteFailedBody := `{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"postflow_delete_failed","arguments":{"dead_letter_id":"` + deleteFailedID + `"}}}`
 	deleteFailedResp, deleteFailedRaw := postMCPRequest(t, mcpURL, sessionID, deleteFailedBody)
 	if deleteFailedResp.StatusCode != http.StatusOK {
 		t.Fatalf("expected delete failed status 200, got %d: %s", deleteFailedResp.StatusCode, string(deleteFailedRaw))
@@ -329,8 +329,8 @@ func TestMCPInitializeAcceptJSONOnly(t *testing.T) {
 	if strings.TrimSpace(initializeResp.Header.Get("Mcp-Session-Id")) == "" {
 		t.Fatalf("expected initialize response to include MCP session id")
 	}
-	if !strings.Contains(string(initializeRaw), "publisher-mcp") {
-		t.Fatalf("expected initialize response to include publisher server info")
+	if !strings.Contains(string(initializeRaw), "postflow-mcp") {
+		t.Fatalf("expected initialize response to include postflow server info")
 	}
 }
 
@@ -355,8 +355,8 @@ func TestMCPInitializeAcceptJSONWithCharset(t *testing.T) {
 	if strings.TrimSpace(initializeResp.Header.Get("Mcp-Session-Id")) == "" {
 		t.Fatalf("expected initialize response to include MCP session id")
 	}
-	if !strings.Contains(string(initializeRaw), "publisher-mcp") {
-		t.Fatalf("expected initialize response to include publisher server info")
+	if !strings.Contains(string(initializeRaw), "postflow-mcp") {
+		t.Fatalf("expected initialize response to include postflow server info")
 	}
 }
 
@@ -383,7 +383,7 @@ func TestMCPUploadMediaRejectsFilePath(t *testing.T) {
 		t.Fatalf("expected initialize response to include MCP session id")
 	}
 
-	uploadBody := `{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"publisher_upload_media","arguments":{"kind":"image","file_path":"/tmp/media.png"}}}`
+	uploadBody := `{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"postflow_upload_media","arguments":{"kind":"image","file_path":"/tmp/media.png"}}}`
 	uploadResp, uploadRaw := postMCPRequest(t, mcpURL, sessionID, uploadBody)
 	if uploadResp.StatusCode != http.StatusOK {
 		t.Fatalf("expected tools/call status 200, got %d: %s", uploadResp.StatusCode, string(uploadRaw))
@@ -418,8 +418,8 @@ func TestMCPTrailingSlashEndpointAcceptsInitialize(t *testing.T) {
 	if strings.TrimSpace(initializeResp.Header.Get("Mcp-Session-Id")) == "" {
 		t.Fatalf("expected initialize response to include MCP session id")
 	}
-	if !strings.Contains(string(initializeRaw), "publisher-mcp") {
-		t.Fatalf("expected initialize response to include publisher server info")
+	if !strings.Contains(string(initializeRaw), "postflow-mcp") {
+		t.Fatalf("expected initialize response to include postflow server info")
 	}
 }
 
@@ -441,8 +441,8 @@ func TestMCPToolsListAcceptsInvalidSessionID(t *testing.T) {
 	if listToolsResp.StatusCode != http.StatusOK {
 		t.Fatalf("expected tools/list status 200 with invalid session id, got %d: %s", listToolsResp.StatusCode, string(listToolsRaw))
 	}
-	if !strings.Contains(string(listToolsRaw), "publisher_health") {
-		t.Fatalf("expected tools/list response to include publisher_health")
+	if !strings.Contains(string(listToolsRaw), "postflow_health") {
+		t.Fatalf("expected tools/list response to include postflow_health")
 	}
 }
 
@@ -499,7 +499,7 @@ func TestSettingsViewIncludesMCPURLAndConfig(t *testing.T) {
 	h := srv.Handler()
 
 	req := httptest.NewRequest(http.MethodGet, "/?view=settings", nil)
-	req.Host = "publisher.example.com"
+	req.Host = "postflow.example.com"
 	req.Header.Set("X-Forwarded-Proto", "https")
 	req.Header.Set("Authorization", "Bearer super-secret")
 	w := httptest.NewRecorder()
@@ -511,19 +511,19 @@ func TestSettingsViewIncludesMCPURLAndConfig(t *testing.T) {
 	if !strings.Contains(body, `id="mcp-url"`) {
 		t.Fatalf("expected mcp url field in settings")
 	}
-	if !strings.Contains(body, "https://publisher.example.com/mcp") {
+	if !strings.Contains(body, "https://postflow.example.com/mcp") {
 		t.Fatalf("expected absolute mcp url in settings")
 	}
-	if !strings.Contains(body, "claude mcp add -t http publisher") {
+	if !strings.Contains(body, "claude mcp add -t http postflow") {
 		t.Fatalf("expected claude mcp command in settings")
 	}
-	if !strings.Contains(body, "codex mcp add publisher --url") {
+	if !strings.Contains(body, "codex mcp add postflow --url") {
 		t.Fatalf("expected codex mcp command in settings")
 	}
-	if !strings.Contains(body, "[mcp_servers.publisher]") {
+	if !strings.Contains(body, "[mcp_servers.postflow]") {
 		t.Fatalf("expected codex toml config in settings")
 	}
-	if !strings.Contains(body, "bearer_token_env_var = &#34;PUBLISHER_API_TOKEN&#34;") {
+	if !strings.Contains(body, "bearer_token_env_var = &#34;POSTFLOW_API_TOKEN&#34;") {
 		t.Fatalf("expected codex bearer token env var hint in settings")
 	}
 	if !strings.Contains(body, "streamable_http") {

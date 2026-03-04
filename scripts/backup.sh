@@ -5,7 +5,7 @@ DATA_ROOT="${DATA_ROOT:-/srv/data}"
 BACKUP_DIR="${BACKUP_DIR:-/srv/backups}"
 RETENTION_DAYS="${RETENTION_DAYS:-14}"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
-ARCHIVE="${BACKUP_DIR}/publisher-backup-${STAMP}.tar.gz"
+ARCHIVE="${BACKUP_DIR}/postflow-backup-${STAMP}.tar.gz"
 TMP_DIR="$(mktemp -d)"
 
 cleanup() {
@@ -20,16 +20,16 @@ if [ ! -d "$DATA_ROOT" ]; then
   exit 1
 fi
 
-if [ -f "$DATA_ROOT/publisher.db" ]; then
-  cp "$DATA_ROOT/publisher.db" "$TMP_DIR/publisher.db"
+if [ -f "$DATA_ROOT/postflow.db" ]; then
+  cp "$DATA_ROOT/postflow.db" "$TMP_DIR/postflow.db"
 fi
 
-if [ -f "$DATA_ROOT/publisher.db-wal" ]; then
-  cp "$DATA_ROOT/publisher.db-wal" "$TMP_DIR/publisher.db-wal"
+if [ -f "$DATA_ROOT/postflow.db-wal" ]; then
+  cp "$DATA_ROOT/postflow.db-wal" "$TMP_DIR/postflow.db-wal"
 fi
 
-if [ -f "$DATA_ROOT/publisher.db-shm" ]; then
-  cp "$DATA_ROOT/publisher.db-shm" "$TMP_DIR/publisher.db-shm"
+if [ -f "$DATA_ROOT/postflow.db-shm" ]; then
+  cp "$DATA_ROOT/postflow.db-shm" "$TMP_DIR/postflow.db-shm"
 fi
 
 if [ -d "$DATA_ROOT/media" ]; then
@@ -43,6 +43,6 @@ fi
 
 ( cd "$TMP_DIR" && tar -czf "$ARCHIVE" . )
 
-find "$BACKUP_DIR" -type f -name 'publisher-backup-*.tar.gz' -mtime +"$RETENTION_DAYS" -delete
+find "$BACKUP_DIR" -type f -name 'postflow-backup-*.tar.gz' -mtime +"$RETENTION_DAYS" -delete
 
 echo "Backup created: $ARCHIVE"

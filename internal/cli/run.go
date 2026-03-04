@@ -118,15 +118,15 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 
 func parseGlobalArgs(args []string, stdout, stderr io.Writer) (config, []string, bool, int) {
 	cfg := config{
-		baseURL: envOrDefault("PUBLISHER_BASE_URL", "http://localhost:8080"),
-		token:   strings.TrimSpace(os.Getenv("PUBLISHER_API_TOKEN")),
+		baseURL: envOrDefault("POSTFLOW_BASE_URL", "http://localhost:8080"),
+		token:   strings.TrimSpace(os.Getenv("POSTFLOW_API_TOKEN")),
 		timeout: 15 * time.Second,
 	}
 
 	fs := flag.NewFlagSet("postflow", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	fs.StringVar(&cfg.baseURL, "base-url", cfg.baseURL, "Publisher API base URL")
-	fs.StringVar(&cfg.token, "api-token", cfg.token, "Publisher API token (or env PUBLISHER_API_TOKEN)")
+	fs.StringVar(&cfg.baseURL, "base-url", cfg.baseURL, "PostFlow API base URL")
+	fs.StringVar(&cfg.token, "api-token", cfg.token, "PostFlow API token (or env POSTFLOW_API_TOKEN)")
 	fs.DurationVar(&cfg.timeout, "timeout", cfg.timeout, "HTTP timeout (e.g. 10s)")
 	fs.BoolVar(&cfg.asJSON, "json", false, "Print raw JSON output")
 	showVersion := fs.Bool("version", false, "Print version")
@@ -536,8 +536,8 @@ Usage:
   postflow [global flags] <command> [subcommand] [flags]
 
 Global flags:
-  --base-url string      Publisher API base URL (default: $PUBLISHER_BASE_URL or http://localhost:8080)
-  --api-token string     API token (default: $PUBLISHER_API_TOKEN)
+  --base-url string      PostFlow API base URL (default: $POSTFLOW_BASE_URL or http://localhost:8080)
+  --api-token string     API token (default: $POSTFLOW_API_TOKEN)
   --timeout duration     HTTP timeout (default: 15s)
   --json                 Print raw JSON output
   --version              Print version

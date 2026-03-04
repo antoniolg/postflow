@@ -9,7 +9,7 @@ WORKER_MIN="${COVERAGE_MIN_WORKER:-80}"
 API_MIN="${COVERAGE_MIN_API:-60}"
 CLI_MIN="${COVERAGE_MIN_CLI:-40}"
 DB_MIN="${COVERAGE_MIN_DB:-55}"
-PUBLISHER_MIN="${COVERAGE_MIN_PUBLISHER:-50}"
+POSTFLOW_MIN="${COVERAGE_MIN_POSTFLOW:-50}"
 
 failures=0
 
@@ -27,7 +27,7 @@ check_threshold() {
 }
 
 echo "Running global coverage..."
-go test ./... -covermode=atomic -coverprofile=coverage.out >/tmp/publisher-global-coverage.log
+go test ./... -covermode=atomic -coverprofile=coverage.out >/tmp/postflow-global-coverage.log
 TOTAL_COVERAGE="$(go tool cover -func=coverage.out | awk '/^total:/ {gsub(/%/, "", $3); print $3}')"
 check_threshold "total" "$TOTAL_COVERAGE" "$TOTAL_MIN"
 
@@ -35,7 +35,7 @@ echo ""
 echo "Running per-package coverage..."
 while IFS='|' read -r pkg min; do
   profile="$(mktemp)"
-  go test "$pkg" -covermode=atomic -coverprofile="$profile" >/tmp/publisher-coverage-$(basename "$pkg").log
+  go test "$pkg" -covermode=atomic -coverprofile="$profile" >/tmp/postflow-coverage-$(basename "$pkg").log
   coverage="$(go tool cover -func="$profile" | awk '/^total:/ {gsub(/%/, "", $3); print $3}')"
   rm -f "$profile"
   check_threshold "$pkg" "$coverage" "$min"
@@ -44,7 +44,7 @@ done <<EOF
 ./internal/api|$API_MIN
 ./internal/cli|$CLI_MIN
 ./internal/db|$DB_MIN
-./internal/publisher|$PUBLISHER_MIN
+./internal/postflow|$POSTFLOW_MIN
 EOF
 
 if [ "$failures" -gt 0 ]; then

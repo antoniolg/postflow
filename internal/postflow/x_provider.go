@@ -1,11 +1,11 @@
-package publisher
+package postflow
 
 import (
 	"context"
 	"fmt"
 	"strings"
 
-	"github.com/antoniolg/publisher/internal/domain"
+	"github.com/antoniolg/postflow/internal/domain"
 )
 
 type XProvider struct {

@@ -13,9 +13,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/antoniolg/publisher/internal/db"
-	"github.com/antoniolg/publisher/internal/domain"
-	"github.com/antoniolg/publisher/internal/publisher"
+	"github.com/antoniolg/postflow/internal/db"
+	"github.com/antoniolg/postflow/internal/domain"
+	"github.com/antoniolg/postflow/internal/postflow"
 )
 
 func (s Server) handleOAuthStart(w http.ResponseWriter, r *http.Request) {
@@ -65,7 +65,7 @@ func (s Server) handleOAuthStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	redirectURL := s.oauthCallbackURL(r, platform)
-	out, err := provider.StartOAuth(r.Context(), publisher.OAuthStartInput{
+	out, err := provider.StartOAuth(r.Context(), postflow.OAuthStartInput{
 		State:        recorded.State,
 		CodeVerifier: recorded.CodeVerifier,
 		RedirectURL:  redirectURL,
@@ -171,7 +171,7 @@ func (s Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	connected, err := provider.HandleOAuthCallback(r.Context(), publisher.OAuthCallbackInput{
+	connected, err := provider.HandleOAuthCallback(r.Context(), postflow.OAuthCallbackInput{
 		Code:         code,
 		State:        recorded.State,
 		CodeVerifier: recorded.CodeVerifier,
@@ -228,7 +228,7 @@ func (s Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s Server) saveCredentials(ctx context.Context, accountID string, credentials publisher.Credentials) error {
+func (s Server) saveCredentials(ctx context.Context, accountID string, credentials postflow.Credentials) error {
 	if credentials.Extra == nil {
 		credentials.Extra = map[string]string{}
 	}
@@ -244,17 +244,17 @@ func (s Server) saveCredentials(ctx context.Context, accountID string, credentia
 	})
 }
 
-func decodeCredentials(raw map[string]any) (publisher.Credentials, error) {
+func decodeCredentials(raw map[string]any) (postflow.Credentials, error) {
 	if len(raw) == 0 {
-		return publisher.Credentials{}, errors.New("credentials are required")
+		return postflow.Credentials{}, errors.New("credentials are required")
 	}
 	encoded, err := json.Marshal(raw)
 	if err != nil {
-		return publisher.Credentials{}, err
+		return postflow.Credentials{}, err
 	}
-	var out publisher.Credentials
+	var out postflow.Credentials
 	if err := json.Unmarshal(encoded, &out); err != nil {
-		return publisher.Credentials{}, err
+		return postflow.Credentials{}, err
 	}
 	if out.Extra == nil {
 		out.Extra = map[string]string{}

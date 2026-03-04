@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	mediaapp "github.com/antoniolg/publisher/internal/application/media"
-	"github.com/antoniolg/publisher/internal/db"
-	"github.com/antoniolg/publisher/internal/domain"
+	mediaapp "github.com/antoniolg/postflow/internal/application/media"
+	"github.com/antoniolg/postflow/internal/db"
+	"github.com/antoniolg/postflow/internal/domain"
 )
 
 const defaultMediaListLimit = mediaapp.DefaultListLimit

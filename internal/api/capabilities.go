@@ -1,6 +1,6 @@
 package api
 
-import "github.com/antoniolg/publisher/internal/capabilities"
+import "github.com/antoniolg/postflow/internal/capabilities"
 
 func HTTPExposedCapabilities() map[string]struct{} {
 	return map[string]struct{}{

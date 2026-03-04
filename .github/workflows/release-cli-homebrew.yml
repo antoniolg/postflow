@@ -68,11 +68,7 @@ jobs:
           TAG="${{ steps.vars.outputs.tag }}"
           BIN_NAME="${BIN_NAME}"
           FORMULA_NAME="${FORMULA_NAME}"
-          if [ -d "./cmd/postflow" ]; then
-            CMD_PATH="./cmd/postflow"
-          else
-            CMD_PATH="./cmd/publisher-cli"
-          fi
+          CMD_PATH="./cmd/postflow"
 
           build_target() {
             local GOOS="$1"
@@ -81,7 +77,7 @@ jobs:
             local ARCHIVE="dist/${FORMULA_NAME}_${VERSION}_${GOOS}_${GOARCH}.tar.gz"
             mkdir -p "${OUT_DIR}"
             CGO_ENABLED=0 GOOS="${GOOS}" GOARCH="${GOARCH}" \
-              go build -trimpath -ldflags "-s -w -X github.com/antoniolg/publisher/internal/cli.Version=${TAG}" \
+              go build -trimpath -ldflags "-s -w -X github.com/antoniolg/postflow/internal/cli.Version=${TAG}" \
               -o "${OUT_DIR}/${BIN_NAME}" "${CMD_PATH}"
             tar -C "${OUT_DIR}" -czf "${ARCHIVE}" "${BIN_NAME}"
           }

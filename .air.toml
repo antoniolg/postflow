@@ -2,9 +2,9 @@ root = "."
 tmp_dir = ".air-tmp"
 
 [build]
-cmd = "go build -o ./publisher ./cmd/publisher"
-entrypoint = "./publisher"
-full_bin = "ENV_FILE=.env ./publisher"
+cmd = "go build -o ./postflow-server ./cmd/postflow-server"
+entrypoint = "./postflow-server"
+full_bin = "ENV_FILE=.env ./postflow-server"
 include_ext = ["go", "tpl", "tmpl", "html", "css", "js", "json", "yaml", "yml"]
 exclude_dir = [".git", ".air-tmp", "data", "tmp", "vendor"]
 exclude_file = []

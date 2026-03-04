@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	postsapp "github.com/antoniolg/publisher/internal/application/posts"
-	"github.com/antoniolg/publisher/internal/domain"
-	"github.com/antoniolg/publisher/internal/publisher"
+	postsapp "github.com/antoniolg/postflow/internal/application/posts"
+	"github.com/antoniolg/postflow/internal/domain"
+	"github.com/antoniolg/postflow/internal/postflow"
 )
 
 type validatePostResponse struct {
@@ -127,7 +127,7 @@ func (s Server) validatePost(ctx context.Context, req validatePostInput) (valida
 			normalizedMediaIDs = append(normalizedMediaIDs, mediaID)
 		}
 		if idx == 0 {
-			stepWarnings, err := provider.ValidateDraft(ctx, account, publisher.Draft{Text: strings.TrimSpace(segment.Text), Media: segmentMedia})
+			stepWarnings, err := provider.ValidateDraft(ctx, account, postflow.Draft{Text: strings.TrimSpace(segment.Text), Media: segmentMedia})
 			if err != nil {
 				return validatePostResponse{}, err
 			}

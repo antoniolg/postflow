@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/antoniolg/publisher/internal/db"
+	"github.com/antoniolg/postflow/internal/db"
 )
 
 const (

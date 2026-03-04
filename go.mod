@@ -1,4 +1,4 @@
-module github.com/antoniolg/publisher
+module github.com/antoniolg/postflow
 
 go 1.24.0
 

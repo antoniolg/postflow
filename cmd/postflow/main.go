@@ -4,7 +4,7 @@ import (
 	"context"
 	"os"
 
-	"github.com/antoniolg/publisher/internal/cli"
+	"github.com/antoniolg/postflow/internal/cli"
 )
 
 func main() {

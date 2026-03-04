@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/antoniolg/publisher/internal/db"
-	"github.com/antoniolg/publisher/internal/domain"
-	"github.com/antoniolg/publisher/internal/publisher"
+	"github.com/antoniolg/postflow/internal/db"
+	"github.com/antoniolg/postflow/internal/domain"
+	"github.com/antoniolg/postflow/internal/postflow"
 )
 
 func TestWorkerPublishesThreadInOrderAcrossCycles(t *testing.T) {
@@ -17,10 +17,10 @@ func TestWorkerPublishesThreadInOrderAcrossCycles(t *testing.T) {
 	testCases := []struct {
 		name            string
 		platform        domain.Platform
-		expectedChildOp publisher.PublishMode
+		expectedChildOp postflow.PublishMode
 	}{
-		{name: "x uses reply mode for thread child", platform: domain.PlatformX, expectedChildOp: publisher.PublishModeReply},
-		{name: "linkedin uses comment mode for thread child", platform: domain.PlatformLinkedIn, expectedChildOp: publisher.PublishModeComment},
+		{name: "x uses reply mode for thread child", platform: domain.PlatformX, expectedChildOp: postflow.PublishModeReply},
+		{name: "linkedin uses comment mode for thread child", platform: domain.PlatformLinkedIn, expectedChildOp: postflow.PublishModeComment},
 	}
 
 	for _, tc := range testCases {
@@ -34,7 +34,7 @@ func TestWorkerPublishesThreadInOrderAcrossCycles(t *testing.T) {
 			provider := &recordingWorkerProvider{platform: tc.platform}
 			creds := workerCredentialsStore{worker: Worker{Store: store, Cipher: newWorkerTestCipher(t)}}
 
-			runPublishCycleOnce(t, store, publisher.NewProviderRegistry(provider), creds, 5*time.Second, 2*time.Second)
+			runPublishCycleOnce(t, store, postflow.NewProviderRegistry(provider), creds, 5*time.Second, 2*time.Second)
 
 			rootAfterFirstRun, err := store.GetPost(t.Context(), rootPost.ID)
 			if err != nil {
@@ -61,11 +61,11 @@ func TestWorkerPublishesThreadInOrderAcrossCycles(t *testing.T) {
 			if provider.calls[0].postID != rootPost.ID {
 				t.Fatalf("expected root publish first, got post %s", provider.calls[0].postID)
 			}
-			if provider.calls[0].mode != publisher.PublishModeRoot {
+			if provider.calls[0].mode != postflow.PublishModeRoot {
 				t.Fatalf("expected root mode for first publish, got %s", provider.calls[0].mode)
 			}
 
-			runPublishCycleOnce(t, store, publisher.NewProviderRegistry(provider), creds, 5*time.Second, 2*time.Second)
+			runPublishCycleOnce(t, store, postflow.NewProviderRegistry(provider), creds, 5*time.Second, 2*time.Second)
 
 			childAfterSecondRun, err := store.GetPost(t.Context(), childPost.ID)
 			if err != nil {
@@ -105,7 +105,7 @@ func TestWorkerPublishesThreadInOrderAcrossCycles(t *testing.T) {
 
 type workerPublishCall struct {
 	postID           string
-	mode             publisher.PublishMode
+	mode             postflow.PublishMode
 	parentExternalID string
 }
 
@@ -118,11 +118,11 @@ func (p *recordingWorkerProvider) Platform() domain.Platform {
 	return p.platform
 }
 
-func (p *recordingWorkerProvider) ValidateDraft(context.Context, domain.SocialAccount, publisher.Draft) ([]string, error) {
+func (p *recordingWorkerProvider) ValidateDraft(context.Context, domain.SocialAccount, postflow.Draft) ([]string, error) {
 	return nil, nil
 }
 
-func (p *recordingWorkerProvider) Publish(_ context.Context, _ domain.SocialAccount, _ publisher.Credentials, post domain.Post, opts publisher.PublishOptions) (string, error) {
+func (p *recordingWorkerProvider) Publish(_ context.Context, _ domain.SocialAccount, _ postflow.Credentials, post domain.Post, opts postflow.PublishOptions) (string, error) {
 	p.calls = append(p.calls, workerPublishCall{
 		postID:           post.ID,
 		mode:             opts.Mode,
@@ -131,7 +131,7 @@ func (p *recordingWorkerProvider) Publish(_ context.Context, _ domain.SocialAcco
 	return "ext_" + strings.TrimSpace(post.ID), nil
 }
 
-func (p *recordingWorkerProvider) RefreshIfNeeded(_ context.Context, _ domain.SocialAccount, credentials publisher.Credentials) (publisher.Credentials, bool, error) {
+func (p *recordingWorkerProvider) RefreshIfNeeded(_ context.Context, _ domain.SocialAccount, credentials postflow.Credentials) (postflow.Credentials, bool, error) {
 	return credentials, false, nil
 }
 

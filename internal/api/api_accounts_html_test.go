@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/antoniolg/publisher/internal/db"
-	"github.com/antoniolg/publisher/internal/domain"
-	"github.com/antoniolg/publisher/internal/publisher"
+	"github.com/antoniolg/postflow/internal/db"
+	"github.com/antoniolg/postflow/internal/domain"
+	"github.com/antoniolg/postflow/internal/postflow"
 )
 
 func TestListAccountsHTMLRedirectsToSettings(t *testing.T) {
@@ -149,7 +149,7 @@ func TestConnectAccountFormRedirectsBackToSettings(t *testing.T) {
 	h := srv.Handler()
 
 	accountID := testAccountID(t, store)
-	if err := srv.saveCredentials(t.Context(), accountID, publisher.Credentials{
+	if err := srv.saveCredentials(t.Context(), accountID, postflow.Credentials{
 		AccessToken:       "token-connect-test",
 		AccessTokenSecret: "secret-connect-test",
 		TokenType:         "oauth1",

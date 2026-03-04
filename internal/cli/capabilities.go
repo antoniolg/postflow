@@ -1,6 +1,6 @@
 package cli
 
-import "github.com/antoniolg/publisher/internal/capabilities"
+import "github.com/antoniolg/postflow/internal/capabilities"
 
 func ExposedCapabilities() map[string]struct{} {
 	return map[string]struct{}{

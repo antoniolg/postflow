@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/antoniolg/publisher/internal/db"
-	"github.com/antoniolg/publisher/internal/domain"
+	"github.com/antoniolg/postflow/internal/db"
+	"github.com/antoniolg/postflow/internal/domain"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 

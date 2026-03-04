@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/antoniolg/publisher/internal/domain"
+	"github.com/antoniolg/postflow/internal/domain"
 )
 
 var (

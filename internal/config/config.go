@@ -23,7 +23,7 @@ type Config struct {
 	UIBasicUser       string
 	UIBasicPass       string
 	LogLevel          string
-	PublisherDriver   string
+	PostflowDriver    string
 	PublicBaseURL     string
 	MasterKeyBase64   string
 	X                 XConfig
@@ -92,7 +92,7 @@ func Load() (Config, error) {
 
 	cfg := Config{
 		Port:              getenv("PORT", "8080"),
-		DatabasePath:      getenv("DATABASE_PATH", "publisher.db"),
+		DatabasePath:      getenv("DATABASE_PATH", "postflow.db"),
 		DataDir:           getenv("DATA_DIR", "data"),
 		WorkerInterval:    interval,
 		RetryBackoff:      retryBackoff,
@@ -102,9 +102,9 @@ func Load() (Config, error) {
 		UIBasicUser:       os.Getenv("UI_BASIC_USER"),
 		UIBasicPass:       os.Getenv("UI_BASIC_PASS"),
 		LogLevel:          getenv("LOG_LEVEL", "info"),
-		PublisherDriver:   getenv("PUBLISHER_DRIVER", "mock"),
+		PostflowDriver:    getenv("POSTFLOW_DRIVER", "mock"),
 		PublicBaseURL:     strings.TrimRight(strings.TrimSpace(os.Getenv("PUBLIC_BASE_URL")), "/"),
-		MasterKeyBase64:   strings.TrimSpace(os.Getenv("PUBLISHER_MASTER_KEY")),
+		MasterKeyBase64:   strings.TrimSpace(os.Getenv("POSTFLOW_MASTER_KEY")),
 		X: XConfig{
 			APIBaseURL:        getenv("X_API_BASE_URL", "https://api.twitter.com"),
 			UploadBaseURL:     getenv("X_UPLOAD_BASE_URL", "https://upload.twitter.com"),
@@ -123,7 +123,7 @@ func Load() (Config, error) {
 		},
 	}
 	if cfg.MasterKeyBase64 == "" {
-		return Config{}, errors.New("PUBLISHER_MASTER_KEY is required")
+		return Config{}, errors.New("POSTFLOW_MASTER_KEY is required")
 	}
 	if cfg.PublicBaseURL == "" {
 		cfg.PublicBaseURL = "http://localhost:" + cfg.Port

@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/antoniolg/publisher/internal/db"
-	"github.com/antoniolg/publisher/internal/domain"
-	"github.com/antoniolg/publisher/internal/publisher"
+	"github.com/antoniolg/postflow/internal/db"
+	"github.com/antoniolg/postflow/internal/domain"
+	"github.com/antoniolg/postflow/internal/postflow"
 )
 
 type mcpToolCallResponse struct {
@@ -46,7 +46,7 @@ func TestMCPEditPostEditsTextAndMedia(t *testing.T) {
 		t.Fatalf("create post: %v", err)
 	}
 
-	call := mcpCallTool(t, mcpURL, sessionID, "publisher_edit_post", map[string]any{
+	call := mcpCallTool(t, mcpURL, sessionID, "postflow_edit_post", map[string]any{
 		"post_id":      created.Post.ID,
 		"text":         "edited with replacement media",
 		"media_ids":    []string{replacementMedia.ID},
@@ -90,7 +90,7 @@ func TestMCPEditPostPreservesScheduledStateWithoutIntentOrScheduledAt(t *testing
 		t.Fatalf("create post: %v", err)
 	}
 
-	call := mcpCallTool(t, mcpURL, sessionID, "publisher_edit_post", map[string]any{
+	call := mcpCallTool(t, mcpURL, sessionID, "postflow_edit_post", map[string]any{
 		"post_id":   created.Post.ID,
 		"text":      "scheduled post edited",
 		"media_ids": []string{replacementMedia.ID},
@@ -136,7 +136,7 @@ func TestMCPEditPostAddsMediaWhenPostHasNone(t *testing.T) {
 		t.Fatalf("expected post without media before edit, got %d", len(before.Media))
 	}
 
-	call := mcpCallTool(t, mcpURL, sessionID, "publisher_edit_post", map[string]any{
+	call := mcpCallTool(t, mcpURL, sessionID, "postflow_edit_post", map[string]any{
 		"post_id":   created.Post.ID,
 		"text":      "text with first media",
 		"media_ids": []string{media.ID},
@@ -172,7 +172,7 @@ func TestMCPEditPostRemovesMediaWhenPlatformAllowsIt(t *testing.T) {
 		t.Fatalf("create post: %v", err)
 	}
 
-	call := mcpCallTool(t, mcpURL, sessionID, "publisher_edit_post", map[string]any{
+	call := mcpCallTool(t, mcpURL, sessionID, "postflow_edit_post", map[string]any{
 		"post_id":   created.Post.ID,
 		"text":      "text without media",
 		"media_ids": []string{},
@@ -208,7 +208,7 @@ func TestMCPEditPostRejectsInstagramWithoutMedia(t *testing.T) {
 		t.Fatalf("create post: %v", err)
 	}
 
-	call := mcpCallTool(t, mcpURL, sessionID, "publisher_edit_post", map[string]any{
+	call := mcpCallTool(t, mcpURL, sessionID, "postflow_edit_post", map[string]any{
 		"post_id":   created.Post.ID,
 		"text":      "caption updated",
 		"media_ids": []string{},
@@ -240,11 +240,11 @@ func setupMCPMediaEditTest(t *testing.T) (*db.Store, string, string) {
 	}
 	t.Cleanup(func() { _ = store.Close() })
 
-	registry := publisher.NewProviderRegistry(
-		publisher.NewMockProvider(domain.PlatformX),
-		publisher.NewLinkedInProvider(publisher.LinkedInProviderConfig{}),
-		publisher.NewFacebookProvider(publisher.MetaProviderConfig{}),
-		publisher.NewInstagramProvider(publisher.MetaProviderConfig{}),
+	registry := postflow.NewProviderRegistry(
+		postflow.NewMockProvider(domain.PlatformX),
+		postflow.NewLinkedInProvider(postflow.LinkedInProviderConfig{}),
+		postflow.NewFacebookProvider(postflow.MetaProviderConfig{}),
+		postflow.NewInstagramProvider(postflow.MetaProviderConfig{}),
 	)
 
 	srv := Server{

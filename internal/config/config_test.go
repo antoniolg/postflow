@@ -18,8 +18,8 @@ func testMasterKey() string {
 
 func TestLoadReadsDotEnvFile(t *testing.T) {
 	tempDir := t.TempDir()
-	envPath := filepath.Join(tempDir, "publisher.env")
-	envContent := "PORT=9090\nWORKER_INTERVAL_SECONDS=45\nPUBLISHER_DRIVER=x\nX_API_KEY=abc123\nPUBLISHER_MASTER_KEY=" + testMasterKey() + "\n"
+	envPath := filepath.Join(tempDir, "postflow.env")
+	envContent := "PORT=9090\nWORKER_INTERVAL_SECONDS=45\nPOSTFLOW_DRIVER=x\nX_API_KEY=abc123\nPOSTFLOW_MASTER_KEY=" + testMasterKey() + "\n"
 	if err := os.WriteFile(envPath, []byte(envContent), 0o600); err != nil {
 		t.Fatalf("write env file: %v", err)
 	}
@@ -27,9 +27,9 @@ func TestLoadReadsDotEnvFile(t *testing.T) {
 	t.Setenv("ENV_FILE", envPath)
 	unsetEnvForTest(t, "PORT")
 	unsetEnvForTest(t, "WORKER_INTERVAL_SECONDS")
-	unsetEnvForTest(t, "PUBLISHER_DRIVER")
+	unsetEnvForTest(t, "POSTFLOW_DRIVER")
 	unsetEnvForTest(t, "X_API_KEY")
-	unsetEnvForTest(t, "PUBLISHER_MASTER_KEY")
+	unsetEnvForTest(t, "POSTFLOW_MASTER_KEY")
 
 	cfg, err := Load()
 	if err != nil {
@@ -42,8 +42,8 @@ func TestLoadReadsDotEnvFile(t *testing.T) {
 	if cfg.WorkerInterval != 45*time.Second {
 		t.Fatalf("WorkerInterval = %v, want %v", cfg.WorkerInterval, 45*time.Second)
 	}
-	if cfg.PublisherDriver != "x" {
-		t.Fatalf("PublisherDriver = %q, want %q", cfg.PublisherDriver, "x")
+	if cfg.PostflowDriver != "x" {
+		t.Fatalf("PostflowDriver = %q, want %q", cfg.PostflowDriver, "x")
 	}
 	if cfg.X.APIKey != "abc123" {
 		t.Fatalf("X.APIKey = %q, want %q", cfg.X.APIKey, "abc123")
@@ -70,8 +70,8 @@ func unsetEnvForTest(t *testing.T, key string) {
 
 func TestLoadEnvVarsOverrideDotEnvFile(t *testing.T) {
 	tempDir := t.TempDir()
-	envPath := filepath.Join(tempDir, "publisher.env")
-	if err := os.WriteFile(envPath, []byte("PORT=9999\nPUBLISHER_MASTER_KEY="+testMasterKey()+"\n"), 0o600); err != nil {
+	envPath := filepath.Join(tempDir, "postflow.env")
+	if err := os.WriteFile(envPath, []byte("PORT=9999\nPOSTFLOW_MASTER_KEY="+testMasterKey()+"\n"), 0o600); err != nil {
 		t.Fatalf("write env file: %v", err)
 	}
 
@@ -89,7 +89,7 @@ func TestLoadEnvVarsOverrideDotEnvFile(t *testing.T) {
 
 func TestLoadMissingDotEnvFileDoesNotFail(t *testing.T) {
 	t.Setenv("ENV_FILE", filepath.Join(t.TempDir(), "missing.env"))
-	t.Setenv("PUBLISHER_MASTER_KEY", testMasterKey())
+	t.Setenv("POSTFLOW_MASTER_KEY", testMasterKey())
 
 	if _, err := Load(); err != nil {
 		t.Fatalf("Load() error = %v, want nil", err)
@@ -98,7 +98,7 @@ func TestLoadMissingDotEnvFileDoesNotFail(t *testing.T) {
 
 func TestLoadRequiresMasterKey(t *testing.T) {
 	t.Setenv("ENV_FILE", filepath.Join(t.TempDir(), "missing.env"))
-	unsetEnvForTest(t, "PUBLISHER_MASTER_KEY")
+	unsetEnvForTest(t, "POSTFLOW_MASTER_KEY")
 	if _, err := Load(); err == nil {
 		t.Fatalf("expected missing key error")
 	}

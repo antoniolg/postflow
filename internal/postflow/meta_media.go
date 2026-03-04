@@ -1,4 +1,4 @@
-package publisher
+package postflow
 
 import (
 	"bytes"
@@ -14,7 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/antoniolg/publisher/internal/domain"
+	"github.com/antoniolg/postflow/internal/domain"
 )
 
 func (p *FacebookProvider) uploadFacebookPhoto(ctx context.Context, pageID, accessToken string, media domain.Media) (string, error) {

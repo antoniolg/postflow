@@ -3,9 +3,9 @@ package api
 import (
 	"sync"
 
-	"github.com/antoniolg/publisher/internal/domain"
-	"github.com/antoniolg/publisher/internal/publisher"
-	"github.com/antoniolg/publisher/internal/secure"
+	"github.com/antoniolg/postflow/internal/domain"
+	"github.com/antoniolg/postflow/internal/postflow"
+	"github.com/antoniolg/postflow/internal/secure"
 )
 
 var (
@@ -13,15 +13,15 @@ var (
 	fallbackCipher     *secure.Cipher
 )
 
-func (s Server) providerRegistry() *publisher.ProviderRegistry {
+func (s Server) providerRegistry() *postflow.ProviderRegistry {
 	if s.Registry != nil {
 		return s.Registry
 	}
-	return publisher.NewProviderRegistry(
-		publisher.NewMockProvider(domain.PlatformX),
-		publisher.NewMockProvider(domain.PlatformLinkedIn),
-		publisher.NewMockProvider(domain.PlatformFacebook),
-		publisher.NewMockProvider(domain.PlatformInstagram),
+	return postflow.NewProviderRegistry(
+		postflow.NewMockProvider(domain.PlatformX),
+		postflow.NewMockProvider(domain.PlatformLinkedIn),
+		postflow.NewMockProvider(domain.PlatformFacebook),
+		postflow.NewMockProvider(domain.PlatformInstagram),
 	)
 }
 

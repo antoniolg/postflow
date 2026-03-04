@@ -250,7 +250,7 @@ func TestRunMediaUploadMissingFile(t *testing.T) {
 	code := Run(context.Background(), []string{
 		"--base-url", "http://127.0.0.1:1",
 		"media", "upload",
-		"--file", "/tmp/this-file-should-not-exist.publisher",
+		"--file", "/tmp/this-file-should-not-exist.postflow",
 	}, &stdout, &stderr)
 	if code != 1 {
 		t.Fatalf("expected upload missing-file exit 1, got %d", code)

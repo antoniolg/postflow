@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/antoniolg/publisher/internal/domain"
+	"github.com/antoniolg/postflow/internal/domain"
 )
 
 func (s *Store) CreateMedia(ctx context.Context, m domain.Media) (domain.Media, error) {

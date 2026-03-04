@@ -126,7 +126,7 @@ func (e *parityEnv) mcpCallToolError(name string, args map[string]any) string {
 
 func (e *parityEnv) mcpScheduleListIDs(from, to string) []string {
 	e.t.Helper()
-	out := e.mcpCallTool("publisher_list_schedule", map[string]any{"from": from, "to": to, "limit": 200})
+	out := e.mcpCallTool("postflow_list_schedule", map[string]any{"from": from, "to": to, "limit": 200})
 	posts, _ := out["posts"].([]any)
 	ids := make([]string, 0, len(posts))
 	for _, item := range posts {
@@ -138,13 +138,13 @@ func (e *parityEnv) mcpScheduleListIDs(from, to string) []string {
 
 func (e *parityEnv) mcpHealthStatus() string {
 	e.t.Helper()
-	out := e.mcpCallTool("publisher_health", map[string]any{})
+	out := e.mcpCallTool("postflow_health", map[string]any{})
 	return strings.TrimSpace(stringValue(out, "status"))
 }
 
 func (e *parityEnv) mcpDraftListIDs(limit int) []string {
 	e.t.Helper()
-	out := e.mcpCallTool("publisher_list_drafts", map[string]any{"limit": limit})
+	out := e.mcpCallTool("postflow_list_drafts", map[string]any{"limit": limit})
 	drafts, _ := out["drafts"].([]any)
 	ids := make([]string, 0, len(drafts))
 	for _, item := range drafts {
@@ -168,7 +168,7 @@ func (e *parityEnv) mcpCreatePostForAccount(accountID, text string, mediaIDs []s
 	if len(mediaIDs) > 0 {
 		args["media_ids"] = mediaIDs
 	}
-	out := e.mcpCallTool("publisher_create_post", args)
+	out := e.mcpCallTool("postflow_create_post", args)
 	post, _ := out["post"].(map[string]any)
 	return strings.TrimSpace(stringValue(post, "id"))
 }
@@ -179,7 +179,7 @@ func (e *parityEnv) mcpCreateThread(segments []map[string]any) []string {
 	if len(segments) > 0 {
 		rootText = strings.TrimSpace(stringValue(segments[0], "text"))
 	}
-	out := e.mcpCallTool("publisher_create_post", map[string]any{
+	out := e.mcpCallTool("postflow_create_post", map[string]any{
 		"account_id": e.account.ID,
 		"text":       rootText,
 		"segments":   segments,
@@ -208,7 +208,7 @@ func (e *parityEnv) mcpCreateThread(segments []map[string]any) []string {
 
 func (e *parityEnv) mcpValidatePost(text string) bool {
 	e.t.Helper()
-	out := e.mcpCallTool("publisher_validate_post", map[string]any{"account_id": e.account.ID, "text": text})
+	out := e.mcpCallTool("postflow_validate_post", map[string]any{"account_id": e.account.ID, "text": text})
 	valid, _ := out["valid"].(bool)
 	return valid
 }
@@ -219,7 +219,7 @@ func (e *parityEnv) mcpValidateThread(segments []map[string]any) bool {
 	if len(segments) > 0 {
 		rootText = strings.TrimSpace(stringValue(segments[0], "text"))
 	}
-	out := e.mcpCallTool("publisher_validate_post", map[string]any{
+	out := e.mcpCallTool("postflow_validate_post", map[string]any{
 		"account_id": e.account.ID,
 		"text":       rootText,
 		"segments":   segments,
@@ -230,12 +230,12 @@ func (e *parityEnv) mcpValidateThread(segments []map[string]any) bool {
 
 func (e *parityEnv) mcpCancelPost(id string) {
 	e.t.Helper()
-	_ = e.mcpCallTool("publisher_cancel_post", map[string]any{"post_id": strings.TrimSpace(id)})
+	_ = e.mcpCallTool("postflow_cancel_post", map[string]any{"post_id": strings.TrimSpace(id)})
 }
 
 func (e *parityEnv) mcpSchedulePost(id string, scheduledAt time.Time) {
 	e.t.Helper()
-	_ = e.mcpCallTool("publisher_schedule_post", map[string]any{
+	_ = e.mcpCallTool("postflow_schedule_post", map[string]any{
 		"post_id":      strings.TrimSpace(id),
 		"scheduled_at": scheduledAt.UTC().Format(time.RFC3339),
 	})
@@ -261,17 +261,17 @@ func (e *parityEnv) mcpEditPostWithMedia(id, text, intent string, scheduledAt ti
 	if includeMediaIDs {
 		args["media_ids"] = append([]string{}, mediaIDs...)
 	}
-	_ = e.mcpCallTool("publisher_edit_post", args)
+	_ = e.mcpCallTool("postflow_edit_post", args)
 }
 
 func (e *parityEnv) mcpDeletePost(id string) {
 	e.t.Helper()
-	_ = e.mcpCallTool("publisher_delete_post", map[string]any{"post_id": strings.TrimSpace(id)})
+	_ = e.mcpCallTool("postflow_delete_post", map[string]any{"post_id": strings.TrimSpace(id)})
 }
 
 func (e *parityEnv) mcpListAccountIDs() []string {
 	e.t.Helper()
-	out := e.mcpCallTool("publisher_list_accounts", map[string]any{})
+	out := e.mcpCallTool("postflow_list_accounts", map[string]any{})
 	items, _ := out["items"].([]any)
 	ids := make([]string, 0, len(items))
 	for _, item := range items {
@@ -283,7 +283,7 @@ func (e *parityEnv) mcpListAccountIDs() []string {
 
 func (e *parityEnv) mcpCreateStaticAccount(platform, externalID string, credentials map[string]any) string {
 	e.t.Helper()
-	out := e.mcpCallTool("publisher_create_static_account", map[string]any{
+	out := e.mcpCallTool("postflow_create_static_account", map[string]any{
 		"platform":            strings.TrimSpace(platform),
 		"display_name":        "MCP " + strings.TrimSpace(platform),
 		"external_account_id": strings.TrimSpace(externalID),
@@ -295,32 +295,32 @@ func (e *parityEnv) mcpCreateStaticAccount(platform, externalID string, credenti
 
 func (e *parityEnv) mcpConnectAccount(id string) {
 	e.t.Helper()
-	_ = e.mcpCallTool("publisher_connect_account", map[string]any{"account_id": strings.TrimSpace(id)})
+	_ = e.mcpCallTool("postflow_connect_account", map[string]any{"account_id": strings.TrimSpace(id)})
 }
 
 func (e *parityEnv) mcpDisconnectAccount(id string) {
 	e.t.Helper()
-	_ = e.mcpCallTool("publisher_disconnect_account", map[string]any{"account_id": strings.TrimSpace(id)})
+	_ = e.mcpCallTool("postflow_disconnect_account", map[string]any{"account_id": strings.TrimSpace(id)})
 }
 
 func (e *parityEnv) mcpSetXPremium(id string, enabled bool) {
 	e.t.Helper()
-	_ = e.mcpCallTool("publisher_set_x_premium", map[string]any{"account_id": strings.TrimSpace(id), "x_premium": enabled})
+	_ = e.mcpCallTool("postflow_set_x_premium", map[string]any{"account_id": strings.TrimSpace(id), "x_premium": enabled})
 }
 
 func (e *parityEnv) mcpDeleteAccount(id string) {
 	e.t.Helper()
-	_ = e.mcpCallTool("publisher_delete_account", map[string]any{"account_id": strings.TrimSpace(id)})
+	_ = e.mcpCallTool("postflow_delete_account", map[string]any{"account_id": strings.TrimSpace(id)})
 }
 
 func (e *parityEnv) mcpSetTimezone(timezone string) {
 	e.t.Helper()
-	_ = e.mcpCallTool("publisher_set_timezone", map[string]any{"timezone": strings.TrimSpace(timezone)})
+	_ = e.mcpCallTool("postflow_set_timezone", map[string]any{"timezone": strings.TrimSpace(timezone)})
 }
 
 func (e *parityEnv) mcpFailedListIDs() []string {
 	e.t.Helper()
-	out := e.mcpCallTool("publisher_list_failed", map[string]any{"limit": 200})
+	out := e.mcpCallTool("postflow_list_failed", map[string]any{"limit": 200})
 	items, _ := out["items"].([]any)
 	ids := make([]string, 0, len(items))
 	for _, item := range items {
@@ -332,16 +332,16 @@ func (e *parityEnv) mcpFailedListIDs() []string {
 
 func (e *parityEnv) mcpRequeueDLQ(id string) {
 	e.t.Helper()
-	_ = e.mcpCallTool("publisher_requeue_failed", map[string]any{"dead_letter_id": id})
+	_ = e.mcpCallTool("postflow_requeue_failed", map[string]any{"dead_letter_id": id})
 }
 func (e *parityEnv) mcpDeleteDLQ(id string) {
 	e.t.Helper()
-	_ = e.mcpCallTool("publisher_delete_failed", map[string]any{"dead_letter_id": id})
+	_ = e.mcpCallTool("postflow_delete_failed", map[string]any{"dead_letter_id": id})
 }
 
 func (e *parityEnv) mcpUploadMedia(content string) string {
 	e.t.Helper()
-	out := e.mcpCallTool("publisher_upload_media", map[string]any{
+	out := e.mcpCallTool("postflow_upload_media", map[string]any{
 		"kind":           "image",
 		"original_name":  "mcp.bin",
 		"content_base64": base64.StdEncoding.EncodeToString([]byte(content)),
@@ -351,7 +351,7 @@ func (e *parityEnv) mcpUploadMedia(content string) string {
 
 func (e *parityEnv) mcpListMediaIDs() []string {
 	e.t.Helper()
-	out := e.mcpCallTool("publisher_list_media", map[string]any{"limit": 200})
+	out := e.mcpCallTool("postflow_list_media", map[string]any{"limit": 200})
 	items, _ := out["items"].([]any)
 	ids := make([]string, 0, len(items))
 	for _, item := range items {
@@ -363,7 +363,7 @@ func (e *parityEnv) mcpListMediaIDs() []string {
 
 func (e *parityEnv) mcpDeleteMedia(id string) {
 	e.t.Helper()
-	_ = e.mcpCallTool("publisher_delete_media", map[string]any{"media_id": id})
+	_ = e.mcpCallTool("postflow_delete_media", map[string]any{"media_id": id})
 }
 
 func (e *parityEnv) mcpPost(payload map[string]any) ([]byte, int, http.Header) {

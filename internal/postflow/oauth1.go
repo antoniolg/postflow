@@ -1,4 +1,4 @@
-package publisher
+package postflow
 
 import (
 	"crypto/hmac"

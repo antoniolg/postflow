@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/antoniolg/publisher/internal/db"
-	"github.com/antoniolg/publisher/internal/domain"
-	"github.com/antoniolg/publisher/internal/publisher"
+	"github.com/antoniolg/postflow/internal/db"
+	"github.com/antoniolg/postflow/internal/domain"
+	"github.com/antoniolg/postflow/internal/postflow"
 )
 
 type fakeMutationsStore struct {
@@ -259,8 +259,8 @@ func TestMutationsServiceUpdateEditableReplacesMediaWhenRequested(t *testing.T) 
 	svc := MutationsService{
 		Store: store,
 		Registry: fakeRegistry{
-			providers: map[domain.Platform]publisher.Provider{
-				domain.PlatformLinkedIn: publisher.NewLinkedInProvider(publisher.LinkedInProviderConfig{}),
+			providers: map[domain.Platform]postflow.Provider{
+				domain.PlatformLinkedIn: postflow.NewLinkedInProvider(postflow.LinkedInProviderConfig{}),
 			},
 		},
 	}
@@ -303,8 +303,8 @@ func TestMutationsServiceUpdateEditableAllowsClearingMediaWhenPlatformAllowsIt(t
 	svc := MutationsService{
 		Store: store,
 		Registry: fakeRegistry{
-			providers: map[domain.Platform]publisher.Provider{
-				domain.PlatformLinkedIn: publisher.NewLinkedInProvider(publisher.LinkedInProviderConfig{}),
+			providers: map[domain.Platform]postflow.Provider{
+				domain.PlatformLinkedIn: postflow.NewLinkedInProvider(postflow.LinkedInProviderConfig{}),
 			},
 		},
 	}
@@ -347,8 +347,8 @@ func TestMutationsServiceUpdateEditableRejectsInstagramWithoutMedia(t *testing.T
 	svc := MutationsService{
 		Store: store,
 		Registry: fakeRegistry{
-			providers: map[domain.Platform]publisher.Provider{
-				domain.PlatformInstagram: publisher.NewInstagramProvider(publisher.MetaProviderConfig{}),
+			providers: map[domain.Platform]postflow.Provider{
+				domain.PlatformInstagram: postflow.NewInstagramProvider(postflow.MetaProviderConfig{}),
 			},
 		},
 	}

@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/antoniolg/publisher/internal/db"
-	"github.com/antoniolg/publisher/internal/domain"
-	"github.com/antoniolg/publisher/internal/publisher"
-	"github.com/antoniolg/publisher/internal/secure"
+	"github.com/antoniolg/postflow/internal/db"
+	"github.com/antoniolg/postflow/internal/domain"
+	"github.com/antoniolg/postflow/internal/postflow"
+	"github.com/antoniolg/postflow/internal/secure"
 )
 
 func TestLoadCredentialsWithoutRowReturnsEmpty(t *testing.T) {
@@ -34,7 +34,7 @@ func TestSaveAndLoadCredentialsRoundTrip(t *testing.T) {
 	account := createWorkerTestAccount(t, store)
 
 	w := Worker{Store: store, Cipher: cipher}
-	original := publisher.Credentials{
+	original := postflow.Credentials{
 		AccessToken:  "access_123",
 		RefreshToken: "refresh_123",
 		TokenType:    "Bearer",
@@ -83,7 +83,7 @@ func TestRunOncePublishesDuePost(t *testing.T) {
 
 	w := Worker{
 		Store:        store,
-		Registry:     publisher.NewProviderRegistry(publisher.NewMockProvider(domain.PlatformX)),
+		Registry:     postflow.NewProviderRegistry(postflow.NewMockProvider(domain.PlatformX)),
 		Cipher:       cipher,
 		Interval:     25 * time.Millisecond,
 		RetryBackoff: 1 * time.Second,
@@ -109,7 +109,7 @@ func TestStartStopsWhenContextCancelled(t *testing.T) {
 
 	w := Worker{
 		Store:        store,
-		Registry:     publisher.NewProviderRegistry(publisher.NewMockProvider(domain.PlatformX)),
+		Registry:     postflow.NewProviderRegistry(postflow.NewMockProvider(domain.PlatformX)),
 		Cipher:       cipher,
 		Interval:     25 * time.Millisecond,
 		RetryBackoff: 1 * time.Second,

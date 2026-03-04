@@ -3,8 +3,8 @@ package api
 import (
 	"testing"
 
-	"github.com/antoniolg/publisher/internal/db"
-	"github.com/antoniolg/publisher/internal/domain"
+	"github.com/antoniolg/postflow/internal/db"
+	"github.com/antoniolg/postflow/internal/domain"
 )
 
 func createTestAccount(t *testing.T, store *db.Store) domain.SocialAccount {

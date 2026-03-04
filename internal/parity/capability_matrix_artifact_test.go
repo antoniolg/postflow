@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/antoniolg/publisher/internal/capabilities"
-	"github.com/antoniolg/publisher/internal/domain"
+	"github.com/antoniolg/postflow/internal/capabilities"
+	"github.com/antoniolg/postflow/internal/domain"
 )
 
 type matrixSurfaceResult struct {
@@ -142,7 +142,7 @@ func capabilityChecks() map[string]map[capabilities.Surface]parityCheck {
 			capabilities.SurfaceMCP: func(env *parityEnv) error {
 				from := time.Now().UTC().Add(-1 * time.Hour).Format(time.RFC3339)
 				to := time.Now().UTC().Add(24 * time.Hour).Format(time.RFC3339)
-				if msg := env.mcpCallToolError("publisher_list_schedule", map[string]any{"from": from, "to": to, "limit": 10}); msg != "" {
+				if msg := env.mcpCallToolError("postflow_list_schedule", map[string]any{"from": from, "to": to, "limit": 10}); msg != "" {
 					return errors.New(msg)
 				}
 				return nil
@@ -190,7 +190,7 @@ func capabilityChecks() map[string]map[capabilities.Surface]parityCheck {
 				return nil
 			},
 			capabilities.SurfaceMCP: func(env *parityEnv) error {
-				if msg := env.mcpCallToolError("publisher_create_post", map[string]any{"account_id": env.account.ID, "text": "matrix create mcp"}); msg != "" {
+				if msg := env.mcpCallToolError("postflow_create_post", map[string]any{"account_id": env.account.ID, "text": "matrix create mcp"}); msg != "" {
 					return errors.New(msg)
 				}
 				return nil
@@ -361,7 +361,7 @@ func capabilityChecks() map[string]map[capabilities.Surface]parityCheck {
 				return nil
 			},
 			capabilities.SurfaceMCP: func(env *parityEnv) error {
-				if msg := env.mcpCallToolError("publisher_validate_post", map[string]any{"account_id": env.account.ID, "text": "matrix validate mcp"}); msg != "" {
+				if msg := env.mcpCallToolError("postflow_validate_post", map[string]any{"account_id": env.account.ID, "text": "matrix validate mcp"}); msg != "" {
 					return errors.New(msg)
 				}
 				return nil
@@ -503,7 +503,7 @@ func capabilityChecks() map[string]map[capabilities.Surface]parityCheck {
 				return nil
 			},
 			capabilities.SurfaceMCP: func(env *parityEnv) error {
-				if msg := env.mcpCallToolError("publisher_list_failed", map[string]any{"limit": 10}); msg != "" {
+				if msg := env.mcpCallToolError("postflow_list_failed", map[string]any{"limit": 10}); msg != "" {
 					return errors.New(msg)
 				}
 				return nil
@@ -528,7 +528,7 @@ func capabilityChecks() map[string]map[capabilities.Surface]parityCheck {
 			},
 			capabilities.SurfaceMCP: func(env *parityEnv) error {
 				dlqID := env.seedFailedDeadLetter("matrix requeue mcp")
-				if msg := env.mcpCallToolError("publisher_requeue_failed", map[string]any{"dead_letter_id": dlqID}); msg != "" {
+				if msg := env.mcpCallToolError("postflow_requeue_failed", map[string]any{"dead_letter_id": dlqID}); msg != "" {
 					return errors.New(msg)
 				}
 				return nil
@@ -553,7 +553,7 @@ func capabilityChecks() map[string]map[capabilities.Surface]parityCheck {
 			},
 			capabilities.SurfaceMCP: func(env *parityEnv) error {
 				dlqID := env.seedFailedDeadLetter("matrix delete mcp")
-				if msg := env.mcpCallToolError("publisher_delete_failed", map[string]any{"dead_letter_id": dlqID}); msg != "" {
+				if msg := env.mcpCallToolError("postflow_delete_failed", map[string]any{"dead_letter_id": dlqID}); msg != "" {
 					return errors.New(msg)
 				}
 				return nil
@@ -574,7 +574,7 @@ func capabilityChecks() map[string]map[capabilities.Surface]parityCheck {
 				return nil
 			},
 			capabilities.SurfaceMCP: func(env *parityEnv) error {
-				if msg := env.mcpCallToolError("publisher_upload_media", map[string]any{
+				if msg := env.mcpCallToolError("postflow_upload_media", map[string]any{
 					"kind":           "image",
 					"original_name":  "matrix-upload.bin",
 					"content_base64": "bWF0cml4LXVwbG9hZA==",
@@ -600,7 +600,7 @@ func capabilityChecks() map[string]map[capabilities.Surface]parityCheck {
 				return nil
 			},
 			capabilities.SurfaceMCP: func(env *parityEnv) error {
-				if msg := env.mcpCallToolError("publisher_list_media", map[string]any{"limit": 10}); msg != "" {
+				if msg := env.mcpCallToolError("postflow_list_media", map[string]any{"limit": 10}); msg != "" {
 					return errors.New(msg)
 				}
 				return nil
@@ -634,7 +634,7 @@ func capabilityChecks() map[string]map[capabilities.Surface]parityCheck {
 				if err != nil {
 					return err
 				}
-				if msg := env.mcpCallToolError("publisher_delete_media", map[string]any{"media_id": mediaID}); msg != "" {
+				if msg := env.mcpCallToolError("postflow_delete_media", map[string]any{"media_id": mediaID}); msg != "" {
 					return errors.New(msg)
 				}
 				return nil

@@ -1,6 +1,6 @@
 package api
 
-import "github.com/antoniolg/publisher/internal/domain"
+import "github.com/antoniolg/postflow/internal/domain"
 
 type settingsAccountItem struct {
 	ID          string

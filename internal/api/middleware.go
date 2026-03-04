@@ -91,7 +91,7 @@ func (s Server) authMiddleware(next http.Handler) http.Handler {
 			return
 		}
 		if basicEnabled {
-			w.Header().Set("WWW-Authenticate", `Basic realm="publisher"`)
+			w.Header().Set("WWW-Authenticate", `Basic realm="postflow"`)
 		}
 		writeError(w, http.StatusUnauthorized, fmt.Errorf("unauthorized"))
 	})
