@@ -98,6 +98,12 @@ func TestSettingsViewRendersAccountsBlockWithActions(t *testing.T) {
 			t.Fatalf("expected oauth start action %s in settings", oauthStartPath)
 		}
 	}
+	if !strings.Contains(body, "@media (max-width: 520px)") {
+		t.Fatalf("expected mobile breakpoint css in settings view")
+	}
+	if !strings.Contains(body, ".settings-accounts { grid-template-columns: 1fr; }") {
+		t.Fatalf("expected settings accounts to collapse to one column on small screens")
+	}
 }
 
 func TestDisconnectAccountFormRedirectsBackToSettings(t *testing.T) {

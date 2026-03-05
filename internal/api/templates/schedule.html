@@ -1209,6 +1209,15 @@
       gap: 14px;
       flex-wrap: wrap;
     }
+    .meta > span {
+      min-width: 0;
+    }
+    .failed-error-text {
+      flex-basis: 100%;
+      white-space: pre-wrap;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+    }
     .card-actions {
       display: flex;
       gap: 6px;
@@ -3121,6 +3130,9 @@
       .stats { grid-template-columns: 1fr; }
       .content .text { font-size: 12px; }
       .meta { font-size: 11px; gap: 8px; }
+      .settings-accounts { grid-template-columns: 1fr; }
+      .settings-account-head { flex-wrap: wrap; }
+      .settings-account-status { align-self: flex-start; }
       .publication-card {
         border-radius: 14px;
       }
@@ -3598,7 +3610,7 @@
           <div class="meta">
             <span>{{t "failed.attempts" .Attempts .MaxAttempts}}</span>
             <span>{{t "failed.failed_at" .FailedAtLabel}}</span>
-            <span>{{.LastError}}</span>
+            <span class="failed-error-text">{{.LastError}}</span>
           </div>
           <div class="card-actions">
             <form method="post" action="/dlq/requeue">
@@ -6158,16 +6170,3 @@
 </script>
 </body>
 </html>
-    .event-group-count {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 14px;
-      padding: 0 4px;
-      border-radius: 999px;
-      background: rgba(0, 0, 0, 0.22);
-      color: inherit;
-      font-size: 8px;
-      line-height: 1.4;
-      letter-spacing: 0.04em;
-    }

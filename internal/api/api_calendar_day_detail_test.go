@@ -324,6 +324,9 @@ func TestDefaultViewIsCalendar(t *testing.T) {
 	if !strings.Contains(body, ">CALENDAR</h1>") {
 		t.Fatalf("expected CALENDAR as default view title")
 	}
+	if !strings.HasSuffix(strings.TrimSpace(body), "</html>") {
+		t.Fatalf("expected rendered schedule document to end at </html>")
+	}
 	if !strings.Contains(body, "<a class=\"create-fab\" href=\"") {
 		t.Fatalf("expected floating create action in non-create views")
 	}

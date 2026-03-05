@@ -286,6 +286,61 @@ func TestFailedViewRendersBulkSelectionControls(t *testing.T) {
 	}
 }
 
+func TestFailedViewWrapsLongDeadLetterErrors(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	payload, _ := json.Marshal(map[string]any{
+		"account_id":   testAccountID(t, store),
+		"text":         "failed long error wrap",
+		"scheduled_at": time.Now().UTC().Add(2 * time.Minute).Format(time.RFC3339),
+		"max_attempts": 1,
+	})
+	createReq := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(payload))
+	createW := httptest.NewRecorder()
+	h.ServeHTTP(createW, createReq)
+	if createW.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", createW.Code)
+	}
+	var created map[string]any
+	if err := json.Unmarshal(createW.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode create response: %v", err)
+	}
+	postID, _ := created["id"].(string)
+	if postID == "" {
+		t.Fatalf("missing post id")
+	}
+
+	longErr := "dlq long: " + strings.Repeat("D", 180)
+	if err := store.RecordPublishFailure(t.Context(), postID, errors.New(longErr), 30*time.Second); err != nil {
+		t.Fatalf("record publish failure: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/?view=failed", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "class=\"failed-error-text\"") {
+		t.Fatalf("expected failed view to render dedicated error text wrapper")
+	}
+	if !strings.Contains(body, longErr) {
+		t.Fatalf("expected full dead letter error text in failed view")
+	}
+	if !strings.Contains(body, ".failed-error-text {") || !strings.Contains(body, "overflow-wrap: anywhere;") {
+		t.Fatalf("expected failed error text css to allow wrapping long tokens")
+	}
+}
+
 func TestCreatePostFromFormUsesConfiguredTimezone(t *testing.T) {
 	tempDir := t.TempDir()
 	store, err := db.Open(filepath.Join(tempDir, "test.db"))
