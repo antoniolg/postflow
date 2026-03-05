@@ -721,7 +721,7 @@
       background: var(--bg-card, #212121);
     }
     .day-cell.outside { background: var(--bg-card, #212121); }
-    .day-cell.outside .day-num { color: #585858; }
+    .day-cell.outside .day-num { color: #8a8a8a; }
     .day-cell.today-cell {
       background: var(--bg-elevated, #2d2d2d);
       box-shadow: inset 0 0 0 2px var(--accent-orange);
@@ -1494,6 +1494,17 @@
     }
     .meta-accent { color: var(--accent-orange); }
     .meta-soft { color: #a8a8a8; }
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
     form {
       display: flex;
       gap: 6px;
@@ -3379,7 +3390,8 @@
               <div class="publication-head-right">
                 <div class="publication-meta-row">
                   {{range .Platforms}}
-                  <span class="publication-platform-chip" title="{{.}}" aria-label="{{.}}">
+                  <span class="publication-platform-chip" title="{{.}}">
+                    <span class="sr-only">{{.}}</span>
                     <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                       {{if eq . "x"}}
                       <use href="#pf-brand-x"></use>
@@ -3430,7 +3442,8 @@
               </div>
               <div class="publication-meta-row">
                 {{range .Platforms}}
-                <span class="publication-platform-chip" title="{{.}}" aria-label="{{.}}">
+                <span class="publication-platform-chip" title="{{.}}">
+                  <span class="sr-only">{{.}}</span>
                   <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                     {{if eq . "x"}}
                     <use href="#pf-brand-x"></use>
@@ -3480,7 +3493,8 @@
             <div class="publication-head-right">
               <div class="publication-meta-row">
                 {{range .Platforms}}
-                <span class="publication-platform-chip" title="{{.}}" aria-label="{{.}}">
+                <span class="publication-platform-chip" title="{{.}}">
+                  <span class="sr-only">{{.}}</span>
                   <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                     {{if eq . "x"}}
                     <use href="#pf-brand-x"></use>
@@ -3526,7 +3540,8 @@
             <div class="publication-head-right">
               <div class="publication-meta-row">
                 {{range .Platforms}}
-                <span class="publication-platform-chip" title="{{.}}" aria-label="{{.}}">
+                <span class="publication-platform-chip" title="{{.}}">
+                  <span class="sr-only">{{.}}</span>
                   <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                     {{if eq . "x"}}
                     <use href="#pf-brand-x"></use>
@@ -3599,7 +3614,8 @@
             </div>
             <div class="publication-meta-row">
               {{range .Platforms}}
-              <span class="publication-platform-chip" title="{{.}}" aria-label="{{.}}">
+              <span class="publication-platform-chip" title="{{.}}">
+                <span class="sr-only">{{.}}</span>
                 <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                   {{if eq . "x"}}
                   <use href="#pf-brand-x"></use>
@@ -3671,6 +3687,7 @@
 	                    data-account-id="{{.ID}}"
 	                    data-platform="{{.Platform}}"
 	                    data-x-premium="{{if and (eq .Platform "x") .XPremium}}1{{else}}0{{end}}"
+	                    aria-label="{{.DisplayName}} · {{.Platform}}"
 	                    aria-pressed="{{if accountSelected .ID}}true{{else}}false{{end}}">
 	                    <span class="network-chip-icon" aria-hidden="true">
 	                      <svg viewBox="0 0 24 24" fill="currentColor">
@@ -3692,7 +3709,7 @@
 	                    </span>
 	                  </button>
 	                  {{else}}
-	                  <button type="button" class="network-chip disabled" disabled>
+	                  <button type="button" class="network-chip disabled" disabled aria-label="{{t "create.no_networks"}}">
 	                    <span class="network-chip-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><use href="#pf-brand-default"></use></svg></span>
 		                    <span class="network-chip-label">{{t "create.no_networks"}}</span>
 	                  </button>
@@ -4017,6 +4034,8 @@
   const pickerClear = {{toJSON (t "datepicker.clear")}};
   const pickerToday = {{toJSON (t "datepicker.today")}};
   const pickerApply = {{toJSON (t "datepicker.apply")}};
+  const pickerHour = {{toJSON (t "datepicker.hour")}};
+  const pickerMinute = {{toJSON (t "datepicker.minute")}};
   const pickerOpenAria = {{toJSON (t "datepicker.open")}};
   const pad2 = (value) => String(value).padStart(2, "0");
 
@@ -4099,9 +4118,11 @@
     '<div class="date-picker-weekdays" data-date-weekdays></div>' +
     '<div class="date-picker-days" data-date-days></div>' +
     '<div class="date-picker-time">' +
-      '<select data-date-hour></select>' +
+      '<label class="sr-only" for="date-picker-hour">' + pickerHour + '</label>' +
+      '<select id="date-picker-hour" name="date_picker_hour" data-date-hour aria-label="' + pickerHour + '"></select>' +
       '<span class="date-picker-time-divider">:</span>' +
-      '<select data-date-minute></select>' +
+      '<label class="sr-only" for="date-picker-minute">' + pickerMinute + '</label>' +
+      '<select id="date-picker-minute" name="date_picker_minute" data-date-minute aria-label="' + pickerMinute + '"></select>' +
     "</div>" +
     '<div class="date-picker-actions">' +
       '<div class="date-picker-actions-left">' +

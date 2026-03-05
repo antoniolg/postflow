@@ -105,6 +105,9 @@ func TestAccessibilityMarkupAddsLabelsAndLandmarks(t *testing.T) {
 	if !failedLabelRe.MatchString(failedBody) {
 		t.Fatalf("expected accessible label on failed selection checkbox")
 	}
+	if !strings.Contains(failedBody, "class=\"publication-platform-chip\"") || !strings.Contains(failedBody, "class=\"sr-only\">x</span>") {
+		t.Fatalf("expected failed publication platform chips to expose screen-reader text")
+	}
 
 	createReq := httptest.NewRequest(http.MethodGet, "/?view=create", nil)
 	createW := httptest.NewRecorder()
@@ -116,6 +119,21 @@ func TestAccessibilityMarkupAddsLabelsAndLandmarks(t *testing.T) {
 	if !strings.Contains(createBody, "for=\"create-scheduled-at\"") || !strings.Contains(createBody, "id=\"create-scheduled-at\"") {
 		t.Fatalf("expected create scheduled datetime label association")
 	}
+	if !strings.Contains(createBody, "aria-label=\"X Default · x\"") {
+		t.Fatalf("expected network chips to expose accessible names")
+	}
+	if !strings.Contains(createBody, `const pickerHour = "hour";`) || !strings.Contains(createBody, `const pickerMinute = "minute";`) {
+		t.Fatalf("expected date picker accessibility labels to be localized in create view")
+	}
+	if !strings.Contains(createBody, `id="date-picker-hour" name="date_picker_hour" data-date-hour aria-label="`) {
+		t.Fatalf("expected date picker hour select to expose id, name, and aria-label")
+	}
+	if !strings.Contains(createBody, `id="date-picker-minute" name="date_picker_minute" data-date-minute aria-label="`) {
+		t.Fatalf("expected date picker minute select to expose id, name, and aria-label")
+	}
+	if !strings.Contains(createBody, `for="date-picker-hour">' + pickerHour + '</label>`) || !strings.Contains(createBody, `for="date-picker-minute">' + pickerMinute + '</label>`) {
+		t.Fatalf("expected date picker selects to expose associated labels")
+	}
 
 	settingsReq := httptest.NewRequest(http.MethodGet, "/?view=settings", nil)
 	settingsW := httptest.NewRecorder()
@@ -126,6 +144,9 @@ func TestAccessibilityMarkupAddsLabelsAndLandmarks(t *testing.T) {
 	settingsBody := settingsW.Body.String()
 	if !strings.Contains(settingsBody, "<label for=\"timezone-select\">zone (IANA)</label>") {
 		t.Fatalf("expected explicit label association for timezone select")
+	}
+	if !strings.Contains(calendarBody, ".day-cell.outside .day-num { color: #8a8a8a; }") {
+		t.Fatalf("expected outside-day numbers to use accessible contrast")
 	}
 }
 
