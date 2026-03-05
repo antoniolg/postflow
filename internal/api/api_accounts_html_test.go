@@ -104,6 +104,15 @@ func TestSettingsViewRendersAccountsBlockWithActions(t *testing.T) {
 	if !strings.Contains(body, ".settings-accounts { grid-template-columns: 1fr; }") {
 		t.Fatalf("expected settings accounts to collapse to one column on small screens")
 	}
+	if !strings.Contains(body, "class=\"editor-actions timezone-actions\"") {
+		t.Fatalf("expected timezone settings actions to use dedicated layout class")
+	}
+	if !strings.Contains(body, ".timezone-actions {\n        display: grid;\n        grid-template-columns: repeat(2, minmax(0, 1fr));") {
+		t.Fatalf("expected timezone actions to render as two columns on small screens")
+	}
+	if !strings.Contains(body, ".settings-media-library {\n        max-height: none;\n        overflow: visible;") {
+		t.Fatalf("expected settings media library to drop internal scrolling on narrow screens")
+	}
 }
 
 func TestDisconnectAccountFormRedirectsBackToSettings(t *testing.T) {
