@@ -145,8 +145,6 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	scheduledCount := len(publicationsItems)
-	failedCount := len(deadLetters)
 	var nextRun *time.Time
 	for _, item := range publicationsItems {
 		if !item.ScheduledAt.IsZero() && (nextRun == nil || item.ScheduledAt.Before(*nextRun)) {
@@ -556,10 +554,10 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		MediaSuccess:               mediaSuccess,
 		TotalAccountCount:          len(accounts),
 		ConnectedAccountCount:      len(connectedAccounts),
-		ScheduledCount:             scheduledCount,
+		ScheduledCount:             len(publicationGroups),
 		PublicationsWindowDays:     publicationsWindowDays,
-		DraftCount:                 len(drafts),
-		FailedCount:                failedCount,
+		DraftCount:                 len(draftGroups),
+		FailedCount:                len(failedGroups),
 		SettingsAccounts:           settingsAccounts,
 		MediaLibrary:               mediaLibrary,
 		CreateRecentMedia:          createRecentMedia,
