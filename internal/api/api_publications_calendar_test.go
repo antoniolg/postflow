@@ -672,6 +672,10 @@ func TestNavBadgesUseNeutralForScheduledAndDraftsAndRedForFailed(t *testing.T) {
 	if !strings.Contains(body, "href=\"/?view=failed\"") {
 		t.Fatalf("expected failed navigation link")
 	}
+	mobileNavGridRe := regexp.MustCompile(`(?s)@media \(max-width: 980px\)\s*\{.*?\.nav\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*repeat\(5,\s*minmax\(0,\s*1fr\)\);[^}]*overflow-x:\s*hidden;`)
+	if !mobileNavGridRe.MatchString(body) {
+		t.Fatalf("expected mobile bottom nav to use fixed grid layout without horizontal scrolling")
+	}
 	if strings.Count(body, "class=\"nav-badge\">1</span>") < 2 {
 		t.Fatalf("expected neutral nav badges for scheduled and drafts")
 	}

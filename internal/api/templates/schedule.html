@@ -2728,12 +2728,14 @@
       }
       .nav {
         flex: initial;
-        flex-direction: row;
-        overflow-x: auto;
-        overflow-y: hidden;
-        gap: 6px;
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        overflow-x: hidden;
+        overflow-y: visible;
+        gap: 2px;
         padding-bottom: 0;
         scrollbar-width: none;
+        width: 100%;
       }
       .nav::-webkit-scrollbar {
         display: none;
@@ -2742,10 +2744,10 @@
         margin-top: 0;
       }
       .nav-item {
-        white-space: nowrap;
-        flex: 1 0 auto;
-        min-width: 72px;
-        padding: 8px 8px;
+        white-space: normal;
+        flex: initial;
+        min-width: 0;
+        padding: 8px 4px;
         border-radius: 12px;
         justify-content: center;
         position: relative;
