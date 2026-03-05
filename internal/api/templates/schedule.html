@@ -5606,7 +5606,7 @@
       return;
     }
     const submitter = event.submitter;
-    if (submitter instanceof HTMLButtonElement && submitter.value === "publish_now" && scheduleInput.value.trim() === "") {
+    if (submitter instanceof HTMLButtonElement && submitter.value === "publish_now") {
       scheduleInput.value = toDatetimeLocal(new Date());
       scheduleInput.dispatchEvent(new Event("input", { bubbles: true }));
       scheduleInput.dispatchEvent(new Event("change", { bubbles: true }));

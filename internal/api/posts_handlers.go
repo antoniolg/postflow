@@ -94,9 +94,7 @@ func (s Server) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		case "publish_now":
-			if scheduledAt.IsZero() {
-				scheduledAt = time.Now().UTC()
-			}
+			scheduledAt = time.Now().UTC()
 		}
 	}
 

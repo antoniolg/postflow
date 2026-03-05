@@ -318,10 +318,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	}
 	createViewURL := "/?view=create&return_to=" + url.QueryEscape(currentViewURL)
 	if view == "calendar" {
-		defaultScheduled := defaultCalendarCreateScheduledLocal(selectedDayLocal, nowLocal)
-		if defaultScheduled != "" {
-			createViewURL += "&scheduled_at_local=" + url.QueryEscape(defaultScheduled)
-		}
+		createViewURL += "&calendar_day=" + url.QueryEscape(selectedDayKey)
 	}
 	backURL := "/?view=calendar&month=" + currentMonthParam + "&day=" + selectedDayKey
 	if returnTo != "" {
@@ -461,6 +458,10 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	}
 	if qScheduled := strings.TrimSpace(r.URL.Query().Get("scheduled_at_local")); qScheduled != "" {
 		createScheduledLocal = qScheduled
+	} else if view == "create" && editID == "" {
+		if calendarDay, ok := calendarSelectedDayFromCreateQuery(r.URL.Query(), uiLoc); ok {
+			createScheduledLocal = defaultCalendarCreateScheduledLocal(calendarDay, nowLocal)
+		}
 	}
 	if len(createInitialSegments) == 0 {
 		createInitialSegments = append(createInitialSegments, createThreadSegment{})
@@ -633,4 +634,33 @@ func defaultCalendarCreateScheduledLocal(selectedDayLocal, nowLocal time.Time) s
 		0,
 		loc,
 	).Format("2006-01-02T15:04")
+}
+
+func calendarSelectedDayFromCreateQuery(q url.Values, loc *time.Location) (time.Time, bool) {
+	if loc == nil {
+		loc = time.UTC
+	}
+	dayRaw := strings.TrimSpace(q.Get("calendar_day"))
+	if dayRaw == "" {
+		returnTo := strings.TrimSpace(q.Get("return_to"))
+		if returnTo == "" {
+			return time.Time{}, false
+		}
+		parsedReturnTo, err := url.Parse(returnTo)
+		if err != nil {
+			return time.Time{}, false
+		}
+		if strings.ToLower(strings.TrimSpace(parsedReturnTo.Query().Get("view"))) != "calendar" {
+			return time.Time{}, false
+		}
+		dayRaw = strings.TrimSpace(parsedReturnTo.Query().Get("day"))
+	}
+	if dayRaw == "" {
+		return time.Time{}, false
+	}
+	parsedDay, err := time.ParseInLocation("2006-01-02", dayRaw, loc)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return parsedDay, true
 }

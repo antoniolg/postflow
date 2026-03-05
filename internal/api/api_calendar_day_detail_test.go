@@ -390,16 +390,9 @@ func TestCalendarCreateKeepsSelectedDayOnBack(t *testing.T) {
 	if returnTo != expectedReturnTo {
 		t.Fatalf("expected return_to %q, got %q", expectedReturnTo, returnTo)
 	}
-	scheduledLocalRaw := parsedCreateHref.Query().Get("scheduled_at_local")
-	if scheduledLocalRaw == "" {
-		t.Fatalf("expected scheduled_at_local in calendar create href")
-	}
-	scheduledLocal, err := time.ParseInLocation("2006-01-02T15:04", scheduledLocalRaw, time.UTC)
-	if err != nil {
-		t.Fatalf("parse scheduled_at_local: %v", err)
-	}
-	if scheduledLocal.Format("2006-01-02") != dayParam {
-		t.Fatalf("expected scheduled_at_local date %q, got %q", dayParam, scheduledLocal.Format("2006-01-02"))
+	calendarDay := parsedCreateHref.Query().Get("calendar_day")
+	if calendarDay != dayParam {
+		t.Fatalf("expected calendar_day %q in create href, got %q", dayParam, calendarDay)
 	}
 
 	createReq := httptest.NewRequest(http.MethodGet, createHref, nil)
@@ -414,7 +407,16 @@ func TestCalendarCreateKeepsSelectedDayOnBack(t *testing.T) {
 	if !strings.Contains(createBody, expectedBackHref) {
 		t.Fatalf("expected create back button to return to selected calendar day")
 	}
-	if !strings.Contains(createBody, `id="create-scheduled-at" type="datetime-local" name="scheduled_at_local" data-date-picker value="`+scheduledLocalRaw+`"`) {
-		t.Fatalf("expected create view to prefill scheduled_at_local with calendar default")
+	scheduledInputMatch := regexp.MustCompile(`id="create-scheduled-at"[^>]*value="([^"]+)"`).FindStringSubmatch(createBody)
+	if len(scheduledInputMatch) != 2 {
+		t.Fatalf("expected create view to include scheduled_at_local value")
+	}
+	scheduledLocalRaw := html.UnescapeString(scheduledInputMatch[1])
+	scheduledLocal, err := time.ParseInLocation("2006-01-02T15:04", scheduledLocalRaw, time.UTC)
+	if err != nil {
+		t.Fatalf("parse create scheduled_at_local: %v", err)
+	}
+	if scheduledLocal.Format("2006-01-02") != dayParam {
+		t.Fatalf("expected create default scheduled date %q, got %q", dayParam, scheduledLocal.Format("2006-01-02"))
 	}
 }

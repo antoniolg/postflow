@@ -110,6 +110,13 @@ func TestResolveScheduledAtForEdit(t *testing.T) {
 	if !publishNowAt.Equal(now) {
 		t.Fatalf("expected publish_now to default to now, got %s", publishNowAt)
 	}
+	publishNowWithScheduled, err := ResolveScheduledAtForEdit("publish_now", now.Add(6*time.Hour), time.Time{}, func() time.Time { return now })
+	if err != nil {
+		t.Fatalf("publish_now with explicit schedule resolve failed: %v", err)
+	}
+	if !publishNowWithScheduled.Equal(now) {
+		t.Fatalf("expected publish_now to ignore explicit scheduled_at and use now, got %s", publishNowWithScheduled)
+	}
 
 	_, err = ResolveScheduledAtForEdit("schedule", time.Time{}, time.Time{}, nil)
 	if !errors.Is(err, ErrScheduledAtNeeded) {

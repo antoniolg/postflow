@@ -48,6 +48,49 @@ func TestCreatePostFromFormRedirects(t *testing.T) {
 	}
 }
 
+func TestCreatePostFromFormPublishNowIgnoresScheduledAt(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	form := url.Values{}
+	form.Set("account_id", testAccountID(t, store))
+	form.Set("text", "publish now from form")
+	form.Set("intent", "publish_now")
+	form.Set("scheduled_at_local", "2099-01-01T12:00")
+
+	before := time.Now().UTC()
+	req := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewBufferString(form.Encode()))
+	req.Header.Set("content-type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	after := time.Now().UTC()
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", w.Code)
+	}
+
+	items, err := store.ListSchedule(t.Context(), before.Add(-1*time.Minute), after.Add(1*time.Minute))
+	if err != nil {
+		t.Fatalf("list schedule: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected one immediate scheduled post, got %d", len(items))
+	}
+	post := items[0]
+	if post.Text != "publish now from form" {
+		t.Fatalf("expected updated text, got %q", post.Text)
+	}
+	if post.ScheduledAt.Before(before.Add(-5*time.Second)) || post.ScheduledAt.After(after.Add(5*time.Second)) {
+		t.Fatalf("expected publish_now scheduled_at near request time, got %s (before=%s after=%s)", post.ScheduledAt, before, after)
+	}
+}
+
 func TestEditPostFromForm(t *testing.T) {
 	tempDir := t.TempDir()
 	store, err := db.Open(filepath.Join(tempDir, "test.db"))
@@ -101,6 +144,63 @@ func TestEditPostFromForm(t *testing.T) {
 	}
 	if post.ScheduledAt.IsZero() {
 		t.Fatalf("expected scheduled_at to be preserved")
+	}
+}
+
+func TestEditPostFromFormPublishNowIgnoresScheduledAt(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	createPayload, _ := json.Marshal(map[string]any{
+		"account_id":   testAccountID(t, store),
+		"text":         "initial scheduled",
+		"scheduled_at": time.Now().UTC().Add(6 * time.Hour).Format(time.RFC3339),
+	})
+	createReq := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(createPayload))
+	createW := httptest.NewRecorder()
+	h.ServeHTTP(createW, createReq)
+	if createW.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", createW.Code)
+	}
+	var created map[string]any
+	if err := json.Unmarshal(createW.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode create response: %v", err)
+	}
+	postID, _ := created["id"].(string)
+	if postID == "" {
+		t.Fatalf("missing post id")
+	}
+
+	editForm := url.Values{}
+	editForm.Set("text", "edited publish now")
+	editForm.Set("intent", "publish_now")
+	editForm.Set("scheduled_at_local", "2099-01-01T12:00")
+	before := time.Now().UTC()
+	editReq := httptest.NewRequest(http.MethodPost, "/posts/"+postID+"/edit", bytes.NewBufferString(editForm.Encode()))
+	editReq.Header.Set("content-type", "application/x-www-form-urlencoded")
+	editW := httptest.NewRecorder()
+	h.ServeHTTP(editW, editReq)
+	after := time.Now().UTC()
+	if editW.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", editW.Code)
+	}
+
+	post, err := store.GetPost(t.Context(), postID)
+	if err != nil {
+		t.Fatalf("get post: %v", err)
+	}
+	if post.Text != "edited publish now" {
+		t.Fatalf("expected updated text, got %q", post.Text)
+	}
+	if post.ScheduledAt.Before(before.Add(-5*time.Second)) || post.ScheduledAt.After(after.Add(5*time.Second)) {
+		t.Fatalf("expected publish_now scheduled_at near request time, got %s (before=%s after=%s)", post.ScheduledAt, before, after)
 	}
 }
 

@@ -49,12 +49,10 @@ func ResolveScheduledAtForEdit(intent string, scheduledAt time.Time, currentSche
 	case "draft":
 		return time.Time{}, nil
 	case "publish_now":
-		if scheduledAt.IsZero() {
-			if now == nil {
-				now = time.Now
-			}
-			return now().UTC(), nil
+		if now == nil {
+			now = time.Now
 		}
+		return now().UTC(), nil
 	case "schedule":
 		if scheduledAt.IsZero() {
 			return time.Time{}, ErrScheduledAtNeeded
