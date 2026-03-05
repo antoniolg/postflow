@@ -295,7 +295,7 @@ func TestCalendarDayDetailShowsMediaIndicatorWhenPostHasMedia(t *testing.T) {
 	}
 	panel := body[panelStart : panelStart+panelEndRel]
 
-	if !strings.Contains(panel, "day-item-media-indicator") {
+	if !strings.Contains(panel, "publication-media-chip") {
 		t.Fatalf("expected day panel to render media indicator for scheduled post with media")
 	}
 	if !strings.Contains(panel, "data-lucide=\"image\"") {

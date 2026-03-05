@@ -285,12 +285,47 @@ func (s Server) handleDeletePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	fromForm := !strings.Contains(strings.ToLower(r.Header.Get("content-type")), "application/json")
+	if fromForm {
+		if err := r.ParseForm(); err != nil {
+			http.Redirect(w, r, "/?view=calendar&error=invalid+form", http.StatusSeeOther)
+			return
+		}
+	}
 	returnTo := sanitizeReturnTo(strings.TrimSpace(r.FormValue("return_to")))
 	if returnTo == "" {
 		returnTo = "/?view=calendar"
 	}
 
 	svc := postsapp.MutationsService{Store: s.Store}
+	if fromForm {
+		ids := normalizeIDList(r.Form["ids"])
+		if len(ids) > 0 {
+			var successCount int
+			var failedCount int
+			for _, id := range ids {
+				if err := svc.DeleteEditable(r.Context(), id); err != nil {
+					failedCount++
+					continue
+				}
+				successCount++
+			}
+			if successCount == 0 {
+				http.Redirect(w, r, withQueryValue(returnTo, "error", "post not deletable"), http.StatusSeeOther)
+				return
+			}
+			successMsg := "post deleted"
+			if successCount > 1 {
+				successMsg = fmt.Sprintf("deleted %d", successCount)
+			}
+			redirectURL := withQueryValue(returnTo, "success", successMsg)
+			if failedCount > 0 {
+				redirectURL = withQueryValue(redirectURL, "error", fmt.Sprintf("failed %d", failedCount))
+			}
+			http.Redirect(w, r, redirectURL, http.StatusSeeOther)
+			return
+		}
+	}
+
 	if err := svc.DeleteEditable(r.Context(), postID); err != nil {
 		if fromForm {
 			http.Redirect(w, r, withQueryValue(returnTo, "error", "post not deletable"), http.StatusSeeOther)
@@ -313,6 +348,26 @@ func (s Server) handleDeletePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"deleted": true, "id": postID})
+}
+
+func normalizeIDList(ids []string) []string {
+	if len(ids) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(ids))
+	out := make([]string, 0, len(ids))
+	for _, raw := range ids {
+		id := strings.TrimSpace(raw)
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	return out
 }
 
 func (s Server) handleScheduleDraftPost(w http.ResponseWriter, r *http.Request) {

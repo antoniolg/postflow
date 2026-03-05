@@ -4,14 +4,17 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"html"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/antoniolg/postflow/internal/db"
+	"github.com/antoniolg/postflow/internal/domain"
 )
 
 func TestPublicationsViewShowsOnlyScheduledInNext14Days(t *testing.T) {
@@ -128,6 +131,460 @@ func TestPublicationsViewShowsOnlyScheduledInNext14Days(t *testing.T) {
 	}
 	if strings.Count(body, "class=\"nav-badge\">1</span>") < 2 {
 		t.Fatalf("expected neutral nav badges for scheduled and drafts")
+	}
+}
+
+func TestPublicationsViewGroupsSameContentByScheduleAcrossNetworks(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	xAccount := createConnectedAccountForPlatform(t, store, domain.PlatformX, "x-grouped")
+	linkedinAccount := createConnectedAccountForPlatform(t, store, domain.PlatformLinkedIn, "li-grouped")
+	instagramAccount := createConnectedAccountForPlatform(t, store, domain.PlatformInstagram, "ig-grouped")
+
+	scheduledAt := time.Now().UTC().Add(3 * time.Hour).Truncate(time.Minute).Format(time.RFC3339)
+	text := "same grouped text"
+	for _, accountID := range []string{xAccount.ID, linkedinAccount.ID, instagramAccount.ID} {
+		createBody, _ := json.Marshal(map[string]any{
+			"account_id":   accountID,
+			"text":         text,
+			"scheduled_at": scheduledAt,
+		})
+		req := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(createBody))
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+		if w.Code != http.StatusCreated {
+			t.Fatalf("expected 201 for grouped publication seed post, got %d", w.Code)
+		}
+	}
+
+	publicationsReq := httptest.NewRequest(http.MethodGet, "/?view=publications", nil)
+	publicationsW := httptest.NewRecorder()
+	h.ServeHTTP(publicationsW, publicationsReq)
+	if publicationsW.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", publicationsW.Code)
+	}
+
+	body := publicationsW.Body.String()
+	if strings.Count(body, "data-publication-group=\"3\"") != 1 {
+		t.Fatalf("expected one grouped publication card with 3 posts")
+	}
+	if strings.Count(body, "class=\"card scheduled publication-card card-editable\"") != 1 {
+		t.Fatalf("expected a single scheduled publication card in grouped view")
+	}
+	if !strings.Contains(body, "data-publication-platform-count=\"3\"") {
+		t.Fatalf("expected grouped publication card to include three unique platforms")
+	}
+
+	editURLRe := regexp.MustCompile(`data-publication-group="3"[^>]*data-edit-url="([^"]+)"`)
+	match := editURLRe.FindStringSubmatch(body)
+	if len(match) != 2 {
+		t.Fatalf("expected grouped publication card with edit url")
+	}
+	groupEditURL := html.UnescapeString(match[1])
+	if !strings.Contains(groupEditURL, "account_ids=") {
+		t.Fatalf("expected grouped edit url to include account_ids query param")
+	}
+
+	createReq := httptest.NewRequest(http.MethodGet, groupEditURL, nil)
+	createW := httptest.NewRecorder()
+	h.ServeHTTP(createW, createReq)
+	if createW.Code != http.StatusOK {
+		t.Fatalf("expected 200 for grouped edit create view, got %d", createW.Code)
+	}
+	createBody := createW.Body.String()
+	for _, accountID := range []string{xAccount.ID, linkedinAccount.ID, instagramAccount.ID} {
+		expected := "value=\"" + accountID + "\""
+		idx := strings.Index(createBody, expected)
+		if idx < 0 {
+			t.Fatalf("expected create view options to include account id %s", accountID)
+		}
+		windowEnd := idx + 160
+		if windowEnd > len(createBody) {
+			windowEnd = len(createBody)
+		}
+		if !strings.Contains(createBody[idx:windowEnd], "selected") {
+			t.Fatalf("expected account id %s to be selected in create view", accountID)
+		}
+	}
+}
+
+func TestDraftsViewGroupsSameContentAcrossNetworks(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	xAccount := createConnectedAccountForPlatform(t, store, domain.PlatformX, "x-draft-grouped")
+	linkedinAccount := createConnectedAccountForPlatform(t, store, domain.PlatformLinkedIn, "li-draft-grouped")
+	facebookAccount := createConnectedAccountForPlatform(t, store, domain.PlatformFacebook, "fb-draft-grouped")
+
+	text := "same grouped draft text"
+	for _, accountID := range []string{xAccount.ID, linkedinAccount.ID, facebookAccount.ID} {
+		createBody, _ := json.Marshal(map[string]any{
+			"account_id": accountID,
+			"text":       text,
+		})
+		req := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(createBody))
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+		if w.Code != http.StatusCreated {
+			t.Fatalf("expected 201 for grouped draft seed post, got %d", w.Code)
+		}
+	}
+
+	draftsReq := httptest.NewRequest(http.MethodGet, "/?view=drafts", nil)
+	draftsW := httptest.NewRecorder()
+	h.ServeHTTP(draftsW, draftsReq)
+	if draftsW.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", draftsW.Code)
+	}
+
+	body := draftsW.Body.String()
+	if strings.Count(body, "data-draft-group=\"3\"") != 1 {
+		t.Fatalf("expected one grouped draft card with 3 posts")
+	}
+	if strings.Count(body, "class=\"card draft publication-card card-editable\"") != 1 {
+		t.Fatalf("expected a single draft card in grouped view")
+	}
+	if !strings.Contains(body, "data-draft-platform-count=\"3\"") {
+		t.Fatalf("expected grouped draft card to include three unique platforms")
+	}
+
+	editURLRe := regexp.MustCompile(`data-draft-group="3"[^>]*data-edit-url="([^"]+)"`)
+	match := editURLRe.FindStringSubmatch(body)
+	if len(match) != 2 {
+		t.Fatalf("expected grouped draft card with edit url")
+	}
+	groupEditURL := html.UnescapeString(match[1])
+	if !strings.Contains(groupEditURL, "account_ids=") {
+		t.Fatalf("expected grouped draft edit url to include account_ids query param")
+	}
+
+	createReq := httptest.NewRequest(http.MethodGet, groupEditURL, nil)
+	createW := httptest.NewRecorder()
+	h.ServeHTTP(createW, createReq)
+	if createW.Code != http.StatusOK {
+		t.Fatalf("expected 200 for grouped draft edit create view, got %d", createW.Code)
+	}
+	createBody := createW.Body.String()
+	for _, accountID := range []string{xAccount.ID, linkedinAccount.ID, facebookAccount.ID} {
+		expected := "value=\"" + accountID + "\""
+		idx := strings.Index(createBody, expected)
+		if idx < 0 {
+			t.Fatalf("expected create view options to include account id %s", accountID)
+		}
+		windowEnd := idx + 160
+		if windowEnd > len(createBody) {
+			windowEnd = len(createBody)
+		}
+		if !strings.Contains(createBody[idx:windowEnd], "selected") {
+			t.Fatalf("expected account id %s to be selected in create view", accountID)
+		}
+	}
+}
+
+func TestCalendarDayPanelGroupsSameContentAcrossNetworks(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	day := time.Date(2026, time.March, 6, 0, 0, 0, 0, time.UTC)
+	scheduledAt := day.Add(13*time.Hour + 24*time.Minute).Format(time.RFC3339)
+	xAccount := createConnectedAccountForPlatform(t, store, domain.PlatformX, "x-calendar-grouped")
+	linkedinAccount := createConnectedAccountForPlatform(t, store, domain.PlatformLinkedIn, "li-calendar-grouped")
+	facebookAccount := createConnectedAccountForPlatform(t, store, domain.PlatformFacebook, "fb-calendar-grouped")
+
+	for _, accountID := range []string{xAccount.ID, linkedinAccount.ID, facebookAccount.ID} {
+		createBody, _ := json.Marshal(map[string]any{
+			"account_id":   accountID,
+			"text":         "same grouped calendar text",
+			"scheduled_at": scheduledAt,
+		})
+		req := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(createBody))
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+		if w.Code != http.StatusCreated {
+			t.Fatalf("expected 201 for grouped calendar post, got %d", w.Code)
+		}
+	}
+
+	calendarReq := httptest.NewRequest(http.MethodGet, "/?view=calendar&month=2026-03&day=2026-03-06", nil)
+	calendarW := httptest.NewRecorder()
+	h.ServeHTTP(calendarW, calendarReq)
+	if calendarW.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", calendarW.Code)
+	}
+
+	body := calendarW.Body.String()
+	if strings.Count(body, "data-calendar-group=\"3\"") != 1 {
+		t.Fatalf("expected one grouped calendar card with 3 posts")
+	}
+	if !strings.Contains(body, "data-calendar-platform-count=\"3\"") {
+		t.Fatalf("expected grouped calendar card to include three unique platforms")
+	}
+	if !strings.Contains(body, "to publish (3)") {
+		t.Fatalf("expected day panel to keep pending count by publications, not grouped cards")
+	}
+
+	cardRe := regexp.MustCompile(`(?s)<article class="card scheduled publication-card day-panel-publication-card[^>]*data-calendar-group="3"[^>]*>.*?</article>`)
+	card := cardRe.FindString(body)
+	if card == "" {
+		t.Fatalf("expected grouped scheduled card in calendar side panel")
+	}
+	if strings.Contains(card, "publication-time-date") {
+		t.Fatalf("expected calendar side panel card to render time only without date label")
+	}
+	if strings.Contains(card, "UTC") || strings.Contains(card, "CET") {
+		t.Fatalf("expected calendar side panel card to avoid timezone suffix")
+	}
+}
+
+func TestCalendarGridGroupsSameContentAcrossNetworks(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	day := time.Date(2026, time.March, 6, 0, 0, 0, 0, time.UTC)
+	scheduledAt := day.Add(13*time.Hour + 24*time.Minute).Format(time.RFC3339)
+	xAccount := createConnectedAccountForPlatform(t, store, domain.PlatformX, "x-calendar-grid-grouped")
+	linkedinAccount := createConnectedAccountForPlatform(t, store, domain.PlatformLinkedIn, "li-calendar-grid-grouped")
+	facebookAccount := createConnectedAccountForPlatform(t, store, domain.PlatformFacebook, "fb-calendar-grid-grouped")
+	instagramAccount := createConnectedAccountForPlatform(t, store, domain.PlatformInstagram, "ig-calendar-grid-grouped")
+
+	for _, accountID := range []string{xAccount.ID, linkedinAccount.ID, facebookAccount.ID, instagramAccount.ID} {
+		createBody, _ := json.Marshal(map[string]any{
+			"account_id":   accountID,
+			"text":         "same grouped calendar grid text",
+			"scheduled_at": scheduledAt,
+		})
+		req := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(createBody))
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+		if w.Code != http.StatusCreated {
+			t.Fatalf("expected 201 for grouped calendar post, got %d", w.Code)
+		}
+	}
+
+	calendarReq := httptest.NewRequest(http.MethodGet, "/?view=calendar&month=2026-03&day=2026-03-06", nil)
+	calendarW := httptest.NewRecorder()
+	h.ServeHTTP(calendarW, calendarReq)
+	if calendarW.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", calendarW.Code)
+	}
+
+	body := calendarW.Body.String()
+	if strings.Count(body, "data-day-event data-status=") != 1 {
+		t.Fatalf("expected grouped calendar grid to render one event row for duplicated content")
+	}
+	if strings.Count(body, "data-event-group=\"4\"") != 1 {
+		t.Fatalf("expected grouped calendar grid row to expose group size 4")
+	}
+	if !strings.Contains(body, "data-event-platform-count=\"4\"") {
+		t.Fatalf("expected grouped calendar grid row to include four unique platforms")
+	}
+	selectedDayCountRe := regexp.MustCompile(`(?s)<div class="day-cell [^"]*selected[^"]*">.*?<span class="day-count">4</span>`)
+	if !selectedDayCountRe.MatchString(body) {
+		t.Fatalf("expected selected day cell badge to keep total publication count")
+	}
+}
+
+func TestGroupedCardsExposeDeleteControlInScheduledAndDrafts(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	xAccount := createConnectedAccountForPlatform(t, store, domain.PlatformX, "x-delete-grouped")
+	linkedinAccount := createConnectedAccountForPlatform(t, store, domain.PlatformLinkedIn, "li-delete-grouped")
+	scheduledAt := time.Now().UTC().Add(2 * time.Hour).Truncate(time.Minute).Format(time.RFC3339)
+
+	for _, accountID := range []string{xAccount.ID, linkedinAccount.ID} {
+		createScheduledBody, _ := json.Marshal(map[string]any{
+			"account_id":   accountID,
+			"text":         "grouped scheduled delete card",
+			"scheduled_at": scheduledAt,
+		})
+		createScheduledReq := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(createScheduledBody))
+		createScheduledW := httptest.NewRecorder()
+		h.ServeHTTP(createScheduledW, createScheduledReq)
+		if createScheduledW.Code != http.StatusCreated {
+			t.Fatalf("expected 201 for grouped scheduled post, got %d", createScheduledW.Code)
+		}
+	}
+
+	publicationsReq := httptest.NewRequest(http.MethodGet, "/?view=publications", nil)
+	publicationsW := httptest.NewRecorder()
+	h.ServeHTTP(publicationsW, publicationsReq)
+	if publicationsW.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", publicationsW.Code)
+	}
+	publicationsBody := publicationsW.Body.String()
+	publicationCardRe := regexp.MustCompile(`(?s)<article class="card scheduled publication-card card-editable"[^>]*data-publication-group="2"[^>]*>.*?</article>`)
+	publicationCard := publicationCardRe.FindString(publicationsBody)
+	if publicationCard == "" {
+		t.Fatalf("expected grouped scheduled card")
+	}
+	if !strings.Contains(publicationCard, "class=\"publication-delete-form\"") {
+		t.Fatalf("expected grouped scheduled card to expose delete control in top-right")
+	}
+	if strings.Count(publicationCard, "name=\"ids\" value=\"") != 2 {
+		t.Fatalf("expected grouped scheduled delete form to submit both post ids")
+	}
+
+	for _, accountID := range []string{xAccount.ID, linkedinAccount.ID} {
+		createDraftBody, _ := json.Marshal(map[string]any{
+			"account_id": accountID,
+			"text":       "grouped draft delete card",
+		})
+		createDraftReq := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(createDraftBody))
+		createDraftW := httptest.NewRecorder()
+		h.ServeHTTP(createDraftW, createDraftReq)
+		if createDraftW.Code != http.StatusCreated {
+			t.Fatalf("expected 201 for grouped draft post, got %d", createDraftW.Code)
+		}
+	}
+
+	draftsReq := httptest.NewRequest(http.MethodGet, "/?view=drafts", nil)
+	draftsW := httptest.NewRecorder()
+	h.ServeHTTP(draftsW, draftsReq)
+	if draftsW.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", draftsW.Code)
+	}
+	draftsBody := draftsW.Body.String()
+	draftCardRe := regexp.MustCompile(`(?s)<article class="card draft publication-card card-editable"[^>]*data-draft-group="2"[^>]*>.*?</article>`)
+	draftCard := draftCardRe.FindString(draftsBody)
+	if draftCard == "" {
+		t.Fatalf("expected grouped draft card")
+	}
+	if !strings.Contains(draftCard, "class=\"publication-delete-form\"") {
+		t.Fatalf("expected grouped draft card to expose delete control in top-right")
+	}
+	if strings.Count(draftCard, "name=\"ids\" value=\"") != 2 {
+		t.Fatalf("expected grouped draft delete form to submit both post ids")
+	}
+}
+
+func TestFailedViewGroupsSameContentAcrossNetworks(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	xAccount := createConnectedAccountForPlatform(t, store, domain.PlatformX, "x-failed-grouped")
+	linkedinAccount := createConnectedAccountForPlatform(t, store, domain.PlatformLinkedIn, "li-failed-grouped")
+
+	scheduledAt := time.Now().UTC().Add(5 * time.Minute).Truncate(time.Minute).Format(time.RFC3339)
+	text := "same grouped failed text"
+	for _, accountID := range []string{xAccount.ID, linkedinAccount.ID} {
+		createBody, _ := json.Marshal(map[string]any{
+			"account_id":   accountID,
+			"text":         text,
+			"scheduled_at": scheduledAt,
+			"max_attempts": 1,
+		})
+		req := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(createBody))
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+		if w.Code != http.StatusCreated {
+			t.Fatalf("expected 201 for grouped failed seed post, got %d", w.Code)
+		}
+		var created map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &created); err != nil {
+			t.Fatalf("decode create response: %v", err)
+		}
+		postID, _ := created["id"].(string)
+		if postID == "" {
+			t.Fatalf("expected failed seed post id")
+		}
+		if err := store.RecordPublishFailure(t.Context(), postID, errors.New("boom"), 30*time.Second); err != nil {
+			t.Fatalf("record publish failure: %v", err)
+		}
+	}
+
+	failedReq := httptest.NewRequest(http.MethodGet, "/?view=failed", nil)
+	failedW := httptest.NewRecorder()
+	h.ServeHTTP(failedW, failedReq)
+	if failedW.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", failedW.Code)
+	}
+
+	body := failedW.Body.String()
+	if strings.Count(body, "data-failed-group=\"2\"") != 1 {
+		t.Fatalf("expected one grouped failed card with 2 posts")
+	}
+	if !strings.Contains(body, "data-failed-platform-count=\"2\"") {
+		t.Fatalf("expected grouped failed card to include two unique platforms")
+	}
+	csvValueRe := regexp.MustCompile(`value="[^"]+,[^"]+"[^>]*data-failed-checkbox|data-failed-checkbox[^>]*value="[^"]+,[^"]+"`)
+	if !csvValueRe.MatchString(body) {
+		t.Fatalf("expected grouped failed card checkbox to include csv dead letter ids")
+	}
+
+	editURLRe := regexp.MustCompile(`data-failed-group="2"[^>]*data-edit-url="([^"]+)"`)
+	match := editURLRe.FindStringSubmatch(body)
+	if len(match) != 2 {
+		t.Fatalf("expected grouped failed card with edit url")
+	}
+	groupEditURL := html.UnescapeString(match[1])
+	if !strings.Contains(groupEditURL, "account_ids=") {
+		t.Fatalf("expected grouped failed edit url to include account_ids query param")
+	}
+
+	createReq := httptest.NewRequest(http.MethodGet, groupEditURL, nil)
+	createW := httptest.NewRecorder()
+	h.ServeHTTP(createW, createReq)
+	if createW.Code != http.StatusOK {
+		t.Fatalf("expected 200 for grouped failed edit create view, got %d", createW.Code)
+	}
+	createBody := createW.Body.String()
+	for _, accountID := range []string{xAccount.ID, linkedinAccount.ID} {
+		expected := "value=\"" + accountID + "\""
+		idx := strings.Index(createBody, expected)
+		if idx < 0 {
+			t.Fatalf("expected create view options to include account id %s", accountID)
+		}
+		windowEnd := idx + 160
+		if windowEnd > len(createBody) {
+			windowEnd = len(createBody)
+		}
+		if !strings.Contains(createBody[idx:windowEnd], "selected") {
+			t.Fatalf("expected account id %s to be selected in create view", accountID)
+		}
 	}
 }
 

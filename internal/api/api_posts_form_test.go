@@ -461,3 +461,65 @@ func TestDeletePostFromFormOnlyAllowsEditableStatuses(t *testing.T) {
 		t.Fatalf("expected published post to remain, got %v", err)
 	}
 }
+
+func TestDeletePostFromFormSupportsBulkIDs(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+	accountID := testAccountID(t, store)
+
+	createScheduled := func(text string, offset time.Duration) string {
+		payload, _ := json.Marshal(map[string]any{
+			"account_id":   accountID,
+			"text":         text,
+			"scheduled_at": time.Now().UTC().Add(offset).Format(time.RFC3339),
+		})
+		req := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(payload))
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+		if w.Code != http.StatusCreated {
+			t.Fatalf("expected 201 for scheduled post, got %d", w.Code)
+		}
+		var out map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+			t.Fatalf("decode create response: %v", err)
+		}
+		id, _ := out["id"].(string)
+		if id == "" {
+			t.Fatalf("expected scheduled post id")
+		}
+		return id
+	}
+
+	postA := createScheduled("bulk delete a", 1*time.Hour)
+	postB := createScheduled("bulk delete b", 2*time.Hour)
+
+	deleteForm := url.Values{}
+	deleteForm.Set("return_to", "/?view=publications")
+	deleteForm.Add("ids", postA)
+	deleteForm.Add("ids", postB)
+	deleteReq := httptest.NewRequest(http.MethodPost, "/posts/"+postA+"/delete", bytes.NewBufferString(deleteForm.Encode()))
+	deleteReq.Header.Set("content-type", "application/x-www-form-urlencoded")
+	deleteW := httptest.NewRecorder()
+	h.ServeHTTP(deleteW, deleteReq)
+	if deleteW.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303 for bulk delete form, got %d", deleteW.Code)
+	}
+	location := deleteW.Header().Get("Location")
+	if !strings.Contains(location, "success=deleted+2") {
+		t.Fatalf("expected bulk delete success redirect, got %q", location)
+	}
+
+	if _, err := store.GetPost(t.Context(), postA); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("expected postA deleted, got err=%v", err)
+	}
+	if _, err := store.GetPost(t.Context(), postB); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("expected postB deleted, got err=%v", err)
+	}
+}

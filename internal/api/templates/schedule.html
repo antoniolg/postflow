@@ -557,11 +557,20 @@
     .day-item-text blockquote + p {
       margin-top: 0.35em;
     }
-    .day-item-platform {
-      font-size: 11px;
-      color: #a8a8a8;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
+    .day-item-platform-icon {
+      width: 14px;
+      height: 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #b8b8b8;
+      opacity: 0.9;
+      flex: 0 0 auto;
+    }
+    .day-item-platform-icon svg {
+      width: 100%;
+      height: 100%;
+      display: block;
     }
     .thread-step-badge {
       display: inline-flex;
@@ -777,7 +786,7 @@
     .day-event {
       flex: 0 0 auto;
       border-radius: 4px;
-      padding: 3px 6px;
+      padding: 4px 6px;
       background: #3a3a3a;
       border: 0;
       font-size: 10px;
@@ -785,9 +794,10 @@
       color: #b8b8b8;
       line-height: 1.3;
       display: flex;
-      align-items: center;
-      gap: 4px;
+      flex-direction: column;
+      gap: 2px;
       min-width: 0;
+      min-height: 30px;
     }
     .day-event.live {
       background: var(--accent-teal);
@@ -798,6 +808,18 @@
       color: #0d0d0d;
     }
     .event-dot { display: none; }
+    .day-event-main {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      min-width: 0;
+    }
+    .day-event-meta {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      min-width: 0;
+    }
     .event-time {
       flex: 0 0 auto;
     }
@@ -820,6 +842,13 @@
       white-space: nowrap;
       min-width: 0;
       flex: 1 1 auto;
+    }
+    .event-networks {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      min-width: 0;
     }
     .event-network {
       flex: 0 0 auto;
@@ -885,15 +914,14 @@
       width: 100%;
       box-sizing: border-box;
       max-width: 100%;
-      min-height: 18px;
+      min-height: 30px;
       font-size: 10px;
       line-height: 1.25;
-      padding: 3px 6px;
+      padding: 4px 6px;
       border-radius: 5px;
     }
     body[data-view="calendar"] .event-network {
       display: inline-flex;
-      margin-left: auto;
     }
     body[data-view="calendar"] .event-time {
       opacity: 0.9;
@@ -948,6 +976,211 @@
     .card.published { box-shadow: inset 0 0 0 1px rgba(0, 212, 170, 0.22); }
     .card.draft { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
     .card.failed { box-shadow: inset 0 0 0 1px rgba(255, 68, 68, 0.24); }
+    .publications-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .publication-card {
+      --publication-border: #313131;
+      --publication-date-color: #a4a4a4;
+      border: 1px solid #313131;
+      border-color: var(--publication-border);
+      border-radius: 14px;
+      background: #212121;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 8px;
+      padding: 12px 14px;
+      transition: border-color 120ms ease, background-color 120ms ease;
+      box-shadow: none;
+    }
+    .card.scheduled.publication-card {
+      --publication-border: rgba(255, 107, 53, 0.45);
+      --publication-date-color: #ffc1a8;
+    }
+    .card.draft.publication-card {
+      --publication-border: #3a3a3a;
+      --publication-date-color: #adadad;
+    }
+    .card.failed.publication-card {
+      --publication-border: #3a3a3a;
+      --publication-date-color: #adadad;
+    }
+    .publication-card:hover {
+      border-color: #434343;
+      background-color: #242424;
+    }
+    .publication-card-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .publication-time {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      flex-wrap: wrap;
+      line-height: 1.2;
+    }
+    .publication-time-date {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--publication-date-color);
+      letter-spacing: 0.04em;
+    }
+    .publication-time-clock {
+      font-size: 11px;
+      font-weight: 700;
+      color: #d4d4d4;
+      letter-spacing: 0.01em;
+    }
+    .publication-meta-row {
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-left: auto;
+    }
+    .publication-head-right {
+      display: inline-flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin-left: auto;
+      min-width: 0;
+    }
+    .publication-head-right .publication-meta-row {
+      margin-left: 0;
+    }
+    .publication-platform-chip {
+      width: 16px;
+      height: 16px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: 0;
+      color: #8d8d8d;
+      flex: 0 0 auto;
+    }
+    .publication-platform-chip svg {
+      width: 16px;
+      height: 16px;
+      display: block;
+    }
+    .publication-thread-chip {
+      border-color: #3a3a3a;
+      background: #2a2a2a;
+      color: #bdbdbd;
+    }
+    .publication-media-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      border-radius: 999px;
+      padding: 3px 8px;
+      border: 1px solid #3a3a3a;
+      background: #2a2a2a;
+      color: #c7c7c7;
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 1;
+      min-height: 24px;
+    }
+    .publication-count-chip {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      padding: 3px 8px;
+      border: 1px solid #3a3a3a;
+      background: #2a2a2a;
+      color: #d6d6d6;
+      font-size: 11px;
+      font-weight: 700;
+      min-height: 24px;
+      line-height: 1;
+    }
+    .publication-media-chip svg {
+      width: 12px;
+      height: 12px;
+      display: block;
+      color: #adadad;
+    }
+    .publication-text {
+      font-size: 13px;
+      line-height: 1.42;
+      color: var(--text-primary);
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 5;
+      max-height: calc(1.42em * 5);
+      overflow: hidden;
+      word-break: break-word;
+    }
+    .publication-card .card-actions {
+      margin-top: 2px;
+    }
+    .publication-delete-form {
+      margin: 0;
+      flex: 0 0 auto;
+    }
+    .publication-delete-btn {
+      width: 24px;
+      height: 24px;
+      border-radius: 7px;
+      border: 0;
+      background: #333333;
+      color: #b47b7b;
+      font-size: 13px;
+      line-height: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      padding: 0;
+    }
+    .publication-delete-btn:hover {
+      background: #4a2a2a;
+      color: #f0a0a0;
+    }
+    .day-panel-publication-card {
+      padding: 10px 12px;
+      border-radius: 12px;
+      gap: 6px;
+    }
+    .day-panel-publication-card .publication-text {
+      -webkit-line-clamp: 4;
+      max-height: calc(1.42em * 4);
+      font-size: 12px;
+      line-height: 1.38;
+    }
+    .day-panel-publication-card .publication-time-clock {
+      font-size: 12px;
+      letter-spacing: 0.05em;
+    }
+    .publication-meta-row .day-item-platform-icon {
+      color: #8d8d8d;
+      width: 16px;
+      height: 16px;
+    }
+    .publication-time-with-select {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .publication-time-with-select .failed-select {
+      padding-top: 0;
+    }
+    .publication-text > :first-child {
+      margin-top: 0;
+    }
+    .publication-text > :last-child {
+      margin-bottom: 0;
+    }
     .card-left {
       display: flex;
       gap: 10px;
@@ -2721,19 +2954,21 @@
       body[data-view="calendar"] .day-event {
         width: 100%;
         font-size: 9px;
-        padding: 2px 5px;
-      }
-      body[data-view="calendar"] .day-event .event-time {
-        display: none;
+        padding: 3px 5px;
+        min-height: 28px;
       }
       body[data-view="calendar"] .day-event .event-thread {
         display: none;
       }
       body[data-view="calendar"] .day-event .event-network {
         display: inline-flex;
-        margin-left: auto;
         width: 10px;
         height: 10px;
+      }
+      body[data-view="calendar"] .day-event .event-group-count {
+        font-size: 7px;
+        min-width: 12px;
+        padding: 0 3px;
       }
       body[data-view="calendar"] .day-events .day-event:nth-child(n+3) {
         display: none;
@@ -2788,6 +3023,28 @@
         flex-direction: column;
         align-items: stretch;
         padding: 10px 10px;
+      }
+      .publications-grid {
+        gap: 10px;
+      }
+      .publication-card {
+        padding: 11px 12px;
+      }
+      .publication-card-head {
+        align-items: flex-start;
+        gap: 8px;
+      }
+      .publication-meta-row {
+        justify-content: flex-start;
+        margin-left: 0;
+      }
+      .publication-time-clock {
+        font-size: 11px;
+      }
+      .publication-text {
+        font-size: 13px;
+        -webkit-line-clamp: 4;
+        max-height: calc(1.42em * 4);
       }
       .card-left {
         gap: 8px;
@@ -2864,6 +3121,31 @@
       .stats { grid-template-columns: 1fr; }
       .content .text { font-size: 12px; }
       .meta { font-size: 11px; gap: 8px; }
+      .publication-card {
+        border-radius: 14px;
+      }
+      .publication-time-date {
+        font-size: 10px;
+      }
+      .publication-time-clock {
+        font-size: 10px;
+      }
+      .publication-platform-chip {
+        width: 15px;
+        height: 15px;
+      }
+      .publication-platform-chip svg {
+        width: 15px;
+        height: 15px;
+      }
+      .publication-media-chip {
+        min-height: 22px;
+        padding: 3px 7px;
+      }
+      .publication-count-chip {
+        min-height: 22px;
+        padding: 3px 7px;
+      }
       .create-fab {
         width: 46px;
         height: 46px;
@@ -2998,30 +3280,39 @@
                 <div class="day-head">
                   <span class="day-num {{if .IsToday}}today{{end}}">{{.DayNumber}}</span>
                   {{if .IsToday}}<span class="today-badge">// {{t "common.today"}}</span>{{end}}
-                  {{if gt (len .Events) 0}}<span class="day-count">{{len .Events}}</span>{{end}}
+                  {{if gt .EventCount 0}}<span class="day-count">{{.EventCount}}</span>{{end}}
                 </div>
                 <div class="day-events" data-day-events>
                   {{range .Events}}
-                  <div class="day-event {{.StatusClass}}" data-day-event data-status="{{.StatusKey}}" data-platform="{{.Platform}}">
-                    <span class="event-dot" aria-hidden="true"></span>
-                    <span class="event-time">{{.TimeLabel}}</span>
-                    {{if .ThreadLabel}}<span class="event-thread">{{.ThreadLabel}}</span>{{end}}
-	                    <span class="event-title">{{previewMarkdown .TextPreview}}</span>
-	                    <span class="event-network" aria-hidden="true">
-	                      <svg viewBox="0 0 24 24" fill="currentColor">
-	                        {{if eq .Platform "x"}}
-	                        <use href="#pf-brand-x"></use>
-	                        {{else if eq .Platform "linkedin"}}
-	                        <use href="#pf-brand-linkedin"></use>
-	                        {{else if eq .Platform "facebook"}}
-	                        <use href="#pf-brand-facebook"></use>
-	                        {{else if eq .Platform "instagram"}}
-	                        <use href="#pf-brand-instagram"></use>
-	                        {{else}}
-	                        <use href="#pf-brand-default"></use>
-	                        {{end}}
-	                      </svg>
-	                    </span>
+                  <div class="day-event {{.StatusClass}}" data-day-event data-status="{{.StatusKey}}" data-platform="{{if .MultiPlatform}}multi{{else}}{{.Platform}}{{end}}" data-event-group="{{.PostCount}}" data-event-platform-count="{{len .Platforms}}">
+                    <div class="day-event-main">
+                      <span class="event-dot" aria-hidden="true"></span>
+                      <span class="event-time">{{.TimeLabel}}</span>
+                      {{if .ThreadLabel}}<span class="event-thread">{{.ThreadLabel}}</span>{{end}}
+		                      <span class="event-title">{{previewMarkdown .TextPreview}}</span>
+                    </div>
+                    <div class="day-event-meta">
+		                      <span class="event-networks" aria-hidden="true">
+                        {{range .Platforms}}
+		                      <span class="event-network">
+		                        <svg viewBox="0 0 24 24" fill="currentColor">
+	                          {{if eq . "x"}}
+	                          <use href="#pf-brand-x"></use>
+	                          {{else if eq . "linkedin"}}
+	                          <use href="#pf-brand-linkedin"></use>
+	                          {{else if eq . "facebook"}}
+	                          <use href="#pf-brand-facebook"></use>
+	                          {{else if eq . "instagram"}}
+	                          <use href="#pf-brand-instagram"></use>
+	                          {{else}}
+	                          <use href="#pf-brand-default"></use>
+	                          {{end}}
+	                        </svg>
+		                      </span>
+                        {{end}}
+                        {{if gt .PostCount 1}}<span class="event-group-count">x{{.PostCount}}</span>{{end}}
+		                      </span>
+                    </div>
 	                  </div>
                   {{end}}
                   {{if gt (len .Events) 0}}
@@ -3038,62 +3329,103 @@
       <aside class="day-panel" aria-label="{{t "aria.day_detail"}}">
         <div class="day-panel-head">
           <div class="day-panel-title">{{.SelectedDayLabel}}</div>
-          <div class="day-panel-sub">// {{t "calendar.scheduled_posts" (len .SelectedDayPendingItems)}}</div>
+          <div class="day-panel-sub">// {{t "calendar.scheduled_posts" .SelectedDayPendingCount}}</div>
         </div>
         <div class="day-panel-body">
-          {{if and (eq (len .SelectedDayPendingItems) 0) (eq (len .SelectedDayPublishedItems) 0)}}
+          {{if and (eq (len .SelectedDayPendingGroups) 0) (eq (len .SelectedDayPublishedGroups) 0)}}
           <div class="empty">{{t "calendar.empty_day"}}</div>
           {{else}}
-          {{if gt (len .SelectedDayPendingItems) 0}}
-          <div class="day-group-title">{{t "calendar.to_publish" (len .SelectedDayPendingItems)}}</div>
-          {{range .SelectedDayPendingItems}}
-          <article class="day-item {{.StatusClass}}" data-status="{{.StatusKey}}" {{if .Editable}}data-edit-url="/?view=create&edit_id={{.PostID}}&return_to={{urlquery $.CurrentViewURL}}"{{end}}>
-            <div class="day-item-head">
-              <span class="day-item-time">{{.TimeLabel}}</span>
-              <span class="day-item-head-meta">
-                <span class="day-item-platform">{{.Platform}}</span>
-                {{if .ThreadLabel}}<span class="thread-step-badge">{{.ThreadLabel}}</span>{{end}}
-                {{if gt .MediaCount 0}}
-                <span class="day-item-media-indicator" title="{{t "common.media_count" .MediaCount}}" aria-label="{{t "common.media_count" .MediaCount}}">
-                  <svg data-lucide="image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="m21 15-5-5L5 21"></path></svg>
-                  <span>{{.MediaCount}}</span>
-                </span>
+          {{if gt (len .SelectedDayPendingGroups) 0}}
+          <div class="day-group-title">{{t "calendar.to_publish" .SelectedDayPendingCount}}</div>
+          {{range .SelectedDayPendingGroups}}
+          <article class="card scheduled publication-card day-panel-publication-card {{if .EditURL}}card-editable{{end}}" data-status="scheduled" data-calendar-group="{{.PostCount}}" data-calendar-platform-count="{{len .Platforms}}" {{if .EditURL}}data-edit-url="{{.EditURL}}"{{end}}>
+            <div class="publication-card-head">
+              <div class="publication-time">
+                {{if .ScheduledAt.IsZero}}
+                <span class="publication-time-clock">{{t "common.no_date"}}</span>
+                {{else}}
+                <span class="publication-time-clock">{{.ScheduledAt.Format "15:04"}}</span>
                 {{end}}
-              </span>
+              </div>
+              <div class="publication-head-right">
+                <div class="publication-meta-row">
+                  {{range .Platforms}}
+                  <span class="publication-platform-chip" title="{{.}}" aria-label="{{.}}">
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      {{if eq . "x"}}
+                      <use href="#pf-brand-x"></use>
+                      {{else if eq . "linkedin"}}
+                      <use href="#pf-brand-linkedin"></use>
+                      {{else if eq . "facebook"}}
+                      <use href="#pf-brand-facebook"></use>
+                      {{else if eq . "instagram"}}
+                      <use href="#pf-brand-instagram"></use>
+                      {{else}}
+                      <use href="#pf-brand-default"></use>
+                      {{end}}
+                    </svg>
+                  </span>
+                  {{end}}
+                  {{if .ThreadLabel}}<span class="thread-step-badge publication-thread-chip">{{.ThreadLabel}}</span>{{end}}
+                  <span class="publication-media-chip" title="{{t "common.media_count" .MediaCount}}" aria-label="{{t "common.media_count" .MediaCount}}">
+                    <svg data-lucide="image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="m21 15-5-5L5 21"></path></svg>
+                    <span>{{.MediaCount}}</span>
+                  </span>
+                  {{if gt .PostCount 1}}<span class="publication-count-chip">x{{.PostCount}}</span>{{end}}
+                </div>
+                <form class="publication-delete-form" method="post" action="/posts/{{.PrimaryPostID}}/delete" onsubmit="return confirm('{{t "calendar.delete_publication_confirm"}}');">
+                  {{range .PostIDs}}<input type="hidden" name="ids" value="{{.}}" />{{end}}
+                  <input type="hidden" name="return_to" value="{{$.CurrentViewURL}}" />
+                  <button type="submit" class="publication-delete-btn" title="{{t "common.delete"}}" aria-label="{{t "common.delete"}}">&#10005;</button>
+                </form>
+              </div>
             </div>
-            <div class="day-item-text">{{previewMarkdown .Text}}</div>
-            <div class="day-item-actions">
-              {{if .Deletable}}
-              <form method="post" action="/posts/{{.PostID}}/delete" onsubmit="return confirm('{{t "calendar.delete_publication_confirm"}}');">
-                <input type="hidden" name="return_to" value="{{$.CurrentViewURL}}" />
-                <button type="submit" class="day-item-btn day-item-btn-del" title="{{t "common.delete"}}">&#10005;</button>
-              </form>
-              {{end}}
-            </div>
+            <div class="publication-text">{{previewMarkdown .Text}}</div>
           </article>
           {{end}}
           {{end}}
-          {{if and (gt (len .SelectedDayPendingItems) 0) (gt (len .SelectedDayPublishedItems) 0)}}
+          {{if and (gt (len .SelectedDayPendingGroups) 0) (gt (len .SelectedDayPublishedGroups) 0)}}
           <div class="day-separator">{{t "calendar.published"}}</div>
           {{end}}
-          {{if gt (len .SelectedDayPublishedItems) 0}}
-          <div class="day-group-title">{{t "calendar.published_count" (len .SelectedDayPublishedItems)}}</div>
-          {{range .SelectedDayPublishedItems}}
-          <article class="day-item {{.StatusClass}}" data-status="{{.StatusKey}}">
-            <div class="day-item-head">
-              <span class="day-item-time">{{.TimeLabel}}</span>
-              <span class="day-item-head-meta">
-                <span class="day-item-platform">{{.Platform}}</span>
-                {{if .ThreadLabel}}<span class="thread-step-badge">{{.ThreadLabel}}</span>{{end}}
-                {{if gt .MediaCount 0}}
-                <span class="day-item-media-indicator" title="{{t "common.media_count" .MediaCount}}" aria-label="{{t "common.media_count" .MediaCount}}">
+          {{if gt (len .SelectedDayPublishedGroups) 0}}
+          <div class="day-group-title">{{t "calendar.published_count" .SelectedDayPublishedCount}}</div>
+          {{range .SelectedDayPublishedGroups}}
+          <article class="card published publication-card day-panel-publication-card" data-status="published" data-calendar-group="{{.PostCount}}" data-calendar-platform-count="{{len .Platforms}}">
+            <div class="publication-card-head">
+              <div class="publication-time">
+                {{if .ScheduledAt.IsZero}}
+                <span class="publication-time-clock">{{t "common.no_date"}}</span>
+                {{else}}
+                <span class="publication-time-clock">{{.ScheduledAt.Format "15:04"}}</span>
+                {{end}}
+              </div>
+              <div class="publication-meta-row">
+                {{range .Platforms}}
+                <span class="publication-platform-chip" title="{{.}}" aria-label="{{.}}">
+                  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    {{if eq . "x"}}
+                    <use href="#pf-brand-x"></use>
+                    {{else if eq . "linkedin"}}
+                    <use href="#pf-brand-linkedin"></use>
+                    {{else if eq . "facebook"}}
+                    <use href="#pf-brand-facebook"></use>
+                    {{else if eq . "instagram"}}
+                    <use href="#pf-brand-instagram"></use>
+                    {{else}}
+                    <use href="#pf-brand-default"></use>
+                    {{end}}
+                  </svg>
+                </span>
+                {{end}}
+                {{if .ThreadLabel}}<span class="thread-step-badge publication-thread-chip">{{.ThreadLabel}}</span>{{end}}
+                <span class="publication-media-chip" title="{{t "common.media_count" .MediaCount}}" aria-label="{{t "common.media_count" .MediaCount}}">
                   <svg data-lucide="image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="m21 15-5-5L5 21"></path></svg>
                   <span>{{.MediaCount}}</span>
                 </span>
-                {{end}}
-              </span>
+                {{if gt .PostCount 1}}<span class="publication-count-chip">x{{.PostCount}}</span>{{end}}
+              </div>
             </div>
-            <div class="day-item-text">{{previewMarkdown .Text}}</div>
+            <div class="publication-text">{{previewMarkdown .Text}}</div>
           </article>
           {{end}}
           {{end}}
@@ -3104,20 +3436,52 @@
       {{end}}
 
       {{if eq .View "publications"}}
-      <section class="list">
-        {{range .Publications}}
-        <article class="card scheduled card-editable" data-edit-url="/?view=create&edit_id={{.ID}}&return_to={{urlquery $.CurrentViewURL}}">
-          <div class="card-left">
-            <div class="content">
-              <div class="text">{{previewMarkdown .Text}}</div>
-              <div class="meta">
-                <span class="meta-accent">{{if .ScheduledAt.IsZero}}{{t "common.no_date"}}{{else}}{{.ScheduledAt.Format "2006-01-02 15:04 MST"}}{{end}}</span>
-                <span>{{.Platform}}</span>
-                {{if threadLabel .}}<span class="thread-step-badge">{{threadLabel .}}</span>{{end}}
-                <span>{{t "common.media_count" (len .Media)}}</span>
+      <section class="list publications-grid">
+        {{range .PublicationGroups}}
+	        <article class="card scheduled publication-card card-editable" data-platform="{{if .MultiPlatform}}multi{{else}}{{.PrimaryPlatform}}{{end}}" data-publication-group="{{.PostCount}}" data-publication-platform-count="{{len .Platforms}}" data-edit-url="{{.EditURL}}">
+          <div class="publication-card-head">
+            <div class="publication-time">
+              {{if .ScheduledAt.IsZero}}
+              <span class="publication-time-date">{{t "common.no_date"}}</span>
+              {{else}}
+              <span class="publication-time-date">{{.ScheduledAt.Format "2006-01-02"}}</span>
+              <span class="publication-time-clock">{{.ScheduledAt.Format "15:04"}}</span>
+              {{end}}
+            </div>
+            <div class="publication-head-right">
+              <div class="publication-meta-row">
+                {{range .Platforms}}
+                <span class="publication-platform-chip" title="{{.}}" aria-label="{{.}}">
+                  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    {{if eq . "x"}}
+                    <use href="#pf-brand-x"></use>
+                    {{else if eq . "linkedin"}}
+                    <use href="#pf-brand-linkedin"></use>
+                    {{else if eq . "facebook"}}
+                    <use href="#pf-brand-facebook"></use>
+                    {{else if eq . "instagram"}}
+                    <use href="#pf-brand-instagram"></use>
+                    {{else}}
+                    <use href="#pf-brand-default"></use>
+                    {{end}}
+                  </svg>
+                </span>
+                {{end}}
+                {{if .ThreadLabel}}<span class="thread-step-badge publication-thread-chip">{{.ThreadLabel}}</span>{{end}}
+                <span class="publication-media-chip" title="{{t "common.media_count" .MediaCount}}" aria-label="{{t "common.media_count" .MediaCount}}">
+                  <svg data-lucide="image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="m21 15-5-5L5 21"></path></svg>
+                  <span>{{.MediaCount}}</span>
+                </span>
+                {{if gt .PostCount 1}}<span class="publication-count-chip">x{{.PostCount}}</span>{{end}}
               </div>
+              <form class="publication-delete-form" method="post" action="/posts/{{.PrimaryPostID}}/delete" onsubmit="return confirm('{{t "calendar.delete_publication_confirm"}}');">
+                {{range .PostIDs}}<input type="hidden" name="ids" value="{{.}}" />{{end}}
+                <input type="hidden" name="return_to" value="{{$.CurrentViewURL}}" />
+                <button type="submit" class="publication-delete-btn" title="{{t "common.delete"}}" aria-label="{{t "common.delete"}}">&#10005;</button>
+              </form>
             </div>
           </div>
+          <div class="publication-text">{{previewMarkdown .Text}}</div>
         </article>
         {{else}}
         <div class="empty">{{t "publications.empty" .PublicationsWindowDays}}</div>
@@ -3126,26 +3490,52 @@
       {{end}}
 
 	      {{if eq .View "drafts"}}
-	      <section class="list">
-	        {{range .Drafts}}
-	        <article class="card draft card-editable" data-status="draft" data-edit-url="/?view=create&edit_id={{.ID}}&return_to={{urlquery $.CurrentViewURL}}">
-          <div class="card-left">
-            <div class="content">
-              <div class="text">{{previewMarkdown .Text}}</div>
-              <div class="meta">
-                <span class="meta-soft">{{t "drafts.no_date_assigned"}}</span>
-                <span>{{.Platform}}</span>
-                {{if threadLabel .}}<span class="thread-step-badge">{{threadLabel .}}</span>{{end}}
-                <span>{{t "common.media_count" (len .Media)}}</span>
+	      <section class="list publications-grid">
+	        {{range .DraftGroups}}
+	        <article class="card draft publication-card card-editable" data-status="draft" data-draft-group="{{.PostCount}}" data-draft-platform-count="{{len .Platforms}}" data-edit-url="{{.EditURL}}">
+          <div class="publication-card-head">
+            <div class="publication-head-right">
+              <div class="publication-meta-row">
+                {{range .Platforms}}
+                <span class="publication-platform-chip" title="{{.}}" aria-label="{{.}}">
+                  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    {{if eq . "x"}}
+                    <use href="#pf-brand-x"></use>
+                    {{else if eq . "linkedin"}}
+                    <use href="#pf-brand-linkedin"></use>
+                    {{else if eq . "facebook"}}
+                    <use href="#pf-brand-facebook"></use>
+                    {{else if eq . "instagram"}}
+                    <use href="#pf-brand-instagram"></use>
+                    {{else}}
+                    <use href="#pf-brand-default"></use>
+                    {{end}}
+                  </svg>
+                </span>
+                {{end}}
+                {{if .ThreadLabel}}<span class="thread-step-badge publication-thread-chip">{{.ThreadLabel}}</span>{{end}}
+                <span class="publication-media-chip" title="{{t "common.media_count" .MediaCount}}" aria-label="{{t "common.media_count" .MediaCount}}">
+                  <svg data-lucide="image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="m21 15-5-5L5 21"></path></svg>
+                  <span>{{.MediaCount}}</span>
+                </span>
+                {{if gt .PostCount 1}}<span class="publication-count-chip">x{{.PostCount}}</span>{{end}}
               </div>
+              <form class="publication-delete-form" method="post" action="/posts/{{.PrimaryPostID}}/delete" onsubmit="return confirm('{{t "calendar.delete_publication_confirm"}}');">
+                {{range .PostIDs}}<input type="hidden" name="ids" value="{{.}}" />{{end}}
+                <input type="hidden" name="return_to" value="{{$.CurrentViewURL}}" />
+                <button type="submit" class="publication-delete-btn" title="{{t "common.delete"}}" aria-label="{{t "common.delete"}}">&#10005;</button>
+              </form>
             </div>
           </div>
+          <div class="publication-text">{{previewMarkdown .Text}}</div>
+          {{if eq .PostCount 1}}
           <div class="card-actions">
-            <form method="post" action="/posts/{{.ID}}/schedule">
-              <input type="datetime-local" name="scheduled_at_local" required data-date-picker aria-label="{{t "drafts.schedule_for_draft" .ID}}" />
+            <form method="post" action="/posts/{{.PrimaryPostID}}/schedule">
+              <input type="datetime-local" name="scheduled_at_local" required data-date-picker aria-label="{{t "drafts.schedule_for_draft" .PrimaryPostID}}" />
               <button type="submit" class="btn-primary">{{t "common.schedule"}}</button>
             </form>
           </div>
+          {{end}}
         </article>
         {{else}}
         <div class="empty">{{t "drafts.empty"}}</div>
@@ -3154,7 +3544,7 @@
       {{end}}
 
 	      {{if eq .View "failed"}}
-	      <section class="list">
+	      <section class="list publications-grid">
 	        {{if .FailedError}}<div class="alert error">{{.FailedError}}</div>{{end}}
 	        {{if .FailedSuccess}}<div class="alert success">{{.FailedSuccess}}</div>{{end}}
         <div class="bulk-actions">
@@ -3167,29 +3557,56 @@
             <button type="submit" id="failed-delete-selected" class="btn-danger" disabled>{{t "failed.delete_selected"}}</button>
           </form>
         </div>
-        {{range .FailedItems}}
-        <article class="card failed card-editable" data-edit-url="/?view=create&edit_id={{.PostID}}&return_to={{urlquery $.CurrentViewURL}}">
-          <div class="card-left">
-            <div class="failed-select">
-              <input class="failed-checkbox" type="checkbox" value="{{.DeadLetterID}}" data-failed-checkbox aria-label="{{t "failed.select_publication" .PostID}}" />
+        {{range .FailedGroups}}
+        <article class="card failed publication-card card-editable" data-failed-group="{{.PostCount}}" data-failed-platform-count="{{len .Platforms}}" data-edit-url="{{.EditURL}}">
+          <div class="publication-card-head">
+            <div class="publication-time-with-select">
+              <span class="failed-select">
+                <input class="failed-checkbox" type="checkbox" value="{{.DeadLetterIDsCSV}}" data-failed-checkbox aria-label="{{t "failed.select_publication" .PrimaryPostID}}" />
+              </span>
+              <span class="publication-time">
+                <span class="publication-time-date">{{.ScheduledAtLabel}}</span>
+              </span>
             </div>
-            <div class="content">
-              <div class="text">{{previewMarkdown .Text}}</div>
-              <div class="meta">
-                <span class="meta-soft">{{.ScheduledAtLabel}}</span>
-                <span>{{.Platform}}</span>
-                <span>{{t "common.media_count" .MediaCount}}</span>
-                <span>{{t "failed.attempts" .Attempts .MaxAttempts}}</span>
-                <span>{{t "failed.failed_at" .FailedAtLabel}}</span>
-                <span>{{.LastError}}</span>
-              </div>
+            <div class="publication-meta-row">
+              {{range .Platforms}}
+              <span class="publication-platform-chip" title="{{.}}" aria-label="{{.}}">
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  {{if eq . "x"}}
+                  <use href="#pf-brand-x"></use>
+                  {{else if eq . "linkedin"}}
+                  <use href="#pf-brand-linkedin"></use>
+                  {{else if eq . "facebook"}}
+                  <use href="#pf-brand-facebook"></use>
+                  {{else if eq . "instagram"}}
+                  <use href="#pf-brand-instagram"></use>
+                  {{else}}
+                  <use href="#pf-brand-default"></use>
+                  {{end}}
+                </svg>
+              </span>
+              {{end}}
+              {{if .ThreadLabel}}<span class="thread-step-badge publication-thread-chip">{{.ThreadLabel}}</span>{{end}}
+              <span class="publication-media-chip" title="{{t "common.media_count" .MediaCount}}" aria-label="{{t "common.media_count" .MediaCount}}">
+                <svg data-lucide="image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="m21 15-5-5L5 21"></path></svg>
+                <span>{{.MediaCount}}</span>
+              </span>
+              {{if gt .PostCount 1}}<span class="publication-count-chip">x{{.PostCount}}</span>{{end}}
             </div>
           </div>
+          <div class="publication-text">{{previewMarkdown .Text}}</div>
+          <div class="meta">
+            <span>{{t "failed.attempts" .Attempts .MaxAttempts}}</span>
+            <span>{{t "failed.failed_at" .FailedAtLabel}}</span>
+            <span>{{.LastError}}</span>
+          </div>
           <div class="card-actions">
-            <form method="post" action="/dlq/{{.DeadLetterID}}/requeue">
+            <form method="post" action="/dlq/requeue">
+              {{range .DeadLetterIDs}}<input type="hidden" name="ids" value="{{.}}" />{{end}}
               <button type="submit" class="btn-secondary">{{t "failed.requeue"}}</button>
             </form>
-            <form method="post" action="/dlq/{{.DeadLetterID}}/delete" onsubmit="return confirm('{{t "failed.delete_confirm"}}');">
+            <form method="post" action="/dlq/delete" onsubmit="return confirm('{{t "failed.delete_confirm"}}');">
+              {{range .DeadLetterIDs}}<input type="hidden" name="ids" value="{{.}}" />{{end}}
               <button type="submit" class="btn-danger">{{t "common.delete"}}</button>
             </form>
           </div>
@@ -3220,12 +3637,12 @@
 	                  {{range .Accounts}}
 	                  <button
 	                    type="button"
-	                    class="network-chip {{if eq .ID $.CreateAccountID}}active{{end}}"
+	                    class="network-chip {{if accountSelected .ID}}active{{end}}"
 	                    data-network-chip
 	                    data-account-id="{{.ID}}"
 	                    data-platform="{{.Platform}}"
 	                    data-x-premium="{{if and (eq .Platform "x") .XPremium}}1{{else}}0{{end}}"
-	                    aria-pressed="{{if eq .ID $.CreateAccountID}}true{{else}}false{{end}}">
+	                    aria-pressed="{{if accountSelected .ID}}true{{else}}false{{end}}">
 	                    <span class="network-chip-icon" aria-hidden="true">
 	                      <svg viewBox="0 0 24 24" fill="currentColor">
 	                        {{if eq .Platform "x"}}
@@ -3254,7 +3671,7 @@
 	                </div>
 	                <select id="create-account-select" name="account_ids" multiple data-account-select class="is-hidden" aria-hidden="true" tabindex="-1">
 	                  {{range .Accounts}}
-	                  <option value="{{.ID}}" data-platform="{{.Platform}}" data-x-premium="{{if and (eq .Platform "x") .XPremium}}1{{else}}0{{end}}" {{if eq .ID $.CreateAccountID}}selected{{end}}>{{.DisplayName}} · {{.Platform}}</option>
+	                  <option value="{{.ID}}" data-platform="{{.Platform}}" data-x-premium="{{if and (eq .Platform "x") .XPremium}}1{{else}}0{{end}}" {{if accountSelected .ID}}selected{{end}}>{{.DisplayName}} · {{.Platform}}</option>
 	                  {{end}}
 	                </select>
 	                <input type="hidden" id="create-primary-account-id" name="account_id" value="{{.CreateAccountID}}" />
@@ -4241,9 +4658,31 @@
   const requeueSelectedText = {{toJSON (t "failed.requeue_selected")}};
   const deleteSelectedText = {{toJSON (t "failed.delete_selected")}};
   const deleteSelectedConfirm = {{toJSON (t "failed.delete_selected_confirm")}};
+  const parseDeadLetterIDs = (rawValue) => String(rawValue || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value) => value !== "");
+
+  const selectedDeadLetterIDs = () => {
+    const ids = [];
+    const seen = new Set();
+    checkboxes.forEach((cb) => {
+      if (!(cb instanceof HTMLInputElement) || !cb.checked) {
+        return;
+      }
+      parseDeadLetterIDs(cb.value).forEach((id) => {
+        if (seen.has(id)) {
+          return;
+        }
+        seen.add(id);
+        ids.push(id);
+      });
+    });
+    return ids;
+  };
 
   const updateBulkButtons = () => {
-    const count = checkboxes.filter((cb) => cb.checked).length;
+    const count = selectedDeadLetterIDs().length;
     if (requeueSubmit instanceof HTMLButtonElement) {
       requeueSubmit.disabled = count === 0;
       requeueSubmit.textContent = count > 0 ? requeueSelectedText + " (" + count + ")" : requeueSelectedText;
@@ -4271,7 +4710,7 @@
       return;
     }
     form.addEventListener("submit", (e) => {
-      const selected = checkboxes.filter((cb) => cb.checked).map((cb) => cb.value);
+      const selected = selectedDeadLetterIDs();
       if (selected.length === 0) {
         e.preventDefault();
         updateBulkButtons();
@@ -5719,3 +6158,16 @@
 </script>
 </body>
 </html>
+    .event-group-count {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 14px;
+      padding: 0 4px;
+      border-radius: 999px;
+      background: rgba(0, 0, 0, 0.22);
+      color: inherit;
+      font-size: 8px;
+      line-height: 1.4;
+      letter-spacing: 0.04em;
+    }

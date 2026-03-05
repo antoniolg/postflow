@@ -127,6 +127,8 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	threadLabelFor := func(post domain.Post) string {
 		return formatThreadLabel(post, threadTotals)
 	}
+	publicationGroups := groupPublicationsByContent(publicationsItems, threadLabelFor)
+	draftGroups := groupPublicationsByContent(drafts, threadLabelFor)
 	accounts, err := s.Store.ListAccounts(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
@@ -154,7 +156,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	}
 	nextRunLabel := uiMessage(uiLang, "stats.next_run.none")
 	if nextRun != nil {
-		nextRunLabel = nextRun.In(uiLoc).Format("2006-01-02 15:04 MST")
+		nextRunLabel = nextRun.In(uiLoc).Format("2006-01-02 15:04")
 	}
 	settingsAccounts := make([]settingsAccountItem, 0, len(accounts))
 	for _, account := range accounts {
@@ -199,53 +201,14 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	lastWeekday = (lastWeekday + 6) % 7
 	gridEnd := lastDayLocal.AddDate(0, 0, 6-lastWeekday)
 
-	eventsByDate := make(map[string][]calendarEvent)
-	detailsByDate := make(map[string][]dayDetailItem)
+	postsByDate := make(map[string][]domain.Post)
 	for _, item := range items {
 		if item.ScheduledAt.IsZero() {
 			continue
 		}
 		localTime := item.ScheduledAt.In(uiLoc)
 		key := localTime.Format("2006-01-02")
-		statusClass := "drft"
-		statusLabel := "DRFT"
-		statusKey := "draft"
-		switch item.Status {
-		case domain.PostStatusPublished:
-			statusClass = "live"
-			statusLabel = "LIVE"
-			statusKey = "published"
-		case domain.PostStatusScheduled:
-			statusClass = "schd"
-			statusLabel = "SCHD"
-			statusKey = "scheduled"
-		}
-		text := strings.TrimSpace(item.Text)
-		if len(text) > 56 {
-			text = text[:53] + "..."
-		}
-		eventsByDate[key] = append(eventsByDate[key], calendarEvent{
-			TimeLabel:   localTime.Format("15:04"),
-			StatusClass: statusClass,
-			StatusLabel: statusLabel,
-			StatusKey:   statusKey,
-			TextPreview: text,
-			ThreadLabel: threadLabelFor(item),
-			Platform:    item.Platform,
-		})
-		detailsByDate[key] = append(detailsByDate[key], dayDetailItem{
-			PostID:      item.ID,
-			Editable:    canEditPostStatus(item.Status),
-			Deletable:   canDeletePostStatus(item.Status),
-			TimeLabel:   localTime.Format("15:04"),
-			StatusClass: statusClass,
-			StatusLabel: statusLabel,
-			StatusKey:   statusKey,
-			Text:        strings.TrimSpace(item.Text),
-			ThreadLabel: threadLabelFor(item),
-			Platform:    item.Platform,
-			MediaCount:  len(item.Media),
-		})
+		postsByDate[key] = append(postsByDate[key], item)
 	}
 
 	selectedDayLocal := nowLocal
@@ -261,13 +224,15 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	var calendarDays []calendarDay
 	for d := gridStart; !d.After(gridEnd); d = d.AddDate(0, 0, 1) {
 		key := d.Format("2006-01-02")
-		dayEvents := eventsByDate[key]
+		dayPosts := postsByDate[key]
+		dayEvents := groupCalendarEventsByContent(dayPosts, threadLabelFor)
 		calendarDays = append(calendarDays, calendarDay{
 			DateKey:        key,
 			DayNumber:      d.Day(),
 			InCurrentMonth: d.Month() == monthStartLocal.Month(),
 			IsToday:        d.Year() == nowLocal.Year() && d.Month() == nowLocal.Month() && d.Day() == nowLocal.Day(),
 			IsSelected:     d.Year() == selectedDayLocal.Year() && d.Month() == selectedDayLocal.Month() && d.Day() == selectedDayLocal.Day(),
+			EventCount:     len(dayPosts),
 			Events:         dayEvents,
 		})
 	}
@@ -287,16 +252,20 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	currentMonthParam := monthStartLocal.Format("2006-01")
 	selectedDayKey := selectedDayLocal.Format("2006-01-02")
 	selectedDayLabel := localizedSelectedDayLabel(selectedDayLocal, uiLang)
-	selectedDayItems := detailsByDate[selectedDayKey]
-	selectedDayPendingItems := make([]dayDetailItem, 0, len(selectedDayItems))
-	selectedDayPublishedItems := make([]dayDetailItem, 0, len(selectedDayItems))
-	for _, item := range selectedDayItems {
-		if item.StatusKey == "published" {
-			selectedDayPublishedItems = append(selectedDayPublishedItems, item)
+	selectedDayPosts := postsByDate[selectedDayKey]
+	selectedDayPendingPosts := make([]domain.Post, 0, len(selectedDayPosts))
+	selectedDayPublishedPosts := make([]domain.Post, 0, len(selectedDayPosts))
+	for _, item := range selectedDayPosts {
+		if item.Status == domain.PostStatusPublished {
+			selectedDayPublishedPosts = append(selectedDayPublishedPosts, item)
 			continue
 		}
-		selectedDayPendingItems = append(selectedDayPendingItems, item)
+		selectedDayPendingPosts = append(selectedDayPendingPosts, item)
 	}
+	selectedDayPendingGroups := groupPublicationsByContent(selectedDayPendingPosts, threadLabelFor)
+	selectedDayPublishedGroups := groupPublicationsByContent(selectedDayPublishedPosts, threadLabelFor)
+	selectedDayPendingCount := len(selectedDayPendingPosts)
+	selectedDayPublishedCount := len(selectedDayPublishedPosts)
 	todayMonthParam := nowLocal.Format("2006-01")
 	todayDayKey := nowLocal.Format("2006-01-02")
 	currentViewURL := "/?view=calendar&month=" + currentMonthParam + "&day=" + selectedDayKey
@@ -320,6 +289,15 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	if view == "calendar" {
 		createViewURL += "&calendar_day=" + url.QueryEscape(selectedDayKey)
 	}
+	for i := range publicationGroups {
+		publicationGroups[i].EditURL = publicationGroupEditURL(publicationGroups[i], currentViewURL)
+	}
+	for i := range draftGroups {
+		draftGroups[i].EditURL = publicationGroupEditURL(draftGroups[i], currentViewURL)
+	}
+	for i := range selectedDayPendingGroups {
+		selectedDayPendingGroups[i].EditURL = publicationGroupEditURL(selectedDayPendingGroups[i], currentViewURL)
+	}
 	backURL := "/?view=calendar&month=" + currentMonthParam + "&day=" + selectedDayKey
 	if returnTo != "" {
 		backURL = returnTo
@@ -338,6 +316,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	failedItems := make([]failedQueueItem, 0, len(deadLetters))
+	failedEnvelopes := make([]failedPostEnvelope, 0, len(deadLetters))
 	for _, dead := range deadLetters {
 		post, err := s.Store.GetPost(r.Context(), dead.PostID)
 		if err != nil {
@@ -345,9 +324,9 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		}
 		scheduledAtLabel := uiMessage(uiLang, "common.no_date")
 		if !post.ScheduledAt.IsZero() {
-			scheduledAtLabel = post.ScheduledAt.In(uiLoc).Format("2006-01-02 15:04 MST")
+			scheduledAtLabel = post.ScheduledAt.In(uiLoc).Format("2006-01-02 15:04")
 		}
-		failedAtLabel := dead.AttemptedAt.In(uiLoc).Format("2006-01-02 15:04 MST")
+		failedAtLabel := dead.AttemptedAt.In(uiLoc).Format("2006-01-02 15:04")
 		failedItems = append(failedItems, failedQueueItem{
 			DeadLetterID:     dead.ID,
 			PostID:           post.ID,
@@ -360,6 +339,19 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 			FailedAtLabel:    failedAtLabel,
 			ScheduledAtLabel: scheduledAtLabel,
 		})
+		failedEnvelopes = append(failedEnvelopes, failedPostEnvelope{
+			Post:         post,
+			DeadLetterID: dead.ID,
+			FailedAt:     dead.AttemptedAt,
+			LastError:    dead.LastError,
+		})
+	}
+	failedGroups := groupFailedPosts(failedEnvelopes, threadLabelFor, uiLoc, uiMessage(uiLang, "common.no_date"))
+	for i := range failedGroups {
+		failedGroups[i].EditURL = publicationGroupEditURL(publicationGroupItem{
+			PrimaryPostID: failedGroups[i].PrimaryPostID,
+			AccountIDs:    append([]string(nil), failedGroups[i].AccountIDs...),
+		}, currentViewURL)
 	}
 	mediaLibrary, err := s.listMediaItems(r.Context(), 200, uiLoc)
 	if err != nil {
@@ -385,6 +377,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	var createText string
 	var createScheduledLocal string
 	var createAccountID string
+	createAccountIDs := make([]string, 0, 2)
 	if editID != "" {
 		p, err := s.Store.GetPost(r.Context(), editID)
 		if err == nil {
@@ -447,8 +440,21 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	if qAccount := strings.TrimSpace(r.URL.Query().Get("account_id")); qAccount != "" {
 		createAccountID = qAccount
 	}
+	if qAccountIDs := normalizeAccountIDListCSV(r.URL.Query().Get("account_ids")); len(qAccountIDs) > 0 {
+		createAccountIDs = qAccountIDs
+	}
+	if createAccountID != "" {
+		createAccountIDs = prependAccountID(createAccountIDs, createAccountID)
+	}
+	createAccountIDs = filterAccountIDsByConnectedAccounts(createAccountIDs, connectedAccounts)
+	if len(createAccountIDs) > 0 {
+		createAccountID = createAccountIDs[0]
+	}
 	if createAccountID == "" && len(connectedAccounts) > 0 {
 		createAccountID = connectedAccounts[0].ID
+	}
+	if len(createAccountIDs) == 0 && createAccountID != "" {
+		createAccountIDs = []string{createAccountID}
 	}
 	if view == "create" && len(connectedAccounts) == 0 && createError == "" {
 		createError = uiMessage(uiLang, "create.no_connected_accounts")
@@ -475,6 +481,10 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	mcpURL, mcpAuthHint, mcpConfigJSON, mcpClaudeCommand, mcpCodexCommand, mcpCodexConfigTOML := s.mcpSettingsInfo(r)
 	appVersion := s.appVersion()
 	tpl := scheduleHTMLTemplate
+	selectedCreateAccountIDs := make(map[string]struct{}, len(createAccountIDs))
+	for _, id := range createAccountIDs {
+		selectedCreateAccountIDs[strings.TrimSpace(id)] = struct{}{}
+	}
 	t, err := template.New("schedule").Funcs(template.FuncMap{
 		"previewMarkdown": func(raw string) template.HTML {
 			return template.HTML(textfmt.MarkdownToPreviewHTML(raw))
@@ -484,6 +494,10 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		},
 		"threadLabel": func(post domain.Post) string {
 			return threadLabelFor(post)
+		},
+		"accountSelected": func(accountID string) bool {
+			_, ok := selectedCreateAccountIDs[strings.TrimSpace(accountID)]
+			return ok
 		},
 		"toJSON": func(v any) template.JS {
 			raw, err := json.Marshal(v)
@@ -499,70 +513,78 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_ = t.Execute(w, pageData{
-		Lang:                      uiLang,
-		View:                      view,
-		ActiveNavView:             activeNavView,
-		UITimezone:                uiTimezone,
-		TimezoneConfigured:        timezoneConfigured,
-		AppVersion:                appVersion,
-		MCPURL:                    mcpURL,
-		MCPAuthHint:               mcpAuthHint,
-		MCPConfigJSON:             mcpConfigJSON,
-		MCPClaudeCommand:          mcpClaudeCommand,
-		MCPCodexCommand:           mcpCodexCommand,
-		MCPCodexConfigTOML:        mcpCodexConfigTOML,
-		Items:                     items,
-		Publications:              publicationsItems,
-		Drafts:                    drafts,
-		FailedItems:               failedItems,
-		CurrentViewURL:            currentViewURL,
-		CreateViewURL:             createViewURL,
-		ReturnTo:                  returnTo,
-		BackURL:                   backURL,
-		Accounts:                  connectedAccounts,
-		EditingPost:               editingPost,
-		CreateInitialMedia:        createInitialMedia,
-		CreateInitialSegments:     createInitialSegments,
-		CreateAccountID:           createAccountID,
-		CreateText:                createText,
-		CreateScheduledLocal:      createScheduledLocal,
-		CreateError:               createError,
-		CreateSuccess:             createSuccess,
-		FailedError:               failedError,
-		FailedSuccess:             failedSuccess,
-		SettingsError:             settingsError,
-		SettingsSuccess:           settingsSuccess,
-		AccountsError:             accountsError,
-		AccountsSuccess:           accountsSuccess,
-		MediaError:                mediaError,
-		MediaSuccess:              mediaSuccess,
-		TotalAccountCount:         len(accounts),
-		ConnectedAccountCount:     len(connectedAccounts),
-		ScheduledCount:            scheduledCount,
-		PublicationsWindowDays:    publicationsWindowDays,
-		DraftCount:                len(drafts),
-		FailedCount:               failedCount,
-		SettingsAccounts:          settingsAccounts,
-		MediaLibrary:              mediaLibrary,
-		CreateRecentMedia:         createRecentMedia,
-		MediaInUseCount:           mediaInUseCount,
-		MediaTotalSizeLabel:       mediaTotalSizeLabel,
-		NextRunLabel:              nextRunLabel,
-		CalendarMonthLabel:        calendarMonthLabel,
-		WeekdayLabels:             weekdayLabels,
-		CalendarWeeks:             calendarWeeks,
-		PrevMonthParam:            prevMonthParam,
-		NextMonthParam:            nextMonthParam,
-		CurrentMonthParam:         currentMonthParam,
-		TodayMonthParam:           todayMonthParam,
-		TodayDayKey:               todayDayKey,
-		SelectedDayKey:            selectedDayKey,
-		SelectedDayLabel:          selectedDayLabel,
-		SelectedDayItems:          selectedDayItems,
-		SelectedDayPendingItems:   selectedDayPendingItems,
-		SelectedDayPublishedItems: selectedDayPublishedItems,
-		DatePickerMonthNames:      datePickerMonthNames,
-		DatePickerWeekdayNames:    datePickerWeekdayNames,
+		Lang:                       uiLang,
+		View:                       view,
+		ActiveNavView:              activeNavView,
+		UITimezone:                 uiTimezone,
+		TimezoneConfigured:         timezoneConfigured,
+		AppVersion:                 appVersion,
+		MCPURL:                     mcpURL,
+		MCPAuthHint:                mcpAuthHint,
+		MCPConfigJSON:              mcpConfigJSON,
+		MCPClaudeCommand:           mcpClaudeCommand,
+		MCPCodexCommand:            mcpCodexCommand,
+		MCPCodexConfigTOML:         mcpCodexConfigTOML,
+		Items:                      items,
+		Publications:               publicationsItems,
+		PublicationGroups:          publicationGroups,
+		Drafts:                     drafts,
+		DraftGroups:                draftGroups,
+		FailedItems:                failedItems,
+		FailedGroups:               failedGroups,
+		CurrentViewURL:             currentViewURL,
+		CreateViewURL:              createViewURL,
+		ReturnTo:                   returnTo,
+		BackURL:                    backURL,
+		Accounts:                   connectedAccounts,
+		EditingPost:                editingPost,
+		CreateInitialMedia:         createInitialMedia,
+		CreateInitialSegments:      createInitialSegments,
+		CreateAccountID:            createAccountID,
+		CreateAccountIDs:           createAccountIDs,
+		CreateText:                 createText,
+		CreateScheduledLocal:       createScheduledLocal,
+		CreateError:                createError,
+		CreateSuccess:              createSuccess,
+		FailedError:                failedError,
+		FailedSuccess:              failedSuccess,
+		SettingsError:              settingsError,
+		SettingsSuccess:            settingsSuccess,
+		AccountsError:              accountsError,
+		AccountsSuccess:            accountsSuccess,
+		MediaError:                 mediaError,
+		MediaSuccess:               mediaSuccess,
+		TotalAccountCount:          len(accounts),
+		ConnectedAccountCount:      len(connectedAccounts),
+		ScheduledCount:             scheduledCount,
+		PublicationsWindowDays:     publicationsWindowDays,
+		DraftCount:                 len(drafts),
+		FailedCount:                failedCount,
+		SettingsAccounts:           settingsAccounts,
+		MediaLibrary:               mediaLibrary,
+		CreateRecentMedia:          createRecentMedia,
+		MediaInUseCount:            mediaInUseCount,
+		MediaTotalSizeLabel:        mediaTotalSizeLabel,
+		NextRunLabel:               nextRunLabel,
+		CalendarMonthLabel:         calendarMonthLabel,
+		WeekdayLabels:              weekdayLabels,
+		CalendarWeeks:              calendarWeeks,
+		PrevMonthParam:             prevMonthParam,
+		NextMonthParam:             nextMonthParam,
+		CurrentMonthParam:          currentMonthParam,
+		TodayMonthParam:            todayMonthParam,
+		TodayDayKey:                todayDayKey,
+		SelectedDayKey:             selectedDayKey,
+		SelectedDayLabel:           selectedDayLabel,
+		SelectedDayItems:           nil,
+		SelectedDayPendingItems:    nil,
+		SelectedDayPublishedItems:  nil,
+		SelectedDayPendingGroups:   selectedDayPendingGroups,
+		SelectedDayPublishedGroups: selectedDayPublishedGroups,
+		SelectedDayPendingCount:    selectedDayPendingCount,
+		SelectedDayPublishedCount:  selectedDayPublishedCount,
+		DatePickerMonthNames:       datePickerMonthNames,
+		DatePickerWeekdayNames:     datePickerWeekdayNames,
 	})
 }
 
@@ -613,6 +635,87 @@ func formatThreadLabel(post domain.Post, totals map[string]int) string {
 		total = position
 	}
 	return fmt.Sprintf("#%d/%d", position, total)
+}
+
+func normalizeAccountIDListCSV(raw string) []string {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	seen := make(map[string]struct{}, len(parts))
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		id := strings.TrimSpace(part)
+		if id == "" {
+			continue
+		}
+		if _, exists := seen[id]; exists {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	return out
+}
+
+func prependAccountID(ids []string, head string) []string {
+	head = strings.TrimSpace(head)
+	if head == "" {
+		return ids
+	}
+	out := make([]string, 0, len(ids)+1)
+	out = append(out, head)
+	for _, id := range ids {
+		id = strings.TrimSpace(id)
+		if id == "" || id == head {
+			continue
+		}
+		out = append(out, id)
+	}
+	return out
+}
+
+func filterAccountIDsByConnectedAccounts(ids []string, accounts []domain.SocialAccount) []string {
+	if len(ids) == 0 || len(accounts) == 0 {
+		return nil
+	}
+	allowed := make(map[string]struct{}, len(accounts))
+	for _, account := range accounts {
+		id := strings.TrimSpace(account.ID)
+		if id == "" {
+			continue
+		}
+		allowed[id] = struct{}{}
+	}
+	out := make([]string, 0, len(ids))
+	seen := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		if _, exists := allowed[id]; !exists {
+			continue
+		}
+		if _, exists := seen[id]; exists {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	return out
+}
+
+func publicationGroupEditURL(group publicationGroupItem, currentViewURL string) string {
+	values := url.Values{}
+	values.Set("view", "create")
+	values.Set("edit_id", strings.TrimSpace(group.PrimaryPostID))
+	values.Set("return_to", currentViewURL)
+	if len(group.AccountIDs) > 0 {
+		values.Set("account_id", group.AccountIDs[0])
+		values.Set("account_ids", strings.Join(group.AccountIDs, ","))
+	}
+	return "/?" + values.Encode()
 }
 
 func defaultCalendarCreateScheduledLocal(selectedDayLocal, nowLocal time.Time) string {

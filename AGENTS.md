@@ -134,6 +134,7 @@ Documentation language in this repo is **English**.
 - Keep `.env` local only.
 - Respect existing backup/restore scripts in `scripts/`.
 - Prefer small, reviewable commits with Conventional Commit messages.
+- For local development server runs, start from repo root with `air` (hot reload). Avoid using `go run ./cmd/postflow-server` as the default workflow.
 
 ## 9) Change Checklist (copy/paste)
 

@@ -1,0 +1,85 @@
+package api
+
+import (
+	"strings"
+
+	"github.com/antoniolg/postflow/internal/domain"
+)
+
+type calendarEventGroupState struct {
+	event       calendarEvent
+	platformSet map[domain.Platform]struct{}
+}
+
+func groupCalendarEventsByContent(posts []domain.Post, threadLabelFor func(domain.Post) string) []calendarEvent {
+	if len(posts) == 0 {
+		return nil
+	}
+
+	indexByKey := make(map[string]int, len(posts))
+	states := make([]calendarEventGroupState, 0, len(posts))
+
+	for _, post := range posts {
+		if post.ScheduledAt.IsZero() {
+			continue
+		}
+		statusClass, statusLabel, statusKey := calendarStatusMeta(post.Status)
+		threadLabel := strings.TrimSpace(threadLabelFor(post))
+		groupKey := statusKey + "|" + publicationGroupKey(post, threadLabel)
+		idx, ok := indexByKey[groupKey]
+		if !ok {
+			idx = len(states)
+			indexByKey[groupKey] = idx
+			preview := strings.TrimSpace(post.Text)
+			if len(preview) > 56 {
+				preview = preview[:53] + "..."
+			}
+			states = append(states, calendarEventGroupState{
+				event: calendarEvent{
+					TimeLabel:     post.ScheduledAt.Format("15:04"),
+					StatusClass:   statusClass,
+					StatusLabel:   statusLabel,
+					StatusKey:     statusKey,
+					TextPreview:   preview,
+					ThreadLabel:   threadLabel,
+					Platform:      post.Platform,
+					Platforms:     make([]domain.Platform, 0, 2),
+					PostCount:     0,
+					MultiPlatform: false,
+				},
+				platformSet: make(map[domain.Platform]struct{}, 2),
+			})
+		}
+
+		state := &states[idx]
+		state.event.PostCount++
+		if _, exists := state.platformSet[post.Platform]; !exists {
+			state.platformSet[post.Platform] = struct{}{}
+			state.event.Platforms = append(state.event.Platforms, post.Platform)
+		}
+	}
+
+	out := make([]calendarEvent, 0, len(states))
+	for _, state := range states {
+		state.event.MultiPlatform = len(state.event.Platforms) > 1
+		out = append(out, state.event)
+	}
+	return out
+}
+
+func calendarStatusMeta(status domain.PostStatus) (statusClass string, statusLabel string, statusKey string) {
+	statusClass = "drft"
+	statusLabel = "DRFT"
+	statusKey = "draft"
+	switch status {
+	case domain.PostStatusPublished:
+		statusClass = "live"
+		statusLabel = "LIVE"
+		statusKey = "published"
+	case domain.PostStatusScheduled:
+		statusClass = "schd"
+		statusLabel = "SCHD"
+		statusKey = "scheduled"
+	}
+	return statusClass, statusLabel, statusKey
+}
