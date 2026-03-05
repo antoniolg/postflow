@@ -74,6 +74,10 @@ func (s Server) authMiddleware(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
+		if isPublicAssetPath(r.URL.Path) {
+			next.ServeHTTP(w, r)
+			return
+		}
 		if isOAuthCallbackPath(r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return
@@ -95,6 +99,11 @@ func (s Server) authMiddleware(next http.Handler) http.Handler {
 		}
 		writeError(w, http.StatusUnauthorized, fmt.Errorf("unauthorized"))
 	})
+}
+
+func isPublicAssetPath(path string) bool {
+	trimmed := strings.TrimSpace(path)
+	return strings.HasPrefix(trimmed, "/assets/")
 }
 
 func (s Server) rateLimitMiddleware(next http.Handler) http.Handler {

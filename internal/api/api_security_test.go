@@ -158,3 +158,29 @@ func TestAuthMiddlewareAllowsSignedMediaContentURL(t *testing.T) {
 		t.Fatalf("expected 200 with signed media url, got %d", w.Code)
 	}
 }
+
+func TestAuthMiddlewareAllowsPublicAssetsWithoutCredentials(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{
+		Store:             store,
+		DataDir:           tempDir,
+		DefaultMaxRetries: 3,
+		APIToken:          "secret-token",
+		UIBasicUser:       "antonio",
+		UIBasicPass:       "pass123",
+	}
+	h := srv.Handler()
+
+	req := httptest.NewRequest(http.MethodGet, "/assets/icons/site.webmanifest", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for public asset without credentials, got %d", w.Code)
+	}
+}
