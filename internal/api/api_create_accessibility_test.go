@@ -134,6 +134,9 @@ func TestAccessibilityMarkupAddsLabelsAndLandmarks(t *testing.T) {
 	if !strings.Contains(createBody, `for="date-picker-hour">' + pickerHour + '</label>`) || !strings.Contains(createBody, `for="date-picker-minute">' + pickerMinute + '</label>`) {
 		t.Fatalf("expected date picker selects to expose associated labels")
 	}
+	if !strings.Contains(createBody, ".composer-text-wrap textarea,") || !strings.Contains(createBody, ".date-picker-time select {") || !strings.Contains(createBody, "font-size: 16px;") {
+		t.Fatalf("expected mobile form controls to force 16px font size to avoid iOS focus zoom")
+	}
 
 	settingsReq := httptest.NewRequest(http.MethodGet, "/?view=settings", nil)
 	settingsW := httptest.NewRecorder()
