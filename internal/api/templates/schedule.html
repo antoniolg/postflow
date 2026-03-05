@@ -1802,7 +1802,6 @@
       gap: 8px;
     }
     .create-field-content .composer-text-wrap,
-    .create-field-media .media-block,
     .create-field-schedule .schedule-block {
       background: var(--bg-card, #212121);
       border-radius: 12px;
@@ -1902,34 +1901,6 @@
       border-color: var(--accent-orange);
       box-shadow: 0 0 0 2px rgba(255, 107, 53, 0.18);
     }
-    .thread-step-media-wrap {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-    .thread-step-media-label {
-      font-size: 10px;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      color: #9f9f9f;
-    }
-    .thread-step-media-select {
-      width: 100%;
-      min-height: 76px;
-      border-radius: 9px;
-      border: 1px solid #363636;
-      background: #1f1f1f;
-      color: #d9d9d9;
-      padding: 8px;
-      font-size: 12px;
-      line-height: 1.3;
-    }
-    .thread-step-media-select:focus,
-    .thread-step-media-select:focus-visible {
-      outline: none;
-      border-color: var(--accent-orange);
-      box-shadow: 0 0 0 2px rgba(255, 107, 53, 0.18);
-    }
     .thread-step-empty {
       border: 1px dashed #353535;
       border-radius: 10px;
@@ -1938,6 +1909,205 @@
       font-size: 12px;
       text-align: center;
       padding: 12px;
+    }
+    .create-field-content .composer-text-wrap,
+    .create-field-thread .thread-steps-block {
+      background: var(--bg-card, #212121);
+      border: 1px solid #303030;
+      border-radius: 12px;
+      box-shadow: none;
+    }
+    .create-field-content .composer-text-wrap {
+      gap: 14px;
+      padding: 18px;
+      min-height: 0;
+    }
+    .create-field-thread .thread-steps-block {
+      padding: 18px;
+      gap: 16px;
+    }
+    .thread-builder-copy {
+      margin: 0;
+      max-width: 620px;
+      font-size: 12px;
+      line-height: 1.45;
+      color: #909090;
+    }
+    .thread-step-card {
+      position: relative;
+      border: 1px solid #323232;
+      border-radius: 12px;
+      background: #252525;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      overflow: hidden;
+    }
+    .thread-step-card::before {
+      content: none;
+    }
+    .thread-step-card-head {
+      align-items: flex-start;
+      gap: 12px;
+    }
+    .thread-step-heading {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .thread-step-title {
+      font-size: 12px;
+      color: #f1f1f1;
+      letter-spacing: 0.08em;
+    }
+    .thread-step-kind {
+      display: inline-flex;
+      align-items: center;
+      align-self: flex-start;
+      min-height: 24px;
+      padding: 0 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 122, 0, 0.28);
+      background: rgba(255, 122, 0, 0.12);
+      color: #ffc49e;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .thread-step-root-tag {
+      border-color: rgba(0, 212, 170, 0.28);
+      background: rgba(0, 212, 170, 0.12);
+      color: #9ff7e7;
+    }
+    #create-text,
+    .thread-step-text {
+      width: 100%;
+      min-height: 120px;
+      resize: vertical;
+      border-radius: 12px;
+      border: 1px solid #363636;
+      background: #1f1f1f;
+      color: #ffffff;
+      padding: 14px 16px;
+      box-sizing: border-box;
+      box-shadow: none;
+    }
+    #create-text {
+      min-height: clamp(220px, 30vh, 360px);
+    }
+    .composer-text-meta {
+      border-top: 1px solid #313131;
+      padding-top: 12px;
+    }
+    .thread-step-media-panel {
+      border-top: 1px solid #313131;
+      padding-top: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .thread-step-media-toolbar {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .thread-step-media-copy {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .thread-step-media-title {
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #9b9b9b;
+    }
+    .thread-step-media-summary {
+      font-size: 12px;
+      color: #d5d5d5;
+      line-height: 1.35;
+    }
+    .thread-step-media-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .thread-step-media-actions .btn-secondary {
+      min-height: 34px;
+      border-radius: 999px;
+      padding: 0 12px;
+    }
+    .thread-step-media-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
+      gap: 10px;
+    }
+    .thread-step-media-list[hidden],
+    .thread-step-media-browser[hidden],
+    .thread-step-media-empty[hidden] {
+      display: none;
+    }
+    .thread-step-media-list .media-item {
+      aspect-ratio: 4 / 3;
+      border-radius: 12px;
+    }
+    .thread-step-media-empty {
+      border: 1px dashed #393939;
+      border-radius: 12px;
+      background: #212121;
+      color: #8f8f8f;
+      font-size: 12px;
+      padding: 14px;
+      text-align: center;
+    }
+    .thread-step-media-browser {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .thread-step-media-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(126px, 1fr));
+      gap: 10px;
+      max-height: 280px;
+      overflow: auto;
+      padding-right: 2px;
+    }
+    .create-media-card.selected {
+      border-color: rgba(0, 212, 170, 0.55);
+      box-shadow: inset 0 0 0 1px rgba(0, 212, 170, 0.22);
+    }
+    .create-media-card-footer {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 1;
+      padding: 16px 10px 9px;
+      background: linear-gradient(180deg, rgba(8, 8, 8, 0) 0%, rgba(8, 8, 8, 0.9) 74%);
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      pointer-events: none;
+    }
+    .create-media-card-name {
+      font-size: 11px;
+      color: #f2f2f2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .create-media-card-meta {
+      font-size: 9px;
+      color: #b5b5b5;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
     }
     .schedule-label {
       font-size: 11px;
@@ -2229,6 +2399,10 @@
     .create-media-card.attached {
       border-color: rgba(0, 212, 170, 0.55);
       box-shadow: inset 0 0 0 1px rgba(0, 212, 170, 0.25);
+    }
+    .create-media-card:focus-visible {
+      outline: 2px solid var(--accent-orange);
+      outline-offset: 2px;
     }
     .create-media-card .media-library-thumb {
       width: 100%;
@@ -3132,8 +3306,7 @@
         padding: 0 8px;
       }
       .create-field-content .composer-text-wrap,
-      .create-field-thread .thread-steps-block,
-      .create-field-media .media-block {
+      .create-field-thread .thread-steps-block {
         padding: 14px;
       }
       .field textarea,
@@ -3141,7 +3314,6 @@
       .field select,
       .composer-text-wrap textarea,
       .thread-step-text,
-      .thread-step-media-select,
       .date-picker-time select {
         font-size: 16px;
       }
@@ -3735,14 +3907,66 @@
 	              </div>
 
               <div class="field create-field create-field-content">
-                <div class="composer-text-wrap">
+                <div class="composer-text-wrap thread-step-card thread-step-card-root">
+                  <div class="thread-step-card-head">
+                    <div class="thread-step-heading">
+                      <span class="thread-step-title">{{t "create.root_step_title"}}</span>
+                      <span class="thread-step-kind thread-step-root-tag">{{t "create.root_step"}}</span>
+                    </div>
+                  </div>
 	                  <div class="composer-label">// {{t "create.post_content"}}</div>
 	                  <textarea id="create-text" name="text" required placeholder="{{t "create.placeholder"}}">{{.CreateText}}</textarea>
 	                  <div class="composer-text-meta">
 	                    <div id="create-char-count" class="char-count-list" role="status" aria-live="polite" aria-atomic="true"><span class="char-count-line">{{t "create.char_count_initial"}}</span></div>
 	                    <span class="composer-format-btns">**bold** *italic*</span>
 	                  </div>
-	                </div>
+                  <div class="thread-step-media-panel">
+                    <div class="thread-step-media-toolbar">
+                      <div class="thread-step-media-copy">
+                        <span class="thread-step-media-title">// {{t "create.media_attachment_max" 4}}</span>
+                        <span class="thread-step-media-summary" id="create-root-media-summary"></span>
+                      </div>
+                      <div class="thread-step-media-actions">
+                        <button type="button" class="btn-secondary" id="create-root-upload-button">{{t "create.add_media"}}</button>
+                        <button type="button" class="btn-secondary" id="create-root-library-toggle" aria-controls="create-root-media-browser" aria-expanded="false">{{t "create.step_library_open"}}</button>
+                      </div>
+                    </div>
+                    <div class="media-list thread-step-media-list" id="create-media-list"></div>
+                    <div class="thread-step-media-empty" id="create-root-media-empty">{{t "create.step_media_empty"}}</div>
+                    <div class="thread-step-media-browser" id="create-root-media-browser" hidden>
+	                    <div class="media-upload-dropzone" id="create-media-dropzone" role="button" tabindex="0" aria-label="{{t "create.add_media"}}">
+	                      <input id="create-media-input" type="file" accept="image/*,video/*" multiple hidden />
+	                      <span class="media-upload-title">{{t "create.drop_media_here"}}</span>
+	                    </div>
+	                    <div class="media-library-wrap">
+	                      <div class="composer-label">// {{t "create.recent_library"}}</div>
+                      <div class="media-library create-media-library-grid" id="create-media-library">
+                        {{range .CreateRecentMedia}}
+                        <article class="create-media-card {{if .InUse}}in-use{{end}}" data-media-library-item data-media-id="{{.ID}}" data-media-name="{{.OriginalName}}" data-media-size="{{.SizeBytes}}" data-media-mime="{{.MimeType}}" data-media-preview="{{.PreviewURL}}" role="button" tabindex="0" aria-pressed="false" aria-label="{{.OriginalName}}">
+                          <div class="media-library-thumb">
+                            {{if .IsImage}}<img src="{{.PreviewURL}}" alt="{{.OriginalName}}" loading="lazy" />{{else if .IsVideo}}<video src="{{.PreviewURL}}" muted preload="metadata" playsinline></video><span class="settings-media-video-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="8 6 19 12 8 18"/></svg></span>{{else}}<span class="settings-media-file-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg></span>{{end}}
+                          </div>
+                          <div class="create-media-overlay-actions">
+	                            <button type="button" class="btn-secondary settings-account-icon-btn create-media-icon-btn" data-media-open="{{.ID}}" aria-label="{{t "settings.open_media"}}" title="{{t "settings.open_media"}}">
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>
+                            </button>
+                            {{if .InUse}}
+	                            <span class="pill media-pill-used">{{t "common.used_count" .UsageCount}}</span>
+                            {{end}}
+                          </div>
+                          <div class="create-media-card-footer">
+                            <span class="create-media-card-name">{{.OriginalName}}</span>
+                            <span class="create-media-card-meta">{{if .IsVideo}}video{{else if .IsImage}}image{{else}}file{{end}}</span>
+                          </div>
+                        </article>
+                        {{else}}
+	                        <div class="empty">{{t "create.no_media_uploaded"}}</div>
+                        {{end}}
+                      </div>
+                    </div>
+                  </div>
+                  <span class="upload-notice" id="create-upload-notice"></span>
+                </div>
               </div>
 
               <div class="field create-field create-field-thread">
@@ -3751,6 +3975,7 @@
                     <div class="composer-label">// {{t "create.thread_steps"}}</div>
                     <button type="button" class="btn-secondary" id="create-add-thread-step">{{t "create.add_step"}}</button>
                   </div>
+                  <p class="thread-builder-copy">{{t "create.thread_builder_hint"}}</p>
                   <div class="thread-steps-list" id="create-thread-steps-list"></div>
                 </div>
               </div>
@@ -3759,40 +3984,6 @@
                 <div class="schedule-block">
 	                  <label class="schedule-label" for="create-scheduled-at">{{t "create.scheduled_at" .UITimezone}}</label>
                   <input id="create-scheduled-at" type="datetime-local" name="scheduled_at_local" data-date-picker value="{{.CreateScheduledLocal}}" />
-                </div>
-              </div>
-
-              <div class="field create-field create-field-media">
-	                <div class="composer-label">// {{t "create.media_attachment_max" 4}}</div>
-	                <div class="media-block">
-	                  <div class="media-upload-dropzone" id="create-media-dropzone" role="button" tabindex="0" aria-label="{{t "create.add_media"}}">
-	                    <input id="create-media-input" type="file" accept="image/*,video/*" multiple hidden />
-	                    <span class="media-upload-title">{{t "create.drop_media_here"}}</span>
-	                    <span class="upload-notice" id="create-upload-notice"></span>
-	                  </div>
-	                  <div class="media-list" id="create-media-list"></div>
-	                  <div class="media-library-wrap">
-	                    <div class="composer-label">// {{t "create.recent_library"}}</div>
-                    <div class="media-library create-media-library-grid" id="create-media-library">
-                      {{range .CreateRecentMedia}}
-                      <article class="create-media-card {{if .InUse}}in-use{{end}}" data-media-library-item data-media-id="{{.ID}}" data-media-name="{{.OriginalName}}" data-media-size="{{.SizeBytes}}" data-media-mime="{{.MimeType}}" data-media-preview="{{.PreviewURL}}">
-                        <div class="media-library-thumb">
-                          {{if .IsImage}}<img src="{{.PreviewURL}}" alt="{{.OriginalName}}" loading="lazy" />{{else if .IsVideo}}<video src="{{.PreviewURL}}" muted preload="metadata" playsinline></video><span class="settings-media-video-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="8 6 19 12 8 18"/></svg></span>{{else}}<span class="settings-media-file-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg></span>{{end}}
-                        </div>
-                        <div class="create-media-overlay-actions">
-	                          <button type="button" class="btn-secondary settings-account-icon-btn create-media-icon-btn" data-media-open="{{.ID}}" aria-label="{{t "settings.open_media"}}" title="{{t "settings.open_media"}}">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>
-                          </button>
-                          {{if .InUse}}
-	                          <span class="pill media-pill-used">{{t "common.used_count" .UsageCount}}</span>
-                          {{end}}
-                        </div>
-                      </article>
-                      {{else}}
-	                      <div class="empty">{{t "create.no_media_uploaded"}}</div>
-                      {{end}}
-                    </div>
-                  </div>
                 </div>
               </div>
 
@@ -4823,6 +5014,11 @@
   const mediaDropzone = document.getElementById("create-media-dropzone");
   const mediaList = document.getElementById("create-media-list");
   const mediaLibrary = document.getElementById("create-media-library");
+  const rootMediaSummary = document.getElementById("create-root-media-summary");
+  const rootMediaEmpty = document.getElementById("create-root-media-empty");
+  const rootMediaBrowser = document.getElementById("create-root-media-browser");
+  const rootUploadButton = document.getElementById("create-root-upload-button");
+  const rootLibraryToggle = document.getElementById("create-root-library-toggle");
   const mediaHidden = document.getElementById("create-media-hidden");
   const uploadNotice = document.getElementById("create-upload-notice");
   const previewMedia = document.getElementById("preview-media");
@@ -4838,6 +5034,11 @@
       !(mediaInput instanceof HTMLInputElement) ||
       !(mediaDropzone instanceof HTMLElement) ||
       !(mediaList instanceof HTMLElement) ||
+      !(rootMediaSummary instanceof HTMLElement) ||
+      !(rootMediaEmpty instanceof HTMLElement) ||
+      !(rootMediaBrowser instanceof HTMLElement) ||
+      !(rootUploadButton instanceof HTMLButtonElement) ||
+      !(rootLibraryToggle instanceof HTMLButtonElement) ||
       !(mediaHidden instanceof HTMLElement) ||
       !(uploadNotice instanceof HTMLElement) ||
       !(previewMedia instanceof HTMLElement) ||
@@ -4862,6 +5063,24 @@
   const maxMedia = 4;
   let uploadInFlight = 0;
   const attachments = [];
+  const initialKnownMedia = [];
+  const normalizeMediaRecord = (raw) => {
+    if (!raw || typeof raw !== "object") {
+      return null;
+    }
+    const id = String(raw.id || "").trim();
+    if (id === "") {
+      return null;
+    }
+    const size = Number(raw.size ?? raw.size_bytes ?? 0);
+    return {
+      id,
+      name: String(raw.name || raw.original_name || "file"),
+      size: Number.isFinite(size) ? size : 0,
+      mime: String(raw.mime || raw.mime_type || ""),
+      previewUrl: String(raw.previewUrl || raw.preview_url || "").trim()
+    };
+  };
   const initialSegmentsRaw = {{toJSON .CreateInitialSegments}};
   const initialSegments = Array.isArray(initialSegmentsRaw) ? initialSegmentsRaw : [];
   if (initialSegments.length > 0) {
@@ -4878,21 +5097,12 @@
   }
   if (Array.isArray(initialAttachments)) {
     initialAttachments.forEach((raw) => {
-      if (!raw || typeof raw !== "object") {
+      const item = normalizeMediaRecord(raw);
+      if (!item || attachments.some((candidate) => candidate.id === item.id)) {
         return;
       }
-      const id = String(raw.id || "").trim();
-      if (id === "" || attachments.some((item) => item.id === id)) {
-        return;
-      }
-      const size = Number(raw.size || 0);
-      attachments.push({
-        id,
-        name: String(raw.name || "file"),
-        size: Number.isFinite(size) ? size : 0,
-        mime: String(raw.mime || ""),
-        previewUrl: String(raw.previewUrl || "").trim()
-      });
+      attachments.push(item);
+      initialKnownMedia.push(item);
     });
   }
   const followupSteps = [];
@@ -4902,19 +5112,21 @@
       const rawMedia = Array.isArray(segment?.media) ? segment.media : [];
       const mediaIDs = [];
       rawMedia.forEach((item) => {
-        if (!item || typeof item !== "object") {
+        const normalizedItem = normalizeMediaRecord(item);
+        if (!normalizedItem) {
           return;
         }
-        const mediaID = String(item.id || "").trim();
-        if (mediaID === "" || mediaIDs.includes(mediaID)) {
+        if (mediaIDs.includes(normalizedItem.id)) {
           return;
         }
-        mediaIDs.push(mediaID);
+        mediaIDs.push(normalizedItem.id);
+        initialKnownMedia.push(normalizedItem);
       });
       followupSteps.push({
         id: nextFollowupStepID++,
         text: String(segment?.text || ""),
-        mediaIDs
+        mediaIDs,
+        libraryOpen: false
       });
     });
   }
@@ -4943,13 +5155,21 @@
     unsupportedMedia: {{toJSON (t "create.unsupported_media")}},
     waitUploads: {{toJSON (t "create.wait_uploads")}},
     selectNetwork: {{toJSON (t "create.select_network")}},
+    addMedia: {{toJSON (t "create.add_media")}},
     addStep: {{toJSON (t "create.add_step")}},
     stepTitle: {{toJSON (t "create.step_title")}},
     removeStep: {{toJSON (t "create.remove_step")}},
     moveStepUp: {{toJSON (t "create.move_step_up")}},
     moveStepDown: {{toJSON (t "create.move_step_down")}},
     stepPlaceholder: {{toJSON (t "create.step_placeholder")}},
-    stepMediaSelector: {{toJSON (t "create.step_media_selector")}},
+    rootStep: {{toJSON (t "create.root_step")}},
+    mediaAttachmentMax: {{toJSON (t "create.media_attachment_max" 4)}},
+    recentLibrary: {{toJSON (t "create.recent_library")}},
+    stepMediaEmpty: {{toJSON (t "create.step_media_empty")}},
+    stepMediaCount: {{toJSON (t "create.step_media_count")}},
+    stepLibraryOpen: {{toJSON (t "create.step_library_open")}},
+    stepLibraryClose: {{toJSON (t "create.step_library_close")}},
+    noMediaUploaded: {{toJSON (t "create.no_media_uploaded")}},
     noFollowupSteps: {{toJSON (t "create.no_followup_steps")}}
   };
   const networkSelectionStorageKey = "postflow.create.selected_account_ids";
@@ -5374,26 +5594,87 @@
     });
   };
 
+  let rootLibraryOpen = false;
+  let activeUploadTarget = { kind: "root", stepID: 0 };
   const isAttachedMedia = (id) => attachments.some((item) => item.id === id);
   const openIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>';
   const closeIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
   const playIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="8 6 19 12 8 18"/></svg>';
   const fileIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>';
 
-  const syncLibraryAttachState = () => {
-    if (!(mediaLibrary instanceof HTMLElement)) {
+  const normalizeMediaIDList = (rawValues) => {
+    const out = [];
+    const seen = new Set();
+    rawValues.forEach((rawValue) => {
+      const mediaID = String(rawValue || "").trim();
+      if (mediaID === "" || seen.has(mediaID)) {
+        return;
+      }
+      seen.add(mediaID);
+      out.push(mediaID);
+    });
+    return out;
+  };
+
+  const findFollowupStep = (stepID) => followupSteps.find((candidate) => candidate.id === stepID) || null;
+  const isRootTarget = (target) => !target || String(target.kind || "").trim() !== "step";
+  const setActiveUploadTarget = (target) => {
+    if (isRootTarget(target)) {
+      activeUploadTarget = { kind: "root", stepID: 0 };
       return;
     }
-    mediaLibrary.querySelectorAll("[data-media-library-item]").forEach((node) => {
-      if (!(node instanceof HTMLElement)) {
-        return;
-      }
-      const id = (node.dataset.mediaId || "").trim();
-      if (!id) {
-        return;
-      }
-      node.classList.toggle("attached", isAttachedMedia(id));
-    });
+    activeUploadTarget = { kind: "step", stepID: Number(target.stepID || 0) };
+  };
+  const selectedMediaIDsForTarget = (target) => {
+    if (isRootTarget(target)) {
+      return attachments.map((item) => item.id);
+    }
+    const step = findFollowupStep(Number(target.stepID || 0));
+    if (!step) {
+      return [];
+    }
+    return normalizeMediaIDList(step.mediaIDs || []);
+  };
+  const targetHasMedia = (target, mediaID) => selectedMediaIDsForTarget(target).includes(String(mediaID || "").trim());
+  const targetSelectionCount = (target) => selectedMediaIDsForTarget(target).length;
+  const threadStepTitle = (stepIndex) => formatTemplate(i18n.stepTitle, stepIndex + 2);
+
+  const formatFileSize = (sizeBytes) => {
+    const size = Number(sizeBytes || 0);
+    if (!Number.isFinite(size) || size <= 0) {
+      return "";
+    }
+    const units = ["B", "KB", "MB", "GB"];
+    let value = size;
+    let unitIndex = 0;
+    while (value >= 1024 && unitIndex < units.length - 1) {
+      value /= 1024;
+      unitIndex += 1;
+    }
+    if (value >= 100 || unitIndex === 0) {
+      return Math.round(value) + " " + units[unitIndex];
+    }
+    return value.toFixed(1) + " " + units[unitIndex];
+  };
+
+  const mediaKindLabel = (item) => {
+    const mime = String(item?.mime || "").toLowerCase();
+    if (mime.startsWith("video/")) {
+      return "video";
+    }
+    if (mime.startsWith("image/")) {
+      return "image";
+    }
+    return "file";
+  };
+
+  const mediaMetaLabel = (item) => {
+    const parts = [mediaKindLabel(item)];
+    const sizeLabel = formatFileSize(item?.size || 0);
+    if (sizeLabel) {
+      parts.push(sizeLabel);
+    }
+    return parts.join(" · ");
   };
 
   const renderLibraryThumb = (thumb, item) => {
@@ -5461,29 +5742,15 @@
       name: (node.dataset.mediaName || "file").trim() || "file",
       size: Number.isFinite(size) ? size : 0,
       mime,
-      previewUrl: previewUrl
+      previewUrl
     };
   };
 
-  const normalizeMediaIDList = (rawValues) => {
-    const out = [];
-    const seen = new Set();
-    rawValues.forEach((rawValue) => {
-      const mediaID = String(rawValue || "").trim();
-      if (mediaID === "" || seen.has(mediaID)) {
-        return;
-      }
-      seen.add(mediaID);
-      out.push(mediaID);
-    });
-    return out;
-  };
-
-  const mediaOptionsFromLibrary = () => {
+  const mediaItemsFromLibrary = () => {
     if (!(mediaLibrary instanceof HTMLElement)) {
       return [];
     }
-    const options = [];
+    const items = [];
     const seen = new Set();
     mediaLibrary.querySelectorAll("[data-media-library-item]").forEach((node) => {
       const item = parseLibraryNode(node);
@@ -5491,43 +5758,126 @@
         return;
       }
       seen.add(item.id);
-      options.push({
-        id: item.id,
-        label: (item.name || item.id).trim() || item.id
-      });
+      items.push(item);
     });
-    return options;
+    return items;
   };
 
-  const syncStepMediaSelectors = () => {
-    const baseOptions = mediaOptionsFromLibrary();
-    const baseSet = new Set(baseOptions.map((opt) => opt.id));
-    threadStepsList.querySelectorAll("[data-thread-step-media]").forEach((node) => {
-      if (!(node instanceof HTMLSelectElement)) {
+  const mediaItemByID = (mediaID) => {
+    const normalizedID = String(mediaID || "").trim();
+    if (normalizedID === "") {
+      return null;
+    }
+    const attachment = attachments.find((item) => item.id === normalizedID);
+    if (attachment) {
+      return attachment;
+    }
+    const libraryItem = mediaItemsFromLibrary().find((item) => item.id === normalizedID);
+    if (libraryItem) {
+      return libraryItem;
+    }
+    return {
+      id: normalizedID,
+      name: normalizedID,
+      size: 0,
+      mime: "",
+      previewUrl: ""
+    };
+  };
+
+  const buildMediaCardFooter = (item) => {
+    const footer = document.createElement("div");
+    footer.className = "create-media-card-footer";
+
+    const name = document.createElement("span");
+    name.className = "create-media-card-name";
+    name.textContent = item.name || item.id || "file";
+
+    const meta = document.createElement("span");
+    meta.className = "create-media-card-meta";
+    meta.textContent = mediaMetaLabel(item);
+
+    footer.appendChild(name);
+    footer.appendChild(meta);
+    return footer;
+  };
+
+  const createMediaLibraryCard = (item, options) => {
+    const config = options || {};
+    const row = document.createElement("article");
+    row.className = "create-media-card";
+    if (config.inUse) {
+      row.classList.add("in-use");
+    }
+    if (config.attached) {
+      row.classList.add("attached");
+    }
+    if (config.selected) {
+      row.classList.add("selected");
+    }
+    if (config.rootLibrary) {
+      row.setAttribute("data-media-library-item", "");
+    }
+    if (config.stepID) {
+      row.setAttribute("data-thread-step-library-item", "");
+      row.dataset.stepId = String(config.stepID);
+    }
+    row.dataset.mediaId = item.id;
+    row.dataset.mediaName = item.name || "file";
+    row.dataset.mediaSize = String(Number(item.size || 0));
+    row.dataset.mediaMime = item.mime || "";
+    row.dataset.mediaPreview = item.previewUrl || "";
+    row.setAttribute("role", "button");
+    row.tabIndex = 0;
+    row.setAttribute("aria-pressed", config.pressed ? "true" : "false");
+    row.setAttribute("aria-label", item.name || item.id || "media");
+
+    const thumb = document.createElement("div");
+    thumb.className = "media-library-thumb";
+    renderLibraryThumb(thumb, item);
+
+    const actions = document.createElement("div");
+    actions.className = "create-media-overlay-actions";
+    const open = document.createElement("button");
+    open.type = "button";
+    open.className = "btn-secondary settings-account-icon-btn create-media-icon-btn";
+    open.setAttribute("data-media-open", item.id);
+    open.setAttribute("aria-label", i18n.openMedia);
+    open.setAttribute("title", i18n.openMedia);
+    open.innerHTML = openIcon;
+    actions.appendChild(open);
+
+    if (config.inUse) {
+      const used = document.createElement("span");
+      used.className = "pill media-pill-used";
+      used.textContent = i18n.usedLabel;
+      actions.appendChild(used);
+    }
+
+    row.appendChild(thumb);
+    row.appendChild(actions);
+    row.appendChild(buildMediaCardFooter(item));
+    return row;
+  };
+
+  const syncLibraryAttachState = () => {
+    if (!(mediaLibrary instanceof HTMLElement)) {
+      return;
+    }
+    mediaLibrary.querySelectorAll("[data-media-library-item]").forEach((node) => {
+      if (!(node instanceof HTMLElement)) {
         return;
       }
-      const stepID = Number(node.dataset.stepId || "0");
-      const step = followupSteps.find((candidate) => candidate.id === stepID);
-      const selectedMediaIDs = normalizeMediaIDList(step ? step.mediaIDs : []);
-      node.innerHTML = "";
-      const options = baseOptions.slice();
-      selectedMediaIDs.forEach((mediaID) => {
-        if (!baseSet.has(mediaID)) {
-          options.push({ id: mediaID, label: mediaID });
-        }
-      });
-      options.forEach((optionData) => {
-        const option = document.createElement("option");
-        option.value = optionData.id;
-        option.textContent = optionData.label;
-        option.selected = selectedMediaIDs.includes(optionData.id);
-        node.appendChild(option);
-      });
-      node.disabled = options.length === 0;
+      const id = (node.dataset.mediaId || "").trim();
+      if (!id) {
+        return;
+      }
+      const attached = isAttachedMedia(id);
+      node.classList.toggle("attached", attached);
+      node.classList.remove("selected");
+      node.setAttribute("aria-pressed", attached ? "true" : "false");
     });
   };
-
-  const threadStepTitle = (stepIndex) => formatTemplate(i18n.stepTitle, stepIndex + 2);
 
   const serializeSegments = () => {
     const segments = [{
@@ -5547,6 +5897,166 @@
     segmentsInput.value = JSON.stringify(serializeSegments());
   };
 
+  const selectedMediaSummary = (count) => formatTemplate(i18n.stepMediaCount, count, maxMedia);
+
+  const openMediaPreview = (itemNode) => {
+    if (!(itemNode instanceof HTMLElement)) {
+      return false;
+    }
+    const previewURL = (itemNode.dataset.mediaPreview || "").trim();
+    if (!previewURL) {
+      return false;
+    }
+    try {
+      window.open(previewURL, "_blank", "noopener,noreferrer");
+    } catch (_) {}
+    return true;
+  };
+
+  const syncRootMediaPanel = () => {
+    rootMediaSummary.textContent = selectedMediaSummary(attachments.length);
+    rootMediaEmpty.hidden = attachments.length > 0;
+    rootMediaBrowser.hidden = !rootLibraryOpen;
+    rootLibraryToggle.textContent = rootLibraryOpen ? i18n.stepLibraryClose : i18n.stepLibraryOpen;
+    rootLibraryToggle.setAttribute("aria-expanded", rootLibraryOpen ? "true" : "false");
+  };
+
+  const renderAssignedMediaList = (container, mediaItems, removeConfig) => {
+    container.innerHTML = "";
+    container.hidden = mediaItems.length === 0;
+    mediaItems.forEach((item) => {
+      const row = document.createElement("article");
+      row.className = "media-item";
+      row.setAttribute("data-media-item", "");
+      row.setAttribute("aria-label", item.name || i18n.mediaItemLabel);
+
+      const thumb = document.createElement("div");
+      thumb.className = "media-thumb";
+      renderLibraryThumb(thumb, item);
+
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "btn-danger media-item-remove";
+      remove.setAttribute(removeConfig.attribute, item.id);
+      remove.setAttribute("aria-label", i18n.removeMedia);
+      remove.setAttribute("title", i18n.removeMedia);
+      remove.innerHTML = closeIcon;
+      if (removeConfig.stepID) {
+        remove.dataset.stepId = String(removeConfig.stepID);
+      }
+
+      row.appendChild(thumb);
+      row.appendChild(remove);
+      container.appendChild(row);
+    });
+  };
+
+  const removeAttachmentByID = (mediaID) => {
+    const index = attachments.findIndex((item) => item.id === mediaID);
+    if (index < 0) {
+      return false;
+    }
+    destroyPreviewURL(attachments[index]);
+    attachments.splice(index, 1);
+    return true;
+  };
+
+  const upsertLibraryItem = (item, inUse) => {
+    if (!(mediaLibrary instanceof HTMLElement) || !item || !item.id) {
+      return;
+    }
+    mediaLibrary.querySelectorAll(".empty").forEach((node) => node.remove());
+    const existing = mediaLibrary.querySelector('[data-media-library-item][data-media-id="' + item.id + '"]');
+    if (existing instanceof HTMLElement) {
+      existing.dataset.mediaName = item.name || "file";
+      existing.dataset.mediaSize = String(Number(item.size || 0));
+      existing.dataset.mediaMime = item.mime || "";
+      existing.dataset.mediaPreview = item.previewUrl || "";
+      if (inUse) {
+        existing.classList.add("in-use");
+      }
+      const thumb = existing.querySelector(".media-library-thumb");
+      if (thumb instanceof HTMLElement) {
+        renderLibraryThumb(thumb, item);
+      }
+      const footer = existing.querySelector(".create-media-card-footer");
+      if (footer instanceof HTMLElement) {
+        footer.replaceWith(buildMediaCardFooter(item));
+      } else {
+        existing.appendChild(buildMediaCardFooter(item));
+      }
+      syncLibraryAttachState();
+      return;
+    }
+    const row = createMediaLibraryCard(item, {
+      rootLibrary: true,
+      inUse,
+      attached: isAttachedMedia(item.id),
+      pressed: isAttachedMedia(item.id)
+    });
+    mediaLibrary.prepend(row);
+    syncLibraryAttachState();
+  };
+
+  const seedKnownMediaIntoLibrary = () => {
+    const seen = new Set();
+    initialKnownMedia.forEach((item) => {
+      if (!item || seen.has(item.id)) {
+        return;
+      }
+      seen.add(item.id);
+      upsertLibraryItem(item, false);
+    });
+  };
+
+  const destroyPreviewURL = (item) => {
+    if (!item || !item.previewUrl) {
+      return;
+    }
+    if (item.previewUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(item.previewUrl);
+    }
+  };
+
+  const renderMediaList = () => {
+    renderAssignedMediaList(mediaList, attachments, { attribute: "data-root-media-remove" });
+    if (attachments.length === 0) {
+      setNotice("");
+    }
+    updatePreviewMedia();
+    syncLibraryAttachState();
+    syncRootMediaPanel();
+    syncSegmentsPayload();
+  };
+
+  const renderStepLibrary = (step, selectedMediaIDs, browser) => {
+    const label = document.createElement("div");
+    label.className = "composer-label";
+    label.textContent = "// " + i18n.recentLibrary;
+    browser.appendChild(label);
+
+    const libraryItems = mediaItemsFromLibrary();
+    if (libraryItems.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "thread-step-media-empty";
+      empty.textContent = i18n.noMediaUploaded;
+      browser.appendChild(empty);
+      return;
+    }
+
+    const grid = document.createElement("div");
+    grid.className = "thread-step-media-grid";
+    grid.setAttribute("data-thread-step-library-grid", String(step.id));
+    libraryItems.forEach((item) => {
+      grid.appendChild(createMediaLibraryCard(item, {
+        stepID: step.id,
+        selected: selectedMediaIDs.includes(item.id),
+        pressed: selectedMediaIDs.includes(item.id)
+      }));
+    });
+    browser.appendChild(grid);
+  };
+
   const renderThreadSteps = () => {
     threadStepsList.innerHTML = "";
     if (followupSteps.length === 0) {
@@ -5557,7 +6067,10 @@
       syncSegmentsPayload();
       return;
     }
+
     followupSteps.forEach((step, index) => {
+      step.mediaIDs = normalizeMediaIDList(step.mediaIDs || []);
+
       const card = document.createElement("article");
       card.className = "thread-step-card";
       card.dataset.stepId = String(step.id);
@@ -5565,10 +6078,13 @@
       const head = document.createElement("div");
       head.className = "thread-step-card-head";
 
+      const heading = document.createElement("div");
+      heading.className = "thread-step-heading";
       const title = document.createElement("span");
       title.className = "thread-step-title";
       title.textContent = threadStepTitle(index);
-      head.appendChild(title);
+      heading.appendChild(title);
+      head.appendChild(heading);
 
       const actions = document.createElement("div");
       actions.className = "thread-step-actions";
@@ -5615,139 +6131,114 @@
       textarea.placeholder = i18n.stepPlaceholder;
       textarea.value = String(step.text || "");
 
-      const mediaWrap = document.createElement("div");
-      mediaWrap.className = "thread-step-media-wrap";
-      const mediaLabel = document.createElement("label");
-      mediaLabel.className = "thread-step-media-label";
-      mediaLabel.textContent = i18n.stepMediaSelector;
-      mediaLabel.setAttribute("for", "thread-step-media-" + step.id);
-      const mediaSelect = document.createElement("select");
-      mediaSelect.className = "thread-step-media-select";
-      mediaSelect.id = "thread-step-media-" + step.id;
-      mediaSelect.dataset.threadStepMedia = "1";
-      mediaSelect.dataset.stepId = String(step.id);
-      mediaSelect.multiple = true;
-      mediaWrap.appendChild(mediaLabel);
-      mediaWrap.appendChild(mediaSelect);
+      const mediaPanel = document.createElement("div");
+      mediaPanel.className = "thread-step-media-panel";
+
+      const toolbar = document.createElement("div");
+      toolbar.className = "thread-step-media-toolbar";
+
+      const copy = document.createElement("div");
+      copy.className = "thread-step-media-copy";
+      const mediaTitle = document.createElement("span");
+      mediaTitle.className = "thread-step-media-title";
+      mediaTitle.textContent = "// " + i18n.mediaAttachmentMax;
+      const mediaSummary = document.createElement("span");
+      mediaSummary.className = "thread-step-media-summary";
+      mediaSummary.textContent = step.mediaIDs.length === 0 ? i18n.stepMediaEmpty : selectedMediaSummary(step.mediaIDs.length);
+      copy.appendChild(mediaTitle);
+      copy.appendChild(mediaSummary);
+
+      const mediaActions = document.createElement("div");
+      mediaActions.className = "thread-step-media-actions";
+
+      const uploadButton = document.createElement("button");
+      uploadButton.type = "button";
+      uploadButton.className = "btn-secondary";
+      uploadButton.setAttribute("data-thread-step-upload", String(step.id));
+      uploadButton.textContent = i18n.addMedia;
+      mediaActions.appendChild(uploadButton);
+
+      const toggleButton = document.createElement("button");
+      toggleButton.type = "button";
+      toggleButton.className = "btn-secondary";
+      toggleButton.setAttribute("data-thread-step-library-toggle", String(step.id));
+      toggleButton.setAttribute("aria-expanded", step.libraryOpen ? "true" : "false");
+      toggleButton.setAttribute("aria-controls", "thread-step-library-" + step.id);
+      toggleButton.textContent = step.libraryOpen ? i18n.stepLibraryClose : i18n.stepLibraryOpen;
+      mediaActions.appendChild(toggleButton);
+
+      toolbar.appendChild(copy);
+      toolbar.appendChild(mediaActions);
+
+      const selectedItems = step.mediaIDs.map((mediaID) => mediaItemByID(mediaID)).filter(Boolean);
+      const mediaListNode = document.createElement("div");
+      mediaListNode.className = "media-list thread-step-media-list";
+      renderAssignedMediaList(mediaListNode, selectedItems, {
+        attribute: "data-thread-step-media-remove",
+        stepID: step.id
+      });
+
+      const emptyState = document.createElement("div");
+      emptyState.className = "thread-step-media-empty";
+      emptyState.textContent = i18n.stepMediaEmpty;
+      emptyState.hidden = selectedItems.length > 0;
+
+      const browser = document.createElement("div");
+      browser.className = "thread-step-media-browser";
+      browser.id = "thread-step-library-" + step.id;
+      browser.hidden = !step.libraryOpen;
+      renderStepLibrary(step, step.mediaIDs, browser);
+
+      mediaPanel.appendChild(toolbar);
+      mediaPanel.appendChild(mediaListNode);
+      mediaPanel.appendChild(emptyState);
+      mediaPanel.appendChild(browser);
 
       card.appendChild(head);
       card.appendChild(textarea);
-      card.appendChild(mediaWrap);
+      card.appendChild(mediaPanel);
       threadStepsList.appendChild(card);
     });
-    syncStepMediaSelectors();
+
     syncSegmentsPayload();
   };
 
-  const removeAttachmentByID = (mediaID) => {
-    const index = attachments.findIndex((item) => item.id === mediaID);
-    if (index < 0) {
+  const toggleMediaForTarget = (target, mediaID) => {
+    const item = mediaItemByID(mediaID);
+    if (!item) {
       return false;
     }
-    destroyPreviewURL(attachments[index]);
-    attachments.splice(index, 1);
+
+    if (isRootTarget(target)) {
+      if (isAttachedMedia(item.id)) {
+        removeAttachmentByID(item.id);
+      } else {
+        if (attachments.length >= maxMedia) {
+          setNotice(formatTemplate(i18n.maxFiles, maxMedia), "error");
+          return false;
+        }
+        attachments.push(item);
+      }
+      syncHiddenMediaInputs();
+      renderMediaList();
+      return true;
+    }
+
+    const step = findFollowupStep(Number(target.stepID || 0));
+    if (!step) {
+      return false;
+    }
+    if (step.mediaIDs.includes(item.id)) {
+      step.mediaIDs = step.mediaIDs.filter((candidateID) => candidateID !== item.id);
+    } else {
+      if (step.mediaIDs.length >= maxMedia) {
+        setNotice(formatTemplate(i18n.maxFiles, maxMedia), "error");
+        return false;
+      }
+      step.mediaIDs.push(item.id);
+    }
+    renderThreadSteps();
     return true;
-  };
-
-  const upsertLibraryItem = (item, inUse) => {
-    if (!(mediaLibrary instanceof HTMLElement) || !item || !item.id) {
-      return;
-    }
-
-    const existing = mediaLibrary.querySelector('[data-media-library-item][data-media-id="' + item.id + '"]');
-    if (existing instanceof HTMLElement) {
-      existing.remove();
-    }
-
-    const row = document.createElement("article");
-    row.className = "create-media-card";
-    if (inUse) {
-      row.classList.add("in-use");
-    }
-    row.setAttribute("data-media-library-item", "");
-    row.dataset.mediaId = item.id;
-    row.dataset.mediaName = item.name || "file";
-    row.dataset.mediaSize = String(Number(item.size || 0));
-    row.dataset.mediaMime = item.mime || "";
-    row.dataset.mediaPreview = item.previewUrl || "";
-
-    const thumb = document.createElement("div");
-    thumb.className = "media-library-thumb";
-    renderLibraryThumb(thumb, item);
-
-    const actions = document.createElement("div");
-    actions.className = "create-media-overlay-actions";
-    const open = document.createElement("button");
-    open.type = "button";
-    open.className = "btn-secondary settings-account-icon-btn create-media-icon-btn";
-    open.setAttribute("data-media-open", item.id);
-    open.innerHTML = openIcon;
-    open.setAttribute("aria-label", i18n.openMedia);
-    open.setAttribute("title", i18n.openMedia);
-    actions.appendChild(open);
-
-    if (inUse) {
-      const used = document.createElement("span");
-      used.className = "pill media-pill-used";
-      used.textContent = i18n.usedLabel;
-      actions.appendChild(used);
-    }
-
-    row.appendChild(thumb);
-    row.appendChild(actions);
-    mediaLibrary.prepend(row);
-    syncLibraryAttachState();
-    syncStepMediaSelectors();
-  };
-
-  const destroyPreviewURL = (item) => {
-    if (!item || !item.previewUrl) {
-      return;
-    }
-    if (item.previewUrl.startsWith("blob:")) {
-      URL.revokeObjectURL(item.previewUrl);
-    }
-  };
-
-  const renderMediaList = () => {
-    if (attachments.length === 0) {
-      mediaList.innerHTML = "";
-      mediaList.hidden = true;
-      setNotice("");
-      updatePreviewMedia();
-      syncLibraryAttachState();
-      syncSegmentsPayload();
-      return;
-    }
-
-    mediaList.hidden = false;
-    mediaList.innerHTML = "";
-    attachments.forEach((item, index) => {
-      const row = document.createElement("article");
-      row.className = "media-item";
-      row.setAttribute("data-media-item", "");
-      row.setAttribute("aria-label", item.name || i18n.mediaItemLabel);
-
-      const thumb = document.createElement("div");
-      thumb.className = "media-thumb";
-      renderLibraryThumb(thumb, item);
-
-      const remove = document.createElement("button");
-      remove.type = "button";
-      remove.className = "btn-danger media-item-remove";
-      remove.setAttribute("data-media-remove", String(index));
-      remove.setAttribute("aria-label", i18n.removeMedia);
-      remove.setAttribute("title", i18n.removeMedia);
-      remove.innerHTML = closeIcon;
-
-      row.appendChild(thumb);
-      row.appendChild(remove);
-      mediaList.appendChild(row);
-    });
-    setNotice(formatTemplate(i18n.mediaUploaded, attachments.length, maxMedia), "success");
-    updatePreviewMedia();
-    syncLibraryAttachState();
-    syncSegmentsPayload();
   };
 
   const isSupportedMediaFile = (file) => file instanceof File && (file.type.startsWith("image/") || file.type.startsWith("video/"));
@@ -5771,11 +6262,11 @@
     return res.json();
   };
 
-  const addFile = async (file) => {
+  const addFile = async (file, target) => {
     if (!(file instanceof File)) {
       return;
     }
-    if (attachments.length >= maxMedia) {
+    if (targetSelectionCount(target) >= maxMedia) {
       setNotice(formatTemplate(i18n.maxFiles, maxMedia), "error");
       return;
     }
@@ -5799,11 +6290,20 @@
         throw new Error(i18n.uploadFailedMissingID);
       }
 
-      attachments.push(item);
-
-      syncHiddenMediaInputs();
-      renderMediaList();
       upsertLibraryItem(item, false);
+      if (isRootTarget(target)) {
+        attachments.push(item);
+        syncHiddenMediaInputs();
+        renderMediaList();
+      } else {
+        const step = findFollowupStep(Number(target.stepID || 0));
+        if (step && !step.mediaIDs.includes(item.id)) {
+          step.mediaIDs.push(item.id);
+          step.libraryOpen = true;
+        }
+        renderThreadSteps();
+      }
+      setNotice(selectedMediaSummary(targetSelectionCount(target)), "success");
     } catch (err) {
       const message = err instanceof Error ? err.message : i18n.uploadFailed;
       setNotice(message, "error");
@@ -5813,7 +6313,7 @@
     }
   };
 
-  const processSelectedFiles = async (rawFiles) => {
+  const processSelectedFiles = async (rawFiles, target) => {
     const files = rawFiles.filter((file) => isSupportedMediaFile(file));
     if (files.length === 0) {
       setNotice(i18n.unsupportedMedia, "error");
@@ -5821,31 +6321,60 @@
     }
 
     for (const file of files) {
-      if (attachments.length >= maxMedia) {
+      if (targetSelectionCount(target) >= maxMedia) {
         break;
       }
-      await addFile(file);
+      await addFile(file, target);
     }
   };
 
+  const openUploaderForTarget = (target) => {
+    if (isRootTarget(target)) {
+      rootLibraryOpen = true;
+      syncRootMediaPanel();
+      setActiveUploadTarget({ kind: "root", stepID: 0 });
+    } else {
+      const step = findFollowupStep(Number(target.stepID || 0));
+      if (!step) {
+        return;
+      }
+      step.libraryOpen = true;
+      setActiveUploadTarget({ kind: "step", stepID: step.id });
+      renderThreadSteps();
+    }
+    mediaInput.click();
+  };
+
   mediaInput.addEventListener("change", async () => {
+    const target = isRootTarget(activeUploadTarget)
+      ? { kind: "root", stepID: 0 }
+      : { kind: "step", stepID: Number(activeUploadTarget.stepID || 0) };
     const files = Array.from(mediaInput.files || []);
     mediaInput.value = "";
     if (files.length === 0) {
       return;
     }
-    await processSelectedFiles(files);
+    await processSelectedFiles(files, target);
+  });
+
+  rootUploadButton.addEventListener("click", () => {
+    openUploaderForTarget({ kind: "root", stepID: 0 });
+  });
+
+  rootLibraryToggle.addEventListener("click", () => {
+    rootLibraryOpen = !rootLibraryOpen;
+    syncRootMediaPanel();
   });
 
   mediaDropzone.addEventListener("click", (event) => {
     if (!(event.target instanceof Element)) {
-      mediaInput.click();
+      openUploaderForTarget({ kind: "root", stepID: 0 });
       return;
     }
     if (event.target.closest("button, a, input, textarea, select")) {
       return;
     }
-    mediaInput.click();
+    openUploaderForTarget({ kind: "root", stepID: 0 });
   });
 
   mediaDropzone.addEventListener("keydown", (event) => {
@@ -5853,7 +6382,7 @@
       return;
     }
     event.preventDefault();
-    mediaInput.click();
+    openUploaderForTarget({ kind: "root", stepID: 0 });
   });
 
   let dragDepth = 0;
@@ -5909,7 +6438,7 @@
     if (files.length === 0) {
       return;
     }
-    await processSelectedFiles(files);
+    await processSelectedFiles(files, { kind: "root", stepID: 0 });
   });
 
   mediaList.addEventListener("click", (event) => {
@@ -5917,39 +6446,30 @@
     if (!(target instanceof Element)) {
       return;
     }
-    const removeButton = target.closest("[data-media-remove]");
-    if (removeButton instanceof HTMLButtonElement) {
-      const removeValue = removeButton.getAttribute("data-media-remove");
-      const index = Number(removeValue);
-      if (Number.isInteger(index) && index >= 0 && index < attachments.length) {
-        destroyPreviewURL(attachments[index]);
-        attachments.splice(index, 1);
-        syncHiddenMediaInputs();
-        renderMediaList();
-      }
+    const removeButton = target.closest("[data-root-media-remove]");
+    if (!(removeButton instanceof HTMLButtonElement)) {
+      return;
+    }
+    const mediaID = (removeButton.getAttribute("data-root-media-remove") || "").trim();
+    if (!mediaID) {
+      return;
+    }
+    if (removeAttachmentByID(mediaID)) {
+      syncHiddenMediaInputs();
+      renderMediaList();
     }
   });
 
-  mediaLibrary?.addEventListener("click", async (event) => {
+  mediaLibrary?.addEventListener("click", (event) => {
     const target = event.target;
     if (!(target instanceof Element)) {
       return;
     }
 
     const openButton = target.closest("[data-media-open]");
-    const openID = openButton instanceof HTMLButtonElement ? (openButton.getAttribute("data-media-open") || "").trim() : "";
-    if (openID) {
+    if (openButton instanceof HTMLButtonElement) {
       const itemNode = openButton.closest("[data-media-library-item]");
-      if (!(itemNode instanceof HTMLElement)) {
-        return;
-      }
-      const previewURL = (itemNode.dataset.mediaPreview || "").trim();
-      if (!previewURL) {
-        return;
-      }
-      try {
-        window.open(previewURL, "_blank", "noopener,noreferrer");
-      } catch (_) {}
+      openMediaPreview(itemNode);
       return;
     }
 
@@ -5957,27 +6477,42 @@
     if (!(itemNode instanceof HTMLElement)) {
       return;
     }
-    if (attachments.length >= maxMedia) {
-      setNotice(formatTemplate(i18n.maxFiles, maxMedia), "error");
+    const mediaID = (itemNode.dataset.mediaId || "").trim();
+    if (!mediaID) {
       return;
     }
-    const libraryItem = parseLibraryNode(itemNode);
-    if (!libraryItem) {
+    toggleMediaForTarget({ kind: "root", stepID: 0 }, mediaID);
+  });
+
+  mediaLibrary?.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") {
       return;
     }
-    if (isAttachedMedia(libraryItem.id)) {
+    const target = event.target;
+    if (!(target instanceof Element)) {
       return;
     }
-    attachments.push(libraryItem);
-    syncHiddenMediaInputs();
-    renderMediaList();
+    if (target.closest("[data-media-open]")) {
+      return;
+    }
+    const itemNode = target.closest("[data-media-library-item]");
+    if (!(itemNode instanceof HTMLElement)) {
+      return;
+    }
+    event.preventDefault();
+    const mediaID = (itemNode.dataset.mediaId || "").trim();
+    if (!mediaID) {
+      return;
+    }
+    toggleMediaForTarget({ kind: "root", stepID: 0 }, mediaID);
   });
 
   addThreadStepButton.addEventListener("click", () => {
     followupSteps.push({
       id: nextFollowupStepID++,
       text: "",
-      mediaIDs: []
+      mediaIDs: [],
+      libraryOpen: false
     });
     renderThreadSteps();
     const lastStep = followupSteps[followupSteps.length - 1];
@@ -5997,7 +6532,7 @@
     }
     if (target instanceof HTMLTextAreaElement && target.hasAttribute("data-thread-step-text")) {
       const stepID = Number(target.dataset.stepId || "0");
-      const step = followupSteps.find((candidate) => candidate.id === stepID);
+      const step = findFollowupStep(stepID);
       if (!step) {
         return;
       }
@@ -6006,26 +6541,58 @@
     }
   });
 
-  threadStepsList.addEventListener("change", (event) => {
-    const target = event.target;
-    if (!(target instanceof HTMLElement)) {
-      return;
-    }
-    if (target instanceof HTMLSelectElement && target.hasAttribute("data-thread-step-media")) {
-      const stepID = Number(target.dataset.stepId || "0");
-      const step = followupSteps.find((candidate) => candidate.id === stepID);
-      if (!step) {
-        return;
-      }
-      const selected = Array.from(target.selectedOptions).map((option) => option.value);
-      step.mediaIDs = normalizeMediaIDList(selected);
-      syncSegmentsPayload();
-    }
-  });
-
   threadStepsList.addEventListener("click", (event) => {
     const target = event.target;
     if (!(target instanceof Element)) {
+      return;
+    }
+
+    const openButton = target.closest("[data-media-open]");
+    if (openButton instanceof HTMLButtonElement) {
+      const itemNode = openButton.closest("[data-thread-step-library-item]");
+      openMediaPreview(itemNode);
+      return;
+    }
+
+    const removeMediaButton = target.closest("[data-thread-step-media-remove]");
+    if (removeMediaButton instanceof HTMLButtonElement) {
+      const stepID = Number(removeMediaButton.dataset.stepId || "0");
+      const mediaID = (removeMediaButton.getAttribute("data-thread-step-media-remove") || "").trim();
+      const step = findFollowupStep(stepID);
+      if (!step || mediaID === "") {
+        return;
+      }
+      step.mediaIDs = step.mediaIDs.filter((candidateID) => candidateID !== mediaID);
+      renderThreadSteps();
+      return;
+    }
+
+    const uploadButton = target.closest("[data-thread-step-upload]");
+    if (uploadButton instanceof HTMLButtonElement) {
+      const stepID = Number(uploadButton.getAttribute("data-thread-step-upload") || "0");
+      openUploaderForTarget({ kind: "step", stepID });
+      return;
+    }
+
+    const toggleLibraryButton = target.closest("[data-thread-step-library-toggle]");
+    if (toggleLibraryButton instanceof HTMLButtonElement) {
+      const stepID = Number(toggleLibraryButton.getAttribute("data-thread-step-library-toggle") || "0");
+      const step = findFollowupStep(stepID);
+      if (!step) {
+        return;
+      }
+      step.libraryOpen = !step.libraryOpen;
+      renderThreadSteps();
+      return;
+    }
+
+    const libraryItem = target.closest("[data-thread-step-library-item]");
+    if (libraryItem instanceof HTMLElement) {
+      const stepID = Number(libraryItem.dataset.stepId || "0");
+      const mediaID = (libraryItem.dataset.mediaId || "").trim();
+      if (mediaID !== "") {
+        toggleMediaForTarget({ kind: "step", stepID }, mediaID);
+      }
       return;
     }
 
@@ -6049,8 +6616,8 @@
         return;
       }
       const current = followupSteps[index];
-      followupSteps[index] = followupSteps[index-1];
-      followupSteps[index-1] = current;
+      followupSteps[index] = followupSteps[index - 1];
+      followupSteps[index - 1] = current;
       renderThreadSteps();
       return;
     }
@@ -6059,15 +6626,40 @@
     if (moveDownButton instanceof HTMLButtonElement) {
       const stepID = Number(moveDownButton.getAttribute("data-thread-step-down") || "0");
       const index = followupSteps.findIndex((candidate) => candidate.id === stepID);
-      if (index < 0 || index >= followupSteps.length-1) {
+      if (index < 0 || index >= followupSteps.length - 1) {
         return;
       }
       const current = followupSteps[index];
-      followupSteps[index] = followupSteps[index+1];
-      followupSteps[index+1] = current;
+      followupSteps[index] = followupSteps[index + 1];
+      followupSteps[index + 1] = current;
       renderThreadSteps();
     }
   });
+
+  threadStepsList.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+    const target = event.target;
+    if (!(target instanceof Element)) {
+      return;
+    }
+    if (target.closest("[data-media-open]")) {
+      return;
+    }
+    const itemNode = target.closest("[data-thread-step-library-item]");
+    if (!(itemNode instanceof HTMLElement)) {
+      return;
+    }
+    event.preventDefault();
+    const stepID = Number(itemNode.dataset.stepId || "0");
+    const mediaID = (itemNode.dataset.mediaId || "").trim();
+    if (mediaID !== "") {
+      toggleMediaForTarget({ kind: "step", stepID }, mediaID);
+    }
+  });
+
+  seedKnownMediaIntoLibrary();
 
   restorePersistedNetworkSelection();
 

@@ -204,6 +204,24 @@ func TestCreateViewIncludesComposerPreviewUploadAndNetworks(t *testing.T) {
 	if !strings.Contains(body, "id=\"create-media-input\"") || !strings.Contains(body, "id=\"create-media-list\"") {
 		t.Fatalf("expected media upload controls in create view")
 	}
+	if strings.Contains(body, "class=\"field create-field create-field-media\"") {
+		t.Fatalf("expected root media controls to live inside the root thread card, not in a detached media field")
+	}
+	if !strings.Contains(body, "id=\"create-root-media-summary\"") || !strings.Contains(body, "id=\"create-root-library-toggle\"") {
+		t.Fatalf("expected root thread card to expose integrated media summary and library toggle")
+	}
+	if !strings.Contains(body, "id=\"create-root-library-toggle\" aria-controls=\"create-root-media-browser\" aria-expanded=\"false\"") {
+		t.Fatalf("expected root media library toggle to start collapsed")
+	}
+	if !strings.Contains(body, "id=\"create-root-media-browser\" hidden") {
+		t.Fatalf("expected root media library browser to be hidden by default")
+	}
+	if !strings.Contains(body, "thread-builder-copy") || !strings.Contains(body, "data-thread-step-library-toggle") {
+		t.Fatalf("expected thread builder UI to expose per-step media controls")
+	}
+	if strings.Contains(body, "thread-step-media-select") {
+		t.Fatalf("did not expect legacy thread media select dropdowns in create view")
+	}
 	if !strings.Contains(body, "id=\"create-scheduled-at\" type=\"datetime-local\" name=\"scheduled_at_local\" data-date-picker") {
 		t.Fatalf("expected create datetime input to use reusable date picker component")
 	}
