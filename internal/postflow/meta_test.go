@@ -283,3 +283,110 @@ func TestInstagramPublishVideoUsesMediaURLBuilder(t *testing.T) {
 		t.Fatalf("expected container status check before publish")
 	}
 }
+
+func TestInstagramPublishIgnoresInvalidCredentialMediaURLWhenBuilderIsValid(t *testing.T) {
+	var createdWithURL string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1.0/ig_1/media":
+			body, _ := io.ReadAll(r.Body)
+			values, _ := url.ParseQuery(string(body))
+			createdWithURL = strings.TrimSpace(values.Get("image_url"))
+			_, _ = w.Write([]byte(`{"id":"ig_container_1"}`))
+		case "/v1.0/ig_1/media_publish":
+			_, _ = w.Write([]byte(`{"id":"ig_post_1"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	expectedURL := "https://cdn.example.com/med_ig_2.jpg"
+	provider := NewInstagramProvider(MetaProviderConfig{
+		GraphURL:   server.URL,
+		APIVersion: "v1.0",
+		MediaURLBuilder: func(media domain.Media) (string, error) {
+			return fmt.Sprintf("https://cdn.example.com/%s.jpg", strings.TrimSpace(media.ID)), nil
+		},
+	})
+	_, err := provider.Publish(context.Background(), domain.SocialAccount{
+		Platform:          domain.PlatformInstagram,
+		ExternalAccountID: "ig_1",
+	}, Credentials{
+		AccessToken: "token-1",
+		Extra: map[string]string{
+			"image_url": "http://localhost:8080/private.jpg",
+		},
+	}, domain.Post{
+		Text: "hello ig",
+		Media: []domain.Media{{
+			ID:          "med_ig_2",
+			StoragePath: "/tmp/not-public.jpg",
+			MimeType:    "image/jpeg",
+		}},
+	}, PublishOptions{})
+	if err != nil {
+		t.Fatalf("publish: %v", err)
+	}
+	if createdWithURL != expectedURL {
+		t.Fatalf("expected image_url %q, got %q", expectedURL, createdWithURL)
+	}
+}
+
+func TestInstagramPublishRejectsNonPublicMediaURLFromBuilder(t *testing.T) {
+	var mediaCreateCalled bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1.0/ig_1/media" {
+			mediaCreateCalled = true
+		}
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
+	provider := NewInstagramProvider(MetaProviderConfig{
+		GraphURL:   server.URL,
+		APIVersion: "v1.0",
+		MediaURLBuilder: func(media domain.Media) (string, error) {
+			return "http://localhost:8080/media/" + strings.TrimSpace(media.ID), nil
+		},
+	})
+	_, err := provider.Publish(context.Background(), domain.SocialAccount{
+		Platform:          domain.PlatformInstagram,
+		ExternalAccountID: "ig_1",
+	}, Credentials{
+		AccessToken: "token-1",
+	}, domain.Post{
+		Text: "hello ig",
+		Media: []domain.Media{{
+			ID:          "med_ig_3",
+			StoragePath: "/tmp/not-public.jpg",
+			MimeType:    "image/jpeg",
+		}},
+	}, PublishOptions{})
+	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "not publicly reachable") {
+		t.Fatalf("expected non-public media url error, got %v", err)
+	}
+	if mediaCreateCalled {
+		t.Fatalf("did not expect create media request when media url is non-public")
+	}
+}
+
+func TestInstagramPublishRejectsPNGImage(t *testing.T) {
+	provider := NewInstagramProvider(MetaProviderConfig{})
+	_, err := provider.Publish(context.Background(), domain.SocialAccount{
+		Platform:          domain.PlatformInstagram,
+		ExternalAccountID: "ig_1",
+	}, Credentials{
+		AccessToken: "token-1",
+	}, domain.Post{
+		Text: "hello ig",
+		Media: []domain.Media{{
+			ID:          "med_ig_png",
+			StoragePath: "/tmp/not-public.png",
+			MimeType:    "image/png",
+		}},
+	}, PublishOptions{})
+	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "jpeg") {
+		t.Fatalf("expected jpeg validation error, got %v", err)
+	}
+}

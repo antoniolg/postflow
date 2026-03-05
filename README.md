@@ -67,7 +67,7 @@ Use `.env.example` as template. These are the key ones:
 |---|---:|---|
 | `POSTFLOW_MASTER_KEY` | Yes | Generate locally: `openssl rand -base64 32` |
 | `API_TOKEN` | Recommended | Generate locally (random token), used for API/MCP auth |
-| `PUBLIC_BASE_URL` | Yes for OAuth | Your app URL (`http://localhost:8080` locally, your domain in prod) |
+| `PUBLIC_BASE_URL` | Yes for OAuth and Instagram media URLs | Your app URL (`http://localhost:8080` locally, your public HTTPS domain in prod) |
 | `UI_BASIC_USER` / `UI_BASIC_PASS` | Recommended | Values you define for UI basic auth |
 
 ### Storage/runtime
@@ -241,6 +241,10 @@ Full production runbook:
   - check `Authorization: Bearer ...` in MCP/API clients
 - OAuth callback errors:
   - verify `PUBLIC_BASE_URL` matches your real public domain
+- Instagram media create errors (`code=9004`, `error_subcode=2207052`):
+  - verify `PUBLIC_BASE_URL` is public/reachable from the internet (not `localhost` in production)
+  - for image posts, upload JPEG (`.jpg` / `.jpeg`)
+  - for video posts, use MP4 or MOV
 - CLI auth errors:
   - verify `POSTFLOW_API_TOKEN` matches server `API_TOKEN`
 

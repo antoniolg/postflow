@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -105,8 +104,8 @@ func (p *InstagramProvider) ValidateDraft(_ context.Context, _ domain.SocialAcco
 	if len(draft.Media) > 1 {
 		return nil, fmt.Errorf("instagram supports a single image or video per post in this release")
 	}
-	if !isImageMedia(draft.Media[0]) && !isVideoMedia(draft.Media[0]) {
-		return nil, fmt.Errorf("instagram requires image or video media")
+	if err := validateInstagramMediaConstraints(draft.Media[0]); err != nil {
+		return nil, err
 	}
 	return nil, nil
 }
@@ -293,8 +292,8 @@ func (p *InstagramProvider) Publish(ctx context.Context, account domain.SocialAc
 	if len(post.Media) > 1 {
 		return "", fmt.Errorf("instagram supports a single image or video per post in this release")
 	}
-	if !isImageMedia(post.Media[0]) && !isVideoMedia(post.Media[0]) {
-		return "", fmt.Errorf("instagram requires image or video media")
+	if err := validateInstagramMediaConstraints(post.Media[0]); err != nil {
+		return "", err
 	}
 	isVideo := isVideoMedia(post.Media[0])
 	mediaURLKey := "image_url"
@@ -303,22 +302,12 @@ func (p *InstagramProvider) Publish(ctx context.Context, account domain.SocialAc
 		mediaURLKey = "video_url"
 		mediaLabel = "video"
 	}
-	mediaURL := strings.TrimSpace(credentials.Extra[mediaURLKey])
-	if mediaURL == "" {
-		candidate := strings.TrimSpace(post.Media[0].StoragePath)
-		if strings.HasPrefix(strings.ToLower(candidate), "http://") || strings.HasPrefix(strings.ToLower(candidate), "https://") {
-			mediaURL = candidate
-		}
-	}
-	if mediaURL == "" && p.cfg.MediaURLBuilder != nil {
-		var err error
-		mediaURL, err = p.cfg.MediaURLBuilder(post.Media[0])
-		if err != nil {
-			return "", err
-		}
+	mediaURL, err := resolveInstagramMediaURL(post.Media[0], credentials, mediaURLKey, p.cfg.MediaURLBuilder)
+	if err != nil {
+		return "", fmt.Errorf("instagram requires a public %s URL: %w", mediaLabel, err)
 	}
 	if mediaURL == "" {
-		return "", fmt.Errorf("instagram requires a public %s URL; media %s at %s is not public", mediaLabel, post.Media[0].ID, filepath.Base(post.Media[0].StoragePath))
+		return "", fmt.Errorf("instagram requires a public %s URL for media %s", mediaLabel, post.Media[0].ID)
 	}
 	createValues := url.Values{}
 	createValues.Set(mediaURLKey, mediaURL)
@@ -340,7 +329,12 @@ func (p *InstagramProvider) Publish(ctx context.Context, account domain.SocialAc
 	defer createResp.Body.Close()
 	createBody, _ := io.ReadAll(io.LimitReader(createResp.Body, 2<<20))
 	if createResp.StatusCode >= 300 {
-		return "", fmt.Errorf("instagram create media failed: status=%d body=%s", createResp.StatusCode, strings.TrimSpace(string(createBody)))
+		return "", fmt.Errorf(
+			"instagram create media failed: status=%d media_url=%s body=%s",
+			createResp.StatusCode,
+			instagramMediaURLForError(mediaURL),
+			strings.TrimSpace(string(createBody)),
+		)
 	}
 	var container struct {
 		ID string `json:"id"`

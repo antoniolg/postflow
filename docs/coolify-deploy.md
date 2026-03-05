@@ -40,7 +40,7 @@ Set these in Coolify:
 - `UI_BASIC_USER=<your-user>`
 - `UI_BASIC_PASS=<long-password>`
 - `POSTFLOW_MASTER_KEY=<base64-32-bytes>`
-- `PUBLIC_BASE_URL=https://<your-coolify-domain>`
+- `PUBLIC_BASE_URL=https://<your-coolify-domain>` (must be publicly reachable; do not use `localhost` in production)
 
 Optional recommended:
 

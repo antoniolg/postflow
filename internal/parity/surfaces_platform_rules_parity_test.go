@@ -42,7 +42,7 @@ func TestPlatformRulesParityInstagramRejectsEditRemovingMedia(t *testing.T) {
 	instagramAccountID := env.apiCreateStaticAccount("instagram", "parity_instagram_edit_media", map[string]any{
 		"access_token": "tok_ig_edit_media",
 	})
-	mediaID := createParityImageMedia(t, env, "ig_edit_media.png")
+	mediaID := createParityImageMedia(t, env, "ig_edit_media.jpg")
 
 	apiPostID := env.apiCreatePostForAccount(instagramAccountID, "caption api", time.Now().UTC().Add(30*time.Minute).Round(time.Second), []string{mediaID})
 	cliPostID := env.apiCreatePostForAccount(instagramAccountID, "caption cli", time.Now().UTC().Add(31*time.Minute).Round(time.Second), []string{mediaID})
@@ -124,11 +124,16 @@ func TestPlatformRulesParityLinkedInEditReplacesMediaAndKeepsSchedule(t *testing
 
 func createParityImageMedia(t *testing.T, env *parityEnv, originalName string) string {
 	t.Helper()
+	mimeType := "image/png"
+	lowerName := strings.ToLower(strings.TrimSpace(originalName))
+	if strings.HasSuffix(lowerName, ".jpg") || strings.HasSuffix(lowerName, ".jpeg") {
+		mimeType = "image/jpeg"
+	}
 	item, err := env.store.CreateMedia(t.Context(), domain.Media{
 		Kind:         "image",
 		OriginalName: strings.TrimSpace(originalName),
 		StoragePath:  "/tmp/" + strings.TrimSpace(originalName),
-		MimeType:     "image/png",
+		MimeType:     mimeType,
 		SizeBytes:    1024,
 	})
 	if err != nil {
