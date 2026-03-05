@@ -211,6 +211,10 @@ func (p *LinkedInProvider) publishComment(ctx context.Context, accessToken, memb
 	if resp.StatusCode >= 300 {
 		return "", fmt.Errorf("linkedin comment failed: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
+	externalID := strings.TrimSpace(resp.Header.Get("x-restli-id"))
+	if externalID != "" {
+		return externalID, nil
+	}
 	var out struct {
 		ID string `json:"id"`
 	}
@@ -218,7 +222,7 @@ func (p *LinkedInProvider) publishComment(ctx context.Context, accessToken, memb
 		_ = json.Unmarshal(body, &out)
 	}
 	if strings.TrimSpace(out.ID) == "" {
-		return fmt.Sprintf("linkedin_comment_%d", time.Now().Unix()), nil
+		return "", fmt.Errorf("linkedin comment response missing id")
 	}
 	return strings.TrimSpace(out.ID), nil
 }

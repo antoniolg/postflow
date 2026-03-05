@@ -380,6 +380,54 @@ func TestMutationsServiceUpdateEditableRejectsInstagramWithoutMedia(t *testing.T
 	}
 }
 
+func TestMutationsServiceUpdateEditableRejectsInvalidThreadFollowUpForPlatform(t *testing.T) {
+	store := &fakeMutationsStore{
+		post: domain.Post{
+			ID:        "pst_li",
+			AccountID: "acc_li",
+			Platform:  domain.PlatformLinkedIn,
+			Status:    domain.PostStatusScheduled,
+			Text:      "root",
+		},
+		account: domain.SocialAccount{
+			ID:       "acc_li",
+			Platform: domain.PlatformLinkedIn,
+			Status:   domain.AccountStatusConnected,
+		},
+		mediaByID: map[string]domain.Media{
+			"med_1": {ID: "med_1", MimeType: "image/png"},
+		},
+	}
+	svc := MutationsService{
+		Store: store,
+		Registry: fakeRegistry{
+			providers: map[domain.Platform]postflow.Provider{
+				domain.PlatformLinkedIn: postflow.NewLinkedInProvider(postflow.LinkedInProviderConfig{}),
+			},
+		},
+	}
+
+	_, err := svc.UpdateEditable(t.Context(), EditInput{
+		PostID: "pst_li",
+		Segments: []ThreadSegmentInput{
+			{Text: "root ok"},
+			{Text: "child with media", MediaIDs: []string{"med_1"}},
+		},
+	}, nil)
+	if err == nil {
+		t.Fatalf("expected validation error")
+	}
+	if !IsValidationError(err) {
+		t.Fatalf("expected validation error wrapper, got %v", err)
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "linkedin") || !strings.Contains(strings.ToLower(err.Error()), "do not support media") {
+		t.Fatalf("expected linkedin follow-up media validation error, got %v", err)
+	}
+	if store.updateThreadRoot != "" {
+		t.Fatalf("expected no thread update call when validation fails")
+	}
+}
+
 func TestMutationsServiceUpdateValidatesTextAndSchedule(t *testing.T) {
 	svc := MutationsService{Store: &fakeMutationsStore{}}
 

@@ -144,6 +144,122 @@ func TestRecordPublishFailureRetriesThenMovesToDLQ(t *testing.T) {
 	}
 }
 
+func TestRecordPublishFailureFailsBlockedThreadDescendants(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+	account := createTestAccount(t, store, domain.PlatformX)
+	scheduledAt := time.Now().UTC().Add(-1 * time.Minute)
+
+	root, err := store.CreatePost(ctx, CreatePostParams{
+		Post: domain.Post{
+			AccountID:      account.ID,
+			Text:           "thread root",
+			Status:         domain.PostStatusScheduled,
+			ScheduledAt:    scheduledAt,
+			ThreadGroupID:  "thd_fail_chain",
+			ThreadPosition: 1,
+			MaxAttempts:    1,
+		},
+	})
+	if err != nil {
+		t.Fatalf("create root: %v", err)
+	}
+	rootID := root.Post.ID
+	if err := store.MarkPublished(ctx, rootID, "tweet_root"); err != nil {
+		t.Fatalf("mark root published: %v", err)
+	}
+
+	child, err := store.CreatePost(ctx, CreatePostParams{
+		Post: domain.Post{
+			AccountID:      account.ID,
+			Text:           "thread child",
+			Status:         domain.PostStatusScheduled,
+			ScheduledAt:    scheduledAt,
+			ThreadGroupID:  "thd_fail_chain",
+			ThreadPosition: 2,
+			ParentPostID:   &rootID,
+			RootPostID:     &rootID,
+			MaxAttempts:    1,
+		},
+	})
+	if err != nil {
+		t.Fatalf("create child: %v", err)
+	}
+	childID := child.Post.ID
+
+	if _, err := store.CreatePost(ctx, CreatePostParams{
+		Post: domain.Post{
+			AccountID:      account.ID,
+			Text:           "thread grandchild",
+			Status:         domain.PostStatusScheduled,
+			ScheduledAt:    scheduledAt,
+			ThreadGroupID:  "thd_fail_chain",
+			ThreadPosition: 3,
+			ParentPostID:   &childID,
+			RootPostID:     &rootID,
+			MaxAttempts:    1,
+		},
+	}); err != nil {
+		t.Fatalf("create grandchild: %v", err)
+	}
+
+	claimed, err := store.ClaimDuePosts(ctx, 10)
+	if err != nil {
+		t.Fatalf("claim due thread child: %v", err)
+	}
+	if len(claimed) != 1 || claimed[0].ID != childID {
+		t.Fatalf("expected only child to be claimed, got %#v", claimed)
+	}
+
+	if err := store.RecordPublishFailure(ctx, childID, errors.New("reply failed hard"), 1*time.Second); err != nil {
+		t.Fatalf("record child failure: %v", err)
+	}
+
+	childPost, err := store.GetPost(ctx, childID)
+	if err != nil {
+		t.Fatalf("get child after failure: %v", err)
+	}
+	if childPost.Status != domain.PostStatusFailed {
+		t.Fatalf("expected child status failed, got %s", childPost.Status)
+	}
+
+	threadPosts, err := store.ListThreadPosts(ctx, rootID)
+	if err != nil {
+		t.Fatalf("list thread posts: %v", err)
+	}
+	if len(threadPosts) != 3 {
+		t.Fatalf("expected 3 thread posts, got %d", len(threadPosts))
+	}
+	grandchildPost := threadPosts[2]
+	if grandchildPost.Status != domain.PostStatusFailed {
+		t.Fatalf("expected grandchild status failed, got %s", grandchildPost.Status)
+	}
+	if grandchildPost.Error == nil || *grandchildPost.Error == "" {
+		t.Fatalf("expected propagated grandchild error")
+	}
+
+	var dlqCount int
+	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM dead_letters WHERE post_id IN (?, ?)`, childID, grandchildPost.ID).Scan(&dlqCount); err != nil {
+		t.Fatalf("count thread dead letters: %v", err)
+	}
+	if dlqCount != 2 {
+		t.Fatalf("expected dead letters for failed step and blocked descendant, got %d", dlqCount)
+	}
+
+	claimed, err = store.ClaimDuePosts(ctx, 10)
+	if err != nil {
+		t.Fatalf("claim due after propagated failure: %v", err)
+	}
+	if len(claimed) != 0 {
+		t.Fatalf("expected no claimable descendants after propagated failure, got %d", len(claimed))
+	}
+}
+
 func TestReschedulePublishWithoutAttemptKeepsAttempts(t *testing.T) {
 	store, err := Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {

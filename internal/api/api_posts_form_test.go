@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/antoniolg/postflow/internal/db"
+	"github.com/antoniolg/postflow/internal/domain"
 )
 
 func TestCreatePostFromFormRedirects(t *testing.T) {
@@ -201,6 +202,87 @@ func TestEditPostFromFormPublishNowIgnoresScheduledAt(t *testing.T) {
 	}
 	if post.ScheduledAt.Before(before.Add(-5*time.Second)) || post.ScheduledAt.After(after.Add(5*time.Second)) {
 		t.Fatalf("expected publish_now scheduled_at near request time, got %s (before=%s after=%s)", post.ScheduledAt, before, after)
+	}
+}
+
+func TestEditPostFromFormRejectsInvalidThreadSegmentsForPlatform(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	account := createConnectedAccountForPlatform(t, store, domain.PlatformLinkedIn, "li-edit-thread-validation")
+	media, err := store.CreateMedia(t.Context(), domain.Media{
+		OriginalName: "followup.png",
+		MimeType:     "image/png",
+		SizeBytes:    128,
+		StoragePath:  "uploads/followup.png",
+	})
+	if err != nil {
+		t.Fatalf("create media: %v", err)
+	}
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	createPayload, _ := json.Marshal(map[string]any{
+		"account_id":   account.ID,
+		"text":         "initial scheduled",
+		"scheduled_at": time.Now().UTC().Add(2 * time.Hour).Format(time.RFC3339),
+	})
+	createReq := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(createPayload))
+	createW := httptest.NewRecorder()
+	h.ServeHTTP(createW, createReq)
+	if createW.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", createW.Code)
+	}
+	var created map[string]any
+	if err := json.Unmarshal(createW.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode create response: %v", err)
+	}
+	postID, _ := created["id"].(string)
+	if postID == "" {
+		t.Fatalf("missing post id")
+	}
+
+	segmentsJSON, err := json.Marshal([]map[string]any{
+		{"text": "edited root"},
+		{"text": "invalid linkedin follow-up", "media_ids": []string{media.ID}},
+	})
+	if err != nil {
+		t.Fatalf("marshal segments json: %v", err)
+	}
+
+	editForm := url.Values{}
+	editForm.Set("text", "edited root")
+	editForm.Set("segments_json", string(segmentsJSON))
+	editReq := httptest.NewRequest(http.MethodPost, "/posts/"+postID+"/edit", bytes.NewBufferString(editForm.Encode()))
+	editReq.Header.Set("content-type", "application/x-www-form-urlencoded")
+	editW := httptest.NewRecorder()
+	h.ServeHTTP(editW, editReq)
+	if editW.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", editW.Code)
+	}
+	location := editW.Header().Get("Location")
+	if !strings.Contains(location, "linkedin+thread+comments+do+not+support+media") {
+		t.Fatalf("expected redirect error for invalid linkedin follow-up media, got %q", location)
+	}
+
+	post, err := store.GetPost(t.Context(), postID)
+	if err != nil {
+		t.Fatalf("get post: %v", err)
+	}
+	if post.Text != "initial scheduled" {
+		t.Fatalf("expected original text to remain after failed thread edit, got %q", post.Text)
+	}
+	threadPosts, err := store.ListThreadPosts(t.Context(), postID)
+	if err != nil {
+		t.Fatalf("list thread posts: %v", err)
+	}
+	if len(threadPosts) != 1 {
+		t.Fatalf("expected invalid edit to avoid expanding thread, got %d posts", len(threadPosts))
 	}
 }
 

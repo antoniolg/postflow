@@ -118,6 +118,9 @@ func (s MutationsService) UpdateEditable(ctx context.Context, in EditInput, now 
 		if len(in.Segments) > MaxThreadSegments {
 			return domain.Post{}, ErrThreadTooLong
 		}
+		if err := s.validateEditableThread(ctx, current, in.Segments); err != nil {
+			return domain.Post{}, err
+		}
 		steps := make([]db.ThreadStepUpdate, 0, len(in.Segments))
 		for _, segment := range in.Segments {
 			text := strings.TrimSpace(segment.Text)
@@ -157,6 +160,25 @@ func (s MutationsService) UpdateEditable(ctx context.Context, in EditInput, now 
 		return domain.Post{}, err
 	}
 	return s.Store.GetPost(ctx, postID)
+}
+
+func (s MutationsService) validateEditableThread(ctx context.Context, post domain.Post, segments []ThreadSegmentInput) error {
+	if s.Registry == nil {
+		return nil
+	}
+
+	account, err := s.Store.GetAccount(ctx, strings.TrimSpace(post.AccountID))
+	if err != nil {
+		return ValidationError{Err: ErrAccountNotFound}
+	}
+	provider, ok := s.Registry.Get(account.Platform)
+	if !ok {
+		return ValidationError{Err: ErrProviderNotConfigured}
+	}
+	if err := validateThreadSegmentsForAccount(ctx, s.Store, provider, account, segments); err != nil {
+		return ValidationError{Err: err}
+	}
+	return nil
 }
 
 func (s MutationsService) validateEditableDraft(ctx context.Context, post domain.Post, text string, mediaIDs []string, replaceMedia bool) error {

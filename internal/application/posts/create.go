@@ -12,7 +12,6 @@ import (
 	"github.com/antoniolg/postflow/internal/application/ports"
 	"github.com/antoniolg/postflow/internal/db"
 	"github.com/antoniolg/postflow/internal/domain"
-	"github.com/antoniolg/postflow/internal/postflow"
 )
 
 var (
@@ -127,15 +126,6 @@ func (s CreateService) Create(ctx context.Context, in CreateInput) (CreateOutput
 	if err != nil {
 		return CreateOutput{}, ValidationError{Err: err}
 	}
-	allMediaIDs := uniqueSegmentMediaIDs(segments)
-	mediaItems, err := s.Store.GetMediaByIDs(ctx, allMediaIDs)
-	if err != nil {
-		return CreateOutput{}, ValidationError{Err: err}
-	}
-	mediaByID := make(map[string]domain.Media, len(mediaItems))
-	for _, item := range mediaItems {
-		mediaByID[strings.TrimSpace(item.ID)] = item
-	}
 
 	maxAttempts := in.MaxAttempts
 	if maxAttempts <= 0 {
@@ -163,20 +153,8 @@ func (s CreateService) Create(ctx context.Context, in CreateInput) (CreateOutput
 		if !ok {
 			return CreateOutput{}, ValidationError{Err: ErrProviderNotConfigured}
 		}
-		for idx, segment := range segments {
-			stepMedia, err := mediaItemsForSegment(segment.MediaIDs, mediaByID)
-			if err != nil {
-				return CreateOutput{}, ValidationError{Err: err}
-			}
-			if idx == 0 {
-				if _, err := provider.ValidateDraft(ctx, account, postflow.Draft{Text: segment.Text, Media: stepMedia}); err != nil {
-					return CreateOutput{}, ValidationError{Err: err}
-				}
-				continue
-			}
-			if err := validateFollowUpSegment(account.Platform, stepMedia); err != nil {
-				return CreateOutput{}, ValidationError{Err: err}
-			}
+		if err := validateThreadSegmentsForAccount(ctx, s.Store, provider, account, segments); err != nil {
+			return CreateOutput{}, ValidationError{Err: err}
 		}
 		targetAccounts = append(targetAccounts, account)
 	}

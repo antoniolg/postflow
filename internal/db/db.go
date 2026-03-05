@@ -815,36 +815,46 @@ func (s *Store) RecordPublishFailure(ctx context.Context, id string, postErr err
 	if retryBackoff <= 0 {
 		retryBackoff = 30 * time.Second
 	}
+	postID := strings.TrimSpace(id)
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 
-	var attempts, maxAttempts int
-	err = tx.QueryRowContext(ctx, `SELECT attempts, max_attempts FROM posts WHERE id = ?`, strings.TrimSpace(id)).Scan(&attempts, &maxAttempts)
+	var attempts, maxAttempts, threadPosition int
+	var rootPostID sql.NullString
+	err = tx.QueryRowContext(ctx, `
+		SELECT attempts, max_attempts, COALESCE(NULLIF(TRIM(root_post_id), ''), id), thread_position
+		FROM posts
+		WHERE id = ?
+	`, postID).Scan(&attempts, &maxAttempts, &rootPostID, &threadPosition)
 	if err != nil {
 		return err
 	}
 	attempts++
 	now := time.Now().UTC()
+	nowFmt := now.Format(time.RFC3339Nano)
+	rootID := strings.TrimSpace(rootPostID.String)
+	if rootID == "" {
+		rootID = postID
+	}
+	if threadPosition <= 0 {
+		threadPosition = 1
+	}
 
 	if attempts >= maxAttempts {
 		if _, err := tx.ExecContext(ctx, `
 			UPDATE posts
 			SET status = ?, attempts = ?, error = ?, next_retry_at = NULL, updated_at = ?
 			WHERE id = ?
-		`, domain.PostStatusFailed, attempts, postErr.Error(), now.Format(time.RFC3339Nano), strings.TrimSpace(id)); err != nil {
+		`, domain.PostStatusFailed, attempts, postErr.Error(), nowFmt, postID); err != nil {
 			return err
 		}
-		dlqID, err := NewID("dlq")
-		if err != nil {
+		if err := insertDeadLetterTx(ctx, tx, postID, "max_attempts_exceeded", postErr.Error(), nowFmt); err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO dead_letters (id, post_id, reason, last_error, attempted_at)
-			VALUES (?, ?, ?, ?, ?)
-		`, dlqID, strings.TrimSpace(id), "max_attempts_exceeded", postErr.Error(), now.Format(time.RFC3339Nano)); err != nil {
+		if err := failBlockedThreadDescendantsTx(ctx, tx, rootID, threadPosition, postID, postErr.Error(), nowFmt); err != nil {
 			return err
 		}
 		return tx.Commit()
@@ -855,7 +865,7 @@ func (s *Store) RecordPublishFailure(ctx context.Context, id string, postErr err
 		UPDATE posts
 		SET status = ?, attempts = ?, error = ?, next_retry_at = ?, updated_at = ?
 		WHERE id = ?
-	`, domain.PostStatusScheduled, attempts, postErr.Error(), nextRetry.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano), strings.TrimSpace(id)); err != nil {
+	`, domain.PostStatusScheduled, attempts, postErr.Error(), nextRetry.Format(time.RFC3339Nano), nowFmt, postID); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -873,6 +883,78 @@ func (s *Store) ReschedulePublishWithoutAttempt(ctx context.Context, id string, 
 		WHERE id = ? AND status = ?
 	`, domain.PostStatusScheduled, postErr.Error(), nextRetry.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano), strings.TrimSpace(id), domain.PostStatusPublishing)
 	return err
+}
+
+func insertDeadLetterTx(ctx context.Context, tx *sql.Tx, postID, reason, lastError, attemptedAt string) error {
+	dlqID, err := NewID("dlq")
+	if err != nil {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, `
+		INSERT INTO dead_letters (id, post_id, reason, last_error, attempted_at)
+		SELECT ?, ?, ?, ?, ?
+		WHERE NOT EXISTS (SELECT 1 FROM dead_letters WHERE post_id = ?)
+	`, dlqID, strings.TrimSpace(postID), strings.TrimSpace(reason), strings.TrimSpace(lastError), strings.TrimSpace(attemptedAt), strings.TrimSpace(postID))
+	return err
+}
+
+func failBlockedThreadDescendantsTx(ctx context.Context, tx *sql.Tx, rootPostID string, failedPosition int, failedPostID, lastError, attemptedAt string) error {
+	rootPostID = strings.TrimSpace(rootPostID)
+	failedPostID = strings.TrimSpace(failedPostID)
+	if rootPostID == "" || failedPosition <= 0 {
+		return nil
+	}
+
+	blockedError := strings.TrimSpace(lastError)
+	if blockedError == "" {
+		blockedError = "thread blocked because a previous step failed"
+	} else {
+		blockedError = "thread blocked because a previous step failed: " + blockedError
+	}
+
+	rows, err := tx.QueryContext(ctx, `
+		SELECT id
+		FROM posts
+		WHERE id != ?
+		  AND COALESCE(NULLIF(TRIM(root_post_id), ''), id) = ?
+		  AND thread_position > ?
+		  AND status IN (?, ?)
+		ORDER BY thread_position ASC, created_at ASC
+	`, failedPostID, rootPostID, failedPosition, domain.PostStatusScheduled, domain.PostStatusPublishing)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	descendantIDs := make([]string, 0, 4)
+	for rows.Next() {
+		var descendantID string
+		if err := rows.Scan(&descendantID); err != nil {
+			return err
+		}
+		descendantIDs = append(descendantIDs, strings.TrimSpace(descendantID))
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	for _, descendantID := range descendantIDs {
+		if descendantID == "" {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE posts
+			SET status = ?, attempts = max_attempts, error = ?, next_retry_at = NULL, updated_at = ?
+			WHERE id = ?
+		`, domain.PostStatusFailed, blockedError, attemptedAt, descendantID); err != nil {
+			return err
+		}
+		if err := insertDeadLetterTx(ctx, tx, descendantID, "thread_dependency_failed", blockedError, attemptedAt); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (s *Store) resolveRootPostID(ctx context.Context, postID string) (string, error) {

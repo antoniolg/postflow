@@ -126,6 +126,35 @@ func TestLinkedInPublishCommentMode(t *testing.T) {
 	}
 }
 
+func TestLinkedInPublishCommentModeUsesRestliHeaderID(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v2/socialActions/root_post_1/comments" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("x-restli-id", "urn:li:comment:(ugcPost:1,2)")
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer server.Close()
+
+	provider := NewLinkedInProvider(LinkedInProviderConfig{APIBaseURL: server.URL})
+	externalID, err := provider.Publish(context.Background(), domain.SocialAccount{
+		Platform:          domain.PlatformLinkedIn,
+		ExternalAccountID: "member_1",
+	}, Credentials{AccessToken: "token-1"}, domain.Post{
+		Text: "comment text",
+	}, PublishOptions{
+		Mode:             PublishModeComment,
+		ParentExternalID: "root_post_1",
+	})
+	if err != nil {
+		t.Fatalf("publish comment with restli header: %v", err)
+	}
+	if externalID != "urn:li:comment:(ugcPost:1,2)" {
+		t.Fatalf("unexpected external id %q", externalID)
+	}
+}
+
 func TestLinkedInRefreshOAuthAndCallbackFlows(t *testing.T) {
 	t.Run("refreshes expiring token", func(t *testing.T) {
 		var refreshCalls int
