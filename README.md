@@ -202,6 +202,7 @@ postflow posts validate --account-id acc_xxx --segments-json '[{"text":"root"},{
 postflow posts create --account-id acc_xxx --segments-json '[{"text":"root"},{"text":"reply 1","media_ids":["med_x"]}]' --scheduled-at 2026-03-01T10:00:00Z
 postflow posts schedule --id pst_xxx --scheduled-at 2026-03-01T10:00:00Z
 postflow posts edit --id pst_xxx --text "copy updated" --intent schedule --scheduled-at 2026-03-01T10:30:00Z
+postflow posts edit --id pst_xxx --segments-json '[{"text":"root updated"},{"text":"reply updated"}]'
 postflow posts edit --id pst_xxx --text "copy + media" --replace-media --media-id med_a --media-id med_b
 postflow posts delete --id pst_xxx
 postflow posts cancel --id pst_xxx
@@ -211,7 +212,7 @@ postflow settings set-timezone --timezone Europe/Madrid
 postflow media list --limit 20
 ```
 
-`--text` and `--segments-json` are mutually exclusive on `posts create` and `posts validate`.
+`--text` and `--segments-json` are mutually exclusive on `posts create`, `posts validate`, and `posts edit`.
 
 ---
 

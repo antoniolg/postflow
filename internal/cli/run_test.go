@@ -21,9 +21,15 @@ func TestRunScheduleListJSON(t *testing.T) {
 			t.Fatalf("unexpected path %s", r.URL.Path)
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"from":  "2026-03-01T00:00:00Z",
-			"to":    "2026-03-31T23:59:59Z",
-			"items": []map[string]any{},
+			"from": "2026-03-01T00:00:00Z",
+			"to":   "2026-03-31T23:59:59Z",
+			"items": []map[string]any{{
+				"id":              "pst_thread_root",
+				"text":            "thread root",
+				"thread_group_id": "thg_123",
+				"thread_position": 1,
+				"root_post_id":    "pst_thread_root",
+			}},
 		})
 	}))
 	defer server.Close()
@@ -38,8 +44,61 @@ func TestRunScheduleListJSON(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d, stderr=%s", code, stderr.String())
 	}
-	if !strings.Contains(stdout.String(), `"items": []`) {
+	if !strings.Contains(stdout.String(), `"thread_group_id": "thg_123"`) || !strings.Contains(stdout.String(), `"thread_position": 1`) {
 		t.Fatalf("expected json output, got %s", stdout.String())
+	}
+}
+
+func TestRunPostsEditSupportsSegmentsJSON(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("expected POST, got %s", r.Method)
+		}
+		if r.URL.Path != "/posts/pst_thread_root/edit" {
+			t.Fatalf("unexpected path %s", r.URL.Path)
+		}
+		var payload map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode payload: %v", err)
+		}
+		if _, ok := payload["text"]; ok {
+			t.Fatalf("did not expect legacy text payload when using segments_json")
+		}
+		rawSegments, ok := payload["segments"].([]any)
+		if !ok || len(rawSegments) != 2 {
+			t.Fatalf("expected 2 segments, got %#v", payload["segments"])
+		}
+		first, _ := rawSegments[0].(map[string]any)
+		second, _ := rawSegments[1].(map[string]any)
+		if first["text"] != "root updated" || second["text"] != "reply updated" {
+			t.Fatalf("unexpected segments payload %#v", rawSegments)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"id":     "pst_thread_root",
+			"status": "draft",
+			"post": map[string]any{
+				"id":              "pst_thread_root",
+				"text":            "root updated",
+				"thread_group_id": "thg_123",
+				"thread_position": 1,
+			},
+		})
+	}))
+	defer server.Close()
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := Run(context.Background(), []string{
+		"--base-url", server.URL,
+		"posts", "edit",
+		"--id", "pst_thread_root",
+		"--segments-json", `[{"text":"root updated"},{"text":"reply updated"}]`,
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("expected edit exit 0, got %d, stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "edited post: pst_thread_root") {
+		t.Fatalf("expected edit output, got %s", stdout.String())
 	}
 }
 

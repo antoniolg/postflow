@@ -109,13 +109,17 @@ func TestRequiredCapabilitiesBehaviorParity(t *testing.T) {
 			{"text": "thread follow up 1"},
 			{"text": "thread follow up 2"},
 		}
-		apiIDs := env.apiCreateThread(threadSegments)
-		cliIDs := env.cliCreateThread(`[{"text":"thread root"},{"text":"thread follow up 1"},{"text":"thread follow up 2"}]`)
-		mcpIDs := env.mcpCreateThread(threadSegments)
+		apiOut := env.apiCreateThreadDetailed(threadSegments)
+		cliOut := env.cliCreateThreadDetailed(`[{"text":"thread root"},{"text":"thread follow up 1"},{"text":"thread follow up 2"}]`)
+		mcpOut := env.mcpCreateThreadDetailed(threadSegments)
 
-		assertThreadLength(t, env, "api", apiIDs, 3)
-		assertThreadLength(t, env, "cli", cliIDs, 3)
-		assertThreadLength(t, env, "mcp", mcpIDs, 3)
+		assertThreadCreateOutput(t, "api", apiOut, 3)
+		assertThreadCreateOutput(t, "cli", cliOut, 3)
+		assertThreadCreateOutput(t, "mcp", mcpOut, 3)
+
+		assertThreadTexts(t, env, "api", apiOut.RootID, []string{"thread root", "thread follow up 1", "thread follow up 2"})
+		assertThreadTexts(t, env, "cli", cliOut.RootID, []string{"thread root", "thread follow up 1", "thread follow up 2"})
+		assertThreadTexts(t, env, "mcp", mcpOut.RootID, []string{"thread root", "thread follow up 1", "thread follow up 2"})
 	})
 
 	t.Run("posts.thread.validate", func(t *testing.T) {
@@ -130,6 +134,50 @@ func TestRequiredCapabilitiesBehaviorParity(t *testing.T) {
 		if !apiValid || !cliValid || !mcpValid {
 			t.Fatalf("expected valid=true on thread validate on all surfaces, got api=%t cli=%t mcp=%t", apiValid, cliValid, mcpValid)
 		}
+	})
+
+	t.Run("posts.thread.edit", func(t *testing.T) {
+		apiOut := env.apiCreateThreadDetailed([]map[string]any{
+			{"text": "api edit root"},
+			{"text": "api edit reply"},
+		})
+		cliOut := env.cliCreateThreadDetailed(`[{"text":"cli edit root"},{"text":"cli edit reply"}]`)
+		mcpOut := env.mcpCreateThreadDetailed([]map[string]any{
+			{"text": "mcp edit root"},
+			{"text": "mcp edit reply"},
+		})
+
+		env.apiEditThread(apiOut.RootID, []map[string]any{
+			{"text": "api edit root updated"},
+			{"text": "api edit reply updated"},
+			{"text": "api edit reply extra"},
+		})
+		env.cliEditThread(cliOut.RootID, `[{"text":"cli edit root updated"},{"text":"cli edit reply updated"},{"text":"cli edit reply extra"}]`)
+		env.mcpEditThread(mcpOut.RootID, []map[string]any{
+			{"text": "mcp edit root updated"},
+			{"text": "mcp edit reply updated"},
+			{"text": "mcp edit reply extra"},
+		})
+
+		assertThreadTexts(t, env, "api edit", apiOut.RootID, []string{"api edit root updated", "api edit reply updated", "api edit reply extra"})
+		assertThreadTexts(t, env, "cli edit", cliOut.RootID, []string{"cli edit root updated", "cli edit reply updated", "cli edit reply extra"})
+		assertThreadTexts(t, env, "mcp edit", mcpOut.RootID, []string{"mcp edit root updated", "mcp edit reply updated", "mcp edit reply extra"})
+	})
+
+	t.Run("posts.thread.list_metadata", func(t *testing.T) {
+		scheduledAt := time.Now().UTC().Add(75 * time.Minute).Round(time.Second)
+		threadOut := env.apiCreateScheduledThreadDetailed([]map[string]any{
+			{"text": "metadata root"},
+			{"text": "metadata reply 1"},
+			{"text": "metadata reply 2"},
+		}, scheduledAt)
+
+		from := time.Now().UTC().Add(-1 * time.Hour).Format(time.RFC3339)
+		to := time.Now().UTC().Add(24 * time.Hour).Format(time.RFC3339)
+
+		assertListedThreadMetadata(t, "api schedule list", env.apiScheduleListPostsDetailed(from, to), threadOut)
+		assertListedThreadMetadata(t, "cli schedule list", env.cliScheduleListPostsDetailed(from, to), threadOut)
+		assertListedThreadMetadata(t, "mcp schedule list", env.mcpScheduleListPostsDetailed(from, to), threadOut)
 	})
 
 	t.Run("failed.list", func(t *testing.T) {
@@ -233,6 +281,86 @@ func assertThreadLength(t *testing.T, env *parityEnv, source string, ids []strin
 		expectedText := expectedTexts[i]
 		if strings.TrimSpace(posts[i].Text) != expectedText {
 			t.Fatalf("%s expected step %d text %q, got %q", source, i+1, expectedText, strings.TrimSpace(posts[i].Text))
+		}
+	}
+}
+
+func assertThreadCreateOutput(t *testing.T, source string, out parityThreadCreateOutput, expectedSteps int) {
+	t.Helper()
+	if strings.TrimSpace(out.RootID) == "" {
+		t.Fatalf("%s create output missing root_id", source)
+	}
+	if out.TotalSteps != expectedSteps {
+		t.Fatalf("%s expected total_steps=%d, got %d", source, expectedSteps, out.TotalSteps)
+	}
+	if len(out.Items) != expectedSteps {
+		t.Fatalf("%s expected %d thread items in response, got %d", source, expectedSteps, len(out.Items))
+	}
+	foundRoot := false
+	for _, item := range out.Items {
+		if strings.TrimSpace(item.ThreadGroupID) == "" {
+			t.Fatalf("%s expected thread_group_id in create item %s", source, item.ID)
+		}
+		if item.ThreadPosition == 0 {
+			t.Fatalf("%s expected thread_position in create item %s", source, item.ID)
+		}
+		if strings.TrimSpace(item.ID) == strings.TrimSpace(out.RootID) {
+			foundRoot = true
+			if item.ThreadPosition != 1 {
+				t.Fatalf("%s expected root create item to be position 1, got %d", source, item.ThreadPosition)
+			}
+		}
+	}
+	if !foundRoot {
+		t.Fatalf("%s create output missing root item %s", source, out.RootID)
+	}
+}
+
+func assertThreadTexts(t *testing.T, env *parityEnv, source string, rootID string, expectedTexts []string) {
+	t.Helper()
+	posts, err := env.store.ListThreadPosts(t.Context(), strings.TrimSpace(rootID))
+	if err != nil {
+		t.Fatalf("%s list thread posts: %v", source, err)
+	}
+	if len(posts) != len(expectedTexts) {
+		t.Fatalf("%s expected thread length %d, got %d", source, len(expectedTexts), len(posts))
+	}
+	for idx, expectedText := range expectedTexts {
+		if strings.TrimSpace(posts[idx].Text) != expectedText {
+			t.Fatalf("%s expected step %d text %q, got %q", source, idx+1, expectedText, strings.TrimSpace(posts[idx].Text))
+		}
+	}
+}
+
+func assertListedThreadMetadata(t *testing.T, source string, listed []parityThreadPost, created parityThreadCreateOutput) {
+	t.Helper()
+	if len(created.Items) == 0 {
+		t.Fatalf("%s missing created thread items for metadata assertion", source)
+	}
+	listedByID := make(map[string]parityThreadPost, len(listed))
+	for _, item := range listed {
+		listedByID[strings.TrimSpace(item.ID)] = item
+	}
+	groupID := ""
+	for _, createdItem := range created.Items {
+		itemID := strings.TrimSpace(createdItem.ID)
+		got, ok := listedByID[itemID]
+		if !ok {
+			t.Fatalf("%s missing thread item %s from list output", source, itemID)
+		}
+		if got.ThreadPosition != createdItem.ThreadPosition {
+			t.Fatalf("%s expected thread_position=%d for %s, got %d", source, createdItem.ThreadPosition, itemID, got.ThreadPosition)
+		}
+		if strings.TrimSpace(got.ThreadGroupID) == "" {
+			t.Fatalf("%s expected thread_group_id for %s", source, itemID)
+		}
+		if groupID == "" {
+			groupID = strings.TrimSpace(got.ThreadGroupID)
+		} else if strings.TrimSpace(got.ThreadGroupID) != groupID {
+			t.Fatalf("%s expected consistent thread_group_id, got %q and %q", source, groupID, got.ThreadGroupID)
+		}
+		if createdItem.ThreadPosition > 1 && strings.TrimSpace(got.RootPostID) != strings.TrimSpace(created.RootID) {
+			t.Fatalf("%s expected root_post_id=%s for %s, got %s", source, created.RootID, itemID, got.RootPostID)
 		}
 	}
 }

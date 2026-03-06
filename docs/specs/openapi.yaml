@@ -460,11 +460,17 @@ paths:
         content:
           application/json:
             schema:
+              description: >
+                Use `text` + `media_ids` for a single editable post, or `segments` to replace an
+                editable thread while keeping the same root post.
+              oneOf:
+                - required: [text]
+                - required: [segments]
               type: object
-              required: [text]
               properties:
                 text:
                   type: string
+                  description: Root post text for single-post edits.
                 intent:
                   type: string
                   description: Optional mode override (draft|schedule|publish_now)
@@ -476,6 +482,12 @@ paths:
                   items:
                     type: string
                   description: Optional replacement media IDs. Pass an empty array to remove all media.
+                segments:
+                  type: array
+                  minItems: 1
+                  maxItems: 500
+                  items:
+                    $ref: '#/components/schemas/ThreadSegmentInput'
       responses:
         '200':
           description: Post edited

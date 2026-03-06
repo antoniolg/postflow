@@ -113,7 +113,7 @@ func (s Server) newMCPHandler() http.Handler {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "postflow_create_post",
-		Description: "Create a post as draft (no scheduled_at) or scheduled (with scheduled_at).",
+		Description: "Create a post or thread as draft (no scheduled_at) or scheduled (with scheduled_at).",
 		Annotations: &mcp.ToolAnnotations{
 			IdempotentHint: false,
 		},
@@ -137,7 +137,7 @@ func (s Server) newMCPHandler() http.Handler {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "postflow_edit_post",
-		Description: "Edit post text and optionally replace media_ids (pass [] to clear), plus optional intent/scheduled date, while still editable.",
+		Description: "Edit a single post or replace an editable thread via segments, plus optional intent/scheduled date.",
 		Annotations: &mcp.ToolAnnotations{
 			IdempotentHint: false,
 		},
@@ -153,7 +153,7 @@ func (s Server) newMCPHandler() http.Handler {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "postflow_validate_post",
-		Description: "Validate a post payload without creating it.",
+		Description: "Validate a post or thread payload without creating it.",
 		Annotations: &mcp.ToolAnnotations{
 			ReadOnlyHint:   true,
 			IdempotentHint: true,
@@ -295,17 +295,21 @@ type mcpThreadSegmentInput struct {
 }
 
 type mcpPostSummary struct {
-	ID          string `json:"id"`
-	AccountID   string `json:"account_id"`
-	Platform    string `json:"platform"`
-	Status      string `json:"status"`
-	Text        string `json:"text"`
-	ScheduledAt string `json:"scheduled_at,omitempty"`
-	PublishedAt string `json:"published_at,omitempty"`
-	UpdatedAt   string `json:"updated_at"`
-	MediaCount  int    `json:"media_count"`
-	Attempts    int    `json:"attempts"`
-	MaxAttempts int    `json:"max_attempts"`
+	ID             string `json:"id"`
+	AccountID      string `json:"account_id"`
+	Platform       string `json:"platform"`
+	Status         string `json:"status"`
+	Text           string `json:"text"`
+	ScheduledAt    string `json:"scheduled_at,omitempty"`
+	PublishedAt    string `json:"published_at,omitempty"`
+	UpdatedAt      string `json:"updated_at"`
+	MediaCount     int    `json:"media_count"`
+	Attempts       int    `json:"attempts"`
+	MaxAttempts    int    `json:"max_attempts"`
+	ThreadGroupID  string `json:"thread_group_id,omitempty"`
+	ThreadPosition int    `json:"thread_position,omitempty"`
+	ParentPostID   string `json:"parent_post_id,omitempty"`
+	RootPostID     string `json:"root_post_id,omitempty"`
 }
 
 type mcpListScheduleOutput struct {
@@ -339,8 +343,11 @@ type mcpListFailedOutput struct {
 }
 
 type mcpCreatePostOutput struct {
-	Created bool           `json:"created"`
-	Post    mcpPostSummary `json:"post"`
+	Created    bool             `json:"created"`
+	Post       mcpPostSummary   `json:"post"`
+	Items      []mcpPostSummary `json:"items,omitempty"`
+	RootID     string           `json:"root_id,omitempty"`
+	TotalSteps int              `json:"total_steps,omitempty"`
 }
 
 type mcpValidatePostOutput struct {
@@ -498,10 +505,21 @@ func (s Server) mcpCreatePostTool(ctx context.Context, _ *mcp.CallToolRequest, i
 		}
 	}
 
-	return nil, mcpCreatePostOutput{
+	out := mcpCreatePostOutput{
 		Created: item.Created,
 		Post:    toMCPPostSummary(item.Post),
-	}, nil
+	}
+	if len(createOut.Items) > 1 {
+		out.Items = make([]mcpPostSummary, 0, len(createOut.Items))
+		for _, createdItem := range createOut.Items {
+			out.Items = append(out.Items, toMCPPostSummary(createdItem.Post))
+		}
+	}
+	if len(segments) > 1 {
+		out.RootID = strings.TrimSpace(item.Post.ID)
+		out.TotalSteps = len(createOut.Items)
+	}
+	return nil, out, nil
 }
 
 func (s Server) mcpValidatePostTool(ctx context.Context, _ *mcp.CallToolRequest, in mcpValidatePostInput) (*mcp.CallToolResult, mcpValidatePostOutput, error) {
@@ -570,18 +588,30 @@ func (s Server) mcpDeleteFailedTool(ctx context.Context, _ *mcp.CallToolRequest,
 }
 
 func toMCPPostSummary(post domain.Post) mcpPostSummary {
+	parentPostID := ""
+	if post.ParentPostID != nil {
+		parentPostID = strings.TrimSpace(*post.ParentPostID)
+	}
+	rootPostID := ""
+	if post.RootPostID != nil {
+		rootPostID = strings.TrimSpace(*post.RootPostID)
+	}
 	return mcpPostSummary{
-		ID:          post.ID,
-		AccountID:   post.AccountID,
-		Platform:    string(post.Platform),
-		Status:      string(post.Status),
-		Text:        strings.TrimSpace(post.Text),
-		ScheduledAt: formatMCPTime(post.ScheduledAt),
-		PublishedAt: formatMCPTimePtr(post.PublishedAt),
-		UpdatedAt:   formatMCPTime(post.UpdatedAt),
-		MediaCount:  len(post.Media),
-		Attempts:    post.Attempts,
-		MaxAttempts: post.MaxAttempts,
+		ID:             post.ID,
+		AccountID:      post.AccountID,
+		Platform:       string(post.Platform),
+		Status:         string(post.Status),
+		Text:           strings.TrimSpace(post.Text),
+		ScheduledAt:    formatMCPTime(post.ScheduledAt),
+		PublishedAt:    formatMCPTimePtr(post.PublishedAt),
+		UpdatedAt:      formatMCPTime(post.UpdatedAt),
+		MediaCount:     len(post.Media),
+		Attempts:       post.Attempts,
+		MaxAttempts:    post.MaxAttempts,
+		ThreadGroupID:  strings.TrimSpace(post.ThreadGroupID),
+		ThreadPosition: post.ThreadPosition,
+		ParentPostID:   parentPostID,
+		RootPostID:     rootPostID,
 	}
 }
 

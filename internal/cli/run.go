@@ -29,12 +29,16 @@ type scheduleResponse struct {
 }
 
 type postDTO struct {
-	ID          string `json:"id"`
-	AccountID   string `json:"account_id"`
-	Platform    string `json:"platform"`
-	Status      string `json:"status"`
-	Text        string `json:"text"`
-	ScheduledAt string `json:"scheduled_at"`
+	ID             string `json:"id"`
+	AccountID      string `json:"account_id"`
+	Platform       string `json:"platform"`
+	Status         string `json:"status"`
+	Text           string `json:"text"`
+	ScheduledAt    string `json:"scheduled_at"`
+	ThreadGroupID  string `json:"thread_group_id,omitempty"`
+	ThreadPosition int    `json:"thread_position,omitempty"`
+	ParentPostID   string `json:"parent_post_id,omitempty"`
+	RootPostID     string `json:"root_post_id,omitempty"`
 }
 
 type dlqListResponse struct {
@@ -573,6 +577,7 @@ Examples:
   postflow posts validate --account-id acc_abc123 --text "draft check" --scheduled-at 2026-03-01T10:00:00Z
   postflow posts schedule --id pst_abc123 --scheduled-at 2026-03-01T10:00:00Z
   postflow posts edit --id pst_abc123 --text "updated copy" --intent schedule --scheduled-at 2026-03-01T10:30:00Z
+  postflow posts edit --id pst_abc123 --segments-json '[{"text":"root updated"},{"text":"reply updated"}]'
   postflow posts edit --id pst_abc123 --text "updated with media" --replace-media --media-id med_a --media-id med_b
   postflow posts delete --id pst_abc123
   postflow dlq list --limit 50

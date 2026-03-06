@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -117,6 +118,7 @@ func runPostsEdit(ctx context.Context, client *APIClient, cfg config, args []str
 	fs.SetOutput(stderr)
 	id := fs.String("id", "", "Editable post ID")
 	text := fs.String("text", "", "Updated post text")
+	segmentsJSON := fs.String("segments-json", "", "Thread segments JSON: [{\"text\":\"...\",\"media_ids\":[\"med_x\"]}]")
 	intent := fs.String("intent", "", "Optional intent: draft|schedule|publish_now")
 	scheduledAt := fs.String("scheduled-at", "", "Optional scheduled datetime (RFC3339 or datetime-local)")
 	replaceMedia := fs.Bool("replace-media", false, "Replace media IDs. Use with repeated --media-id; can be empty to clear all media")
@@ -131,12 +133,28 @@ func runPostsEdit(ctx context.Context, client *APIClient, cfg config, args []str
 		return 2
 	}
 	content := strings.TrimSpace(*text)
-	if content == "" {
-		fmt.Fprintln(stderr, "--text is required")
+	segmentsJSONValue := strings.TrimSpace(*segmentsJSON)
+	if content == "" && segmentsJSONValue == "" {
+		fmt.Fprintln(stderr, "--text is required (or --segments-json)")
+		return 2
+	}
+	if content != "" && segmentsJSONValue != "" {
+		fmt.Fprintln(stderr, "--text and --segments-json are mutually exclusive")
 		return 2
 	}
 
-	payload := map[string]any{"text": content}
+	payload := map[string]any{}
+	if content != "" {
+		payload["text"] = content
+	}
+	if segmentsJSONValue != "" {
+		var segments []map[string]any
+		if err := json.Unmarshal([]byte(segmentsJSONValue), &segments); err != nil {
+			fmt.Fprintf(stderr, "--segments-json must be valid JSON array: %v\n", err)
+			return 2
+		}
+		payload["segments"] = segments
+	}
 	if trimmed := strings.TrimSpace(*intent); trimmed != "" {
 		payload["intent"] = trimmed
 	}

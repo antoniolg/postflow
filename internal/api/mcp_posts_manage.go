@@ -34,11 +34,12 @@ type mcpSchedulePostOutput struct {
 }
 
 type mcpEditPostInput struct {
-	PostID      string   `json:"post_id" jsonschema:"Editable post ID."`
-	Text        string   `json:"text" jsonschema:"Updated post text content."`
-	Intent      string   `json:"intent,omitempty" jsonschema:"Optional intent: draft|schedule|publish_now."`
-	ScheduledAt string   `json:"scheduled_at,omitempty" jsonschema:"Optional RFC3339 or datetime-local value. If omitted with empty intent, current scheduling is preserved."`
-	MediaIDs    []string `json:"media_ids,omitempty" jsonschema:"Optional replacement media IDs. Pass [] to remove all media."`
+	PostID      string                  `json:"post_id" jsonschema:"Editable post ID."`
+	Text        string                  `json:"text" jsonschema:"Updated post text content for single-post edits."`
+	Intent      string                  `json:"intent,omitempty" jsonschema:"Optional intent: draft|schedule|publish_now."`
+	ScheduledAt string                  `json:"scheduled_at,omitempty" jsonschema:"Optional RFC3339 or datetime-local value. If omitted with empty intent, current scheduling is preserved."`
+	MediaIDs    []string                `json:"media_ids,omitempty" jsonschema:"Optional replacement media IDs for single-post edits. Pass [] to remove all media."`
+	Segments    []mcpThreadSegmentInput `json:"segments,omitempty" jsonschema:"Optional thread segments [{text, media_ids}] where the first segment is the root post."`
 }
 
 type mcpEditPostOutput struct {
@@ -114,6 +115,14 @@ func (s Server) mcpEditPostTool(ctx context.Context, _ *mcp.CallToolRequest, in 
 	if postID == "" {
 		return nil, mcpEditPostOutput{}, errors.New("post_id is required")
 	}
+	text := strings.TrimSpace(in.Text)
+	segments := normalizeMCPThreadSegments(in.Segments)
+	if len(segments) > 0 {
+		text = strings.TrimSpace(segments[0].Text)
+	}
+	if text == "" && len(segments) == 0 {
+		return nil, mcpEditPostOutput{}, errors.New("text is required")
+	}
 
 	uiLoc, _, _, err := s.resolveUILocation(ctx)
 	if err != nil {
@@ -128,13 +137,15 @@ func (s Server) mcpEditPostTool(ctx context.Context, _ *mcp.CallToolRequest, in 
 		Store:    s.Store,
 		Registry: s.providerRegistry(),
 	}
+	mediaIDs := cleanMCPMediaIDs(in.MediaIDs)
 	post, err := svc.UpdateEditable(ctx, postsapp.EditInput{
 		PostID:       postID,
-		Text:         strings.TrimSpace(in.Text),
+		Text:         text,
 		Intent:       strings.ToLower(strings.TrimSpace(in.Intent)),
 		ScheduledAt:  scheduledAt,
-		MediaIDs:     in.MediaIDs,
+		MediaIDs:     mediaIDs,
 		ReplaceMedia: in.MediaIDs != nil,
+		Segments:     toAppSegments(segments),
 	}, time.Now)
 	if err != nil {
 		switch {
