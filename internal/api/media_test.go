@@ -632,6 +632,100 @@ func TestUploadMediaAcceptsOutOfOrderMultipartFields(t *testing.T) {
 	}
 }
 
+func TestUploadMediaFallsBackToFileExtensionWhenMultipartUsesGenericMime(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	filePart, err := writer.CreateFormFile("file", "cover.jpg")
+	if err != nil {
+		t.Fatalf("create form file: %v", err)
+	}
+	payload := []byte("not-a-real-jpeg-but-extension-matters")
+	if _, err := filePart.Write(payload); err != nil {
+		t.Fatalf("write file payload: %v", err)
+	}
+	if err := writer.WriteField("kind", "image"); err != nil {
+		t.Fatalf("write kind field: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close writer: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/media", &body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		MimeType string `json:"mime_type"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.MimeType != "image/jpeg" {
+		t.Fatalf("expected mime_type image/jpeg, got %q", resp.MimeType)
+	}
+}
+
+func TestUploadMediaSniffsMimeWhenMultipartUsesGenericMimeWithoutExtension(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	filePart, err := writer.CreateFormFile("file", "cover")
+	if err != nil {
+		t.Fatalf("create form file: %v", err)
+	}
+	payload := []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 0, 0, 0, 0}
+	if _, err := filePart.Write(payload); err != nil {
+		t.Fatalf("write file payload: %v", err)
+	}
+	if err := writer.WriteField("kind", "image"); err != nil {
+		t.Fatalf("write kind field: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close writer: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/media", &body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		MimeType string `json:"mime_type"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.MimeType != "image/png" {
+		t.Fatalf("expected mime_type image/png, got %q", resp.MimeType)
+	}
+}
+
 func TestUploadMediaMissingFileReturnsBadRequest(t *testing.T) {
 	tempDir := t.TempDir()
 	store, err := db.Open(filepath.Join(tempDir, "test.db"))

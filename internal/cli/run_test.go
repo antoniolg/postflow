@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -347,6 +348,63 @@ func TestRunMediaUploadHTTPErrorJSON(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "POST /media: status 413: file too large") {
 		t.Fatalf("expected upload json-error message, got %s", stderr.String())
+	}
+}
+
+func TestRunMediaUploadSendsDetectedFileMimeType(t *testing.T) {
+	filePath := filepath.Join(t.TempDir(), "cover.jpg")
+	payload := []byte{0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43, 0x00}
+	if err := os.WriteFile(filePath, payload, 0o644); err != nil {
+		t.Fatalf("write media file: %v", err)
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/media" {
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		mr, err := r.MultipartReader()
+		if err != nil {
+			t.Fatalf("multipart reader: %v", err)
+		}
+		seenFile := false
+		for {
+			part, err := mr.NextPart()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				t.Fatalf("next part: %v", err)
+			}
+			if part.FormName() != "file" {
+				_, _ = io.Copy(io.Discard, part)
+				_ = part.Close()
+				continue
+			}
+			seenFile = true
+			if got := strings.TrimSpace(part.Header.Get("Content-Type")); got != "image/jpeg" {
+				t.Fatalf("expected file part content-type image/jpeg, got %q", got)
+			}
+			_, _ = io.Copy(io.Discard, part)
+			_ = part.Close()
+		}
+		if !seenFile {
+			t.Fatalf("expected file part in multipart body")
+		}
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "med_1", "mime_type": "image/jpeg"})
+	}))
+	defer server.Close()
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := Run(context.Background(), []string{
+		"--base-url", server.URL,
+		"media", "upload",
+		"--file", filePath,
+		"--kind", "image",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("expected upload exit 0, got %d, stderr=%s", code, stderr.String())
 	}
 }
 

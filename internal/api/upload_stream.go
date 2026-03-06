@@ -91,10 +91,21 @@ func (s Server) saveUploadToDisk(r *http.Request) (_ mediaUpload, status int, er
 			}
 			upload.StoragePath = filepath.Join(storageDir, mediaID+"_"+name)
 
+			sniffed, readErr := readPartPrefix(part, 512)
+			if readErr != nil {
+				_ = part.Close()
+				return mediaUpload{}, http.StatusInternalServerError, readErr
+			}
 			out, err = os.Create(upload.StoragePath)
 			if err != nil {
 				_ = part.Close()
 				return mediaUpload{}, http.StatusInternalServerError, err
+			}
+			if len(sniffed) > 0 {
+				if _, err := out.Write(sniffed); err != nil {
+					_ = part.Close()
+					return mediaUpload{}, http.StatusInternalServerError, err
+				}
 			}
 			size, copyErr := io.CopyBuffer(out, part, copyBuffer)
 			_ = part.Close()
@@ -106,8 +117,8 @@ func (s Server) saveUploadToDisk(r *http.Request) (_ mediaUpload, status int, er
 			}
 			out = nil
 
-			upload.SizeBytes = size
-			upload.MimeType = detectUploadedMimeType(part.Header.Get("Content-Type"), upload.OriginalName)
+			upload.SizeBytes = int64(len(sniffed)) + size
+			upload.MimeType = detectUploadedMimeType(part.Header.Get("Content-Type"), upload.OriginalName, sniffed)
 		default:
 			_, _ = io.Copy(io.Discard, part)
 			_ = part.Close()
@@ -132,16 +143,45 @@ func readMultipartField(part *multipart.Part, maxBytes int64) (string, error) {
 	return strings.TrimSpace(string(raw)), nil
 }
 
-func detectUploadedMimeType(contentType, originalName string) string {
+func readPartPrefix(part *multipart.Part, maxBytes int) ([]byte, error) {
+	if maxBytes <= 0 {
+		return nil, nil
+	}
+	buf := make([]byte, maxBytes)
+	n, err := io.ReadFull(part, buf)
+	switch {
+	case errors.Is(err, io.EOF), errors.Is(err, io.ErrUnexpectedEOF), err == nil:
+		return buf[:n], nil
+	default:
+		return nil, err
+	}
+}
+
+func detectUploadedMimeType(contentType, originalName string, content []byte) string {
 	mimeType := strings.TrimSpace(contentType)
-	if mimeType != "" {
+	if !isGenericUploadMimeType(mimeType) && mimeType != "" {
 		return mimeType
 	}
-	mimeType = mime.TypeByExtension(filepath.Ext(originalName))
-	if mimeType == "" {
-		mimeType = "application/octet-stream"
+	if extMimeType := strings.TrimSpace(mime.TypeByExtension(strings.ToLower(filepath.Ext(originalName)))); extMimeType != "" {
+		return extMimeType
 	}
-	return mimeType
+	if len(content) > 0 {
+		if sniffed := strings.TrimSpace(http.DetectContentType(content)); sniffed != "" {
+			return sniffed
+		}
+	}
+	return "application/octet-stream"
+}
+
+func isGenericUploadMimeType(raw string) bool {
+	mimeType, _, err := mime.ParseMediaType(strings.TrimSpace(raw))
+	if err != nil {
+		mimeType = strings.TrimSpace(raw)
+		if i := strings.Index(mimeType, ";"); i >= 0 {
+			mimeType = strings.TrimSpace(mimeType[:i])
+		}
+	}
+	return strings.EqualFold(mimeType, "application/octet-stream")
 }
 
 func removeFileQuiet(path string) error {

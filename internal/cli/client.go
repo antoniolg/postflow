@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime"
 	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -75,7 +77,11 @@ func (c *APIClient) PostMultipartFile(ctx context.Context, path, fileField, file
 			return fmt.Errorf("write multipart field %q: %w", key, err)
 		}
 	}
-	part, err := writer.CreateFormFile(fileField, filepath.Base(filePath))
+	mimeType, err := detectUploadFileMimeType(file, filePath)
+	if err != nil {
+		return err
+	}
+	part, err := createMultipartFilePart(writer, fileField, filepath.Base(filePath), mimeType)
 	if err != nil {
 		return fmt.Errorf("create form file: %w", err)
 	}
@@ -105,6 +111,45 @@ func (c *APIClient) PostMultipartFile(ctx context.Context, path, fileField, file
 		return fmt.Errorf("read response body: %w", err)
 	}
 	return decodeResponse(http.MethodPost, path, resp.StatusCode, respBody, out)
+}
+
+func createMultipartFilePart(writer *multipart.Writer, fileField, fileName, mimeType string) (io.Writer, error) {
+	header := make(textproto.MIMEHeader)
+	header.Set("Content-Disposition", multipart.FileContentDisposition(fileField, fileName))
+	header.Set("Content-Type", strings.TrimSpace(mimeType))
+	return writer.CreatePart(header)
+}
+
+func detectUploadFileMimeType(file *os.File, filePath string) (string, error) {
+	var sniff [512]byte
+	n, err := file.Read(sniff[:])
+	if err != nil && err != io.EOF {
+		return "", fmt.Errorf("detect file mime: %w", err)
+	}
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return "", fmt.Errorf("rewind file after mime detection: %w", err)
+	}
+	if n > 0 {
+		mimeType := strings.TrimSpace(http.DetectContentType(sniff[:n]))
+		if !isGenericMIMEType(mimeType) {
+			return mimeType, nil
+		}
+	}
+	if mimeType := strings.TrimSpace(mime.TypeByExtension(strings.ToLower(filepath.Ext(filePath)))); mimeType != "" {
+		return mimeType, nil
+	}
+	return "application/octet-stream", nil
+}
+
+func isGenericMIMEType(raw string) bool {
+	mimeType, _, err := mime.ParseMediaType(strings.TrimSpace(raw))
+	if err != nil {
+		mimeType = strings.TrimSpace(raw)
+		if i := strings.Index(mimeType, ";"); i >= 0 {
+			mimeType = strings.TrimSpace(mimeType[:i])
+		}
+	}
+	return strings.EqualFold(mimeType, "application/octet-stream")
 }
 
 func (c *APIClient) do(ctx context.Context, method, path string, query url.Values, in any, out any, headers map[string]string) error {
