@@ -29,8 +29,6 @@ type LinkedInProvider struct {
 	client *http.Client
 }
 
-const linkedInRestVersion = "202601"
-
 func NewLinkedInProvider(cfg LinkedInProviderConfig) *LinkedInProvider {
 	if strings.TrimSpace(cfg.AuthBaseURL) == "" {
 		cfg.AuthBaseURL = "https://www.linkedin.com"
@@ -205,13 +203,12 @@ func (p *LinkedInProvider) publishComment(ctx context.Context, accessToken, memb
 		}
 	}
 	raw, _ := json.Marshal(payload)
-	endpoint := strings.TrimRight(p.cfg.APIBaseURL, "/") + "/rest/socialActions/" + url.PathEscape(target) + "/comments"
+	endpoint := strings.TrimRight(p.cfg.APIBaseURL, "/") + "/v2/socialActions/" + url.PathEscape(target) + "/comments"
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(raw))
 	if err != nil {
 		return "", err
 	}
 	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(accessToken))
-	req.Header.Set("Linkedin-Version", linkedInRestVersion)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := p.client.Do(req)
 	if err != nil {

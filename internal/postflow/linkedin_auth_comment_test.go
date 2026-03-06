@@ -84,7 +84,7 @@ func TestLinkedInPublishCommentMode(t *testing.T) {
 	targetURN := "urn:li:ugcPost:7096760097833439232"
 	encodedTargetURN := url.PathEscape(targetURN)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if got := r.URL.EscapedPath(); got != "/rest/socialActions/"+encodedTargetURN+"/comments" {
+		if got := r.URL.EscapedPath(); got != "/v2/socialActions/"+encodedTargetURN+"/comments" {
 			http.NotFound(w, r)
 			return
 		}
@@ -92,11 +92,11 @@ func TestLinkedInPublishCommentMode(t *testing.T) {
 		if got := strings.TrimSpace(r.Header.Get("Authorization")); got != "Bearer token-1" {
 			t.Fatalf("unexpected authorization header %q", got)
 		}
-		if got := strings.TrimSpace(r.Header.Get("Linkedin-Version")); got != linkedInRestVersion {
-			t.Fatalf("unexpected Linkedin-Version header %q", got)
+		if got := strings.TrimSpace(r.Header.Get("Linkedin-Version")); got != "" {
+			t.Fatalf("did not expect Linkedin-Version on v2 comment endpoint, got %q", got)
 		}
 		if got := strings.TrimSpace(r.Header.Get("X-Restli-Protocol-Version")); got != "" {
-			t.Fatalf("did not expect X-Restli-Protocol-Version on rest comment endpoint, got %q", got)
+			t.Fatalf("did not expect X-Restli-Protocol-Version on v2 comment endpoint, got %q", got)
 		}
 		var payload map[string]any
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
@@ -143,7 +143,7 @@ func TestLinkedInPublishCommentMode(t *testing.T) {
 func TestLinkedInPublishCommentModeUsesRestliHeaderID(t *testing.T) {
 	targetURN := "urn:li:ugcPost:7096760097833439232"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if got := r.URL.EscapedPath(); got != "/rest/socialActions/"+url.PathEscape(targetURN)+"/comments" {
+		if got := r.URL.EscapedPath(); got != "/v2/socialActions/"+url.PathEscape(targetURN)+"/comments" {
 			http.NotFound(w, r)
 			return
 		}
@@ -173,7 +173,7 @@ func TestLinkedInPublishCommentModeUsesRestliHeaderID(t *testing.T) {
 func TestLinkedInPublishNestedCommentModeUsesParentComment(t *testing.T) {
 	parentCommentURN := "urn:li:comment:(urn:li:ugcPost:7096760097833439232,7100646796353826816)"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if got := r.URL.EscapedPath(); got != "/rest/socialActions/"+url.PathEscape(parentCommentURN)+"/comments" {
+		if got := r.URL.EscapedPath(); got != "/v2/socialActions/"+url.PathEscape(parentCommentURN)+"/comments" {
 			http.NotFound(w, r)
 			return
 		}
@@ -212,15 +212,15 @@ func TestLinkedInPublishNestedCommentModeUsesParentComment(t *testing.T) {
 func TestLinkedInPublishCommentModeAcceptsShareURNTargets(t *testing.T) {
 	targetURN := "urn:li:share:7435691467278331904"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if got := r.URL.EscapedPath(); got != "/rest/socialActions/"+url.PathEscape(targetURN)+"/comments" {
+		if got := r.URL.EscapedPath(); got != "/v2/socialActions/"+url.PathEscape(targetURN)+"/comments" {
 			http.NotFound(w, r)
 			return
 		}
-		if got := strings.TrimSpace(r.Header.Get("Linkedin-Version")); got != linkedInRestVersion {
-			t.Fatalf("unexpected Linkedin-Version header %q", got)
+		if got := strings.TrimSpace(r.Header.Get("Linkedin-Version")); got != "" {
+			t.Fatalf("did not expect Linkedin-Version on v2 comment endpoint, got %q", got)
 		}
 		if got := strings.TrimSpace(r.Header.Get("X-Restli-Protocol-Version")); got != "" {
-			t.Fatalf("did not expect X-Restli-Protocol-Version on rest comment endpoint, got %q", got)
+			t.Fatalf("did not expect X-Restli-Protocol-Version on v2 comment endpoint, got %q", got)
 		}
 		var payload map[string]any
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
