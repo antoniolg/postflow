@@ -84,13 +84,16 @@ func TestLinkedInPublishCommentMode(t *testing.T) {
 	targetURN := "urn:li:ugcPost:7096760097833439232"
 	encodedTargetURN := url.PathEscape(targetURN)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if got := r.URL.EscapedPath(); got != "/v2/socialActions/"+encodedTargetURN+"/comments" {
+		if got := r.URL.EscapedPath(); got != "/rest/socialActions/"+encodedTargetURN+"/comments" {
 			http.NotFound(w, r)
 			return
 		}
 		sawCommentEndpoint = true
 		if got := strings.TrimSpace(r.Header.Get("Authorization")); got != "Bearer token-1" {
 			t.Fatalf("unexpected authorization header %q", got)
+		}
+		if got := strings.TrimSpace(r.Header.Get("Linkedin-Version")); got != linkedInRestVersion {
+			t.Fatalf("unexpected Linkedin-Version header %q", got)
 		}
 		var payload map[string]any
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
@@ -137,7 +140,7 @@ func TestLinkedInPublishCommentMode(t *testing.T) {
 func TestLinkedInPublishCommentModeUsesRestliHeaderID(t *testing.T) {
 	targetURN := "urn:li:ugcPost:7096760097833439232"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if got := r.URL.EscapedPath(); got != "/v2/socialActions/"+url.PathEscape(targetURN)+"/comments" {
+		if got := r.URL.EscapedPath(); got != "/rest/socialActions/"+url.PathEscape(targetURN)+"/comments" {
 			http.NotFound(w, r)
 			return
 		}
@@ -167,7 +170,7 @@ func TestLinkedInPublishCommentModeUsesRestliHeaderID(t *testing.T) {
 func TestLinkedInPublishNestedCommentModeUsesParentComment(t *testing.T) {
 	parentCommentURN := "urn:li:comment:(urn:li:ugcPost:7096760097833439232,7100646796353826816)"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if got := r.URL.EscapedPath(); got != "/v2/socialActions/"+url.PathEscape(parentCommentURN)+"/comments" {
+		if got := r.URL.EscapedPath(); got != "/rest/socialActions/"+url.PathEscape(parentCommentURN)+"/comments" {
 			http.NotFound(w, r)
 			return
 		}
@@ -200,6 +203,46 @@ func TestLinkedInPublishNestedCommentModeUsesParentComment(t *testing.T) {
 	}
 	if externalID != "urn:li:comment:(urn:li:ugcPost:7096760097833439232,7100646796353826817)" {
 		t.Fatalf("unexpected nested comment external id %q", externalID)
+	}
+}
+
+func TestLinkedInPublishCommentModeAcceptsShareURNTargets(t *testing.T) {
+	targetURN := "urn:li:share:7435691467278331904"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.EscapedPath(); got != "/rest/socialActions/"+url.PathEscape(targetURN)+"/comments" {
+			http.NotFound(w, r)
+			return
+		}
+		if got := strings.TrimSpace(r.Header.Get("Linkedin-Version")); got != linkedInRestVersion {
+			t.Fatalf("unexpected Linkedin-Version header %q", got)
+		}
+		var payload map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode share comment payload: %v", err)
+		}
+		if object, _ := payload["object"].(string); strings.TrimSpace(object) != targetURN {
+			t.Fatalf("unexpected share comment object %q", object)
+		}
+		w.Header().Set("x-restli-id", "7435691469999999999")
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer server.Close()
+
+	provider := NewLinkedInProvider(LinkedInProviderConfig{APIBaseURL: server.URL})
+	externalID, err := provider.Publish(context.Background(), domain.SocialAccount{
+		Platform:          domain.PlatformLinkedIn,
+		ExternalAccountID: "member_1",
+	}, Credentials{AccessToken: "token-1"}, domain.Post{
+		Text: "share comment text",
+	}, PublishOptions{
+		Mode:             PublishModeComment,
+		ParentExternalID: targetURN,
+	})
+	if err != nil {
+		t.Fatalf("publish comment on share urn: %v", err)
+	}
+	if externalID != "urn:li:comment:(urn:li:share:7435691467278331904,7435691469999999999)" {
+		t.Fatalf("unexpected external id %q", externalID)
 	}
 }
 
