@@ -3555,7 +3555,7 @@
           <div class="day-panel-sub">// {{t "calendar.scheduled_posts" .SelectedDayPendingCount}}</div>
         </div>
         <div class="day-panel-body">
-          {{if and (eq (len .SelectedDayPendingGroups) 0) (eq (len .SelectedDayPublishedGroups) 0)}}
+          {{if and (eq (len .SelectedDayPendingGroups) 0) (eq (len .SelectedDayPublishedGroups) 0) (eq (len .SelectedDayFailedGroups) 0)}}
           <div class="empty">{{t "calendar.empty_day"}}</div>
           {{else}}
           {{if gt (len .SelectedDayPendingGroups) 0}}
@@ -3611,6 +3611,9 @@
           {{if and (gt (len .SelectedDayPendingGroups) 0) (gt (len .SelectedDayPublishedGroups) 0)}}
           <div class="day-separator">{{t "calendar.published"}}</div>
           {{end}}
+          {{if and (gt (len .SelectedDayPendingGroups) 0) (eq (len .SelectedDayPublishedGroups) 0) (gt (len .SelectedDayFailedGroups) 0)}}
+          <div class="day-separator">{{t "calendar.failed"}}</div>
+          {{end}}
           {{if gt (len .SelectedDayPublishedGroups) 0}}
           <div class="day-group-title">{{t "calendar.published_count" .SelectedDayPublishedCount}}</div>
           {{range .SelectedDayPublishedGroups}}
@@ -3651,6 +3654,55 @@
               </div>
             </div>
             <div class="publication-text">{{previewMarkdown .Text}}</div>
+          </article>
+          {{end}}
+          {{end}}
+          {{if and (gt (len .SelectedDayFailedGroups) 0) (gt (len .SelectedDayPublishedGroups) 0)}}
+          <div class="day-separator">{{t "calendar.failed"}}</div>
+          {{end}}
+          {{if gt (len .SelectedDayFailedGroups) 0}}
+          <div class="day-group-title">{{t "calendar.failed_count" .SelectedDayFailedCount}}</div>
+          {{range .SelectedDayFailedGroups}}
+          <article class="card failed publication-card day-panel-publication-card {{if .EditURL}}card-editable{{end}}" data-status="failed" data-failed-group="{{.PostCount}}" data-failed-platform-count="{{len .Platforms}}" {{if .EditURL}}data-edit-url="{{.EditURL}}"{{end}}>
+            <div class="publication-card-head">
+              <div class="publication-time">
+                <span class="publication-time-date">{{.ScheduledAtLabel}}</span>
+              </div>
+              <div class="publication-head-right">
+                <div class="publication-meta-row">
+                  {{range .Platforms}}
+                  <span class="publication-platform-chip" title="{{.}}">
+                    <span class="sr-only">{{.}}</span>
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      {{if eq . "x"}}
+                      <use href="#pf-brand-x"></use>
+                      {{else if eq . "linkedin"}}
+                      <use href="#pf-brand-linkedin"></use>
+                      {{else if eq . "facebook"}}
+                      <use href="#pf-brand-facebook"></use>
+                      {{else if eq . "instagram"}}
+                      <use href="#pf-brand-instagram"></use>
+                      {{else}}
+                      <use href="#pf-brand-default"></use>
+                      {{end}}
+                    </svg>
+                  </span>
+                  {{end}}
+                  {{if .ThreadLabel}}<span class="thread-step-badge publication-thread-chip">{{.ThreadLabel}}</span>{{end}}
+                  <span class="publication-media-chip" title="{{t "common.media_count" .MediaCount}}" aria-label="{{t "common.media_count" .MediaCount}}">
+                    <svg data-lucide="image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="m21 15-5-5L5 21"></path></svg>
+                    <span>{{.MediaCount}}</span>
+                  </span>
+                  {{if gt .PostCount 1}}<span class="publication-count-chip">x{{.PostCount}}</span>{{end}}
+                </div>
+              </div>
+            </div>
+            <div class="publication-text">{{previewMarkdown .Text}}</div>
+            <div class="meta">
+              <span>{{t "failed.attempts" .Attempts .MaxAttempts}}</span>
+              <span>{{t "failed.failed_at" .FailedAtLabel}}</span>
+              <span class="failed-error-text">{{.LastError}}</span>
+            </div>
           </article>
           {{end}}
           {{end}}

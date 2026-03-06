@@ -253,12 +253,16 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	selectedDayPosts := postsByDate[selectedDayKey]
 	selectedDayPendingPosts := make([]domain.Post, 0, len(selectedDayPosts))
 	selectedDayPublishedPosts := make([]domain.Post, 0, len(selectedDayPosts))
+	selectedDayFailedPostIDs := make(map[string]struct{}, len(selectedDayPosts))
 	for _, item := range selectedDayPosts {
-		if item.Status == domain.PostStatusPublished {
+		switch item.Status {
+		case domain.PostStatusPublished:
 			selectedDayPublishedPosts = append(selectedDayPublishedPosts, item)
-			continue
+		case domain.PostStatusFailed:
+			selectedDayFailedPostIDs[item.ID] = struct{}{}
+		default:
+			selectedDayPendingPosts = append(selectedDayPendingPosts, item)
 		}
-		selectedDayPendingPosts = append(selectedDayPendingPosts, item)
 	}
 	selectedDayPendingGroups := groupPublicationsByContent(selectedDayPendingPosts, threadLabelFor)
 	selectedDayPublishedGroups := groupPublicationsByContent(selectedDayPublishedPosts, threadLabelFor)
@@ -351,6 +355,20 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 			AccountIDs:    append([]string(nil), failedGroups[i].AccountIDs...),
 		}, currentViewURL)
 	}
+	selectedDayFailedEnvelopes := make([]failedPostEnvelope, 0, len(selectedDayFailedPostIDs))
+	for _, item := range failedEnvelopes {
+		if _, ok := selectedDayFailedPostIDs[item.Post.ID]; ok {
+			selectedDayFailedEnvelopes = append(selectedDayFailedEnvelopes, item)
+		}
+	}
+	selectedDayFailedGroups := groupFailedPosts(selectedDayFailedEnvelopes, threadLabelFor, uiLoc, uiMessage(uiLang, "common.no_date"))
+	for i := range selectedDayFailedGroups {
+		selectedDayFailedGroups[i].EditURL = publicationGroupEditURL(publicationGroupItem{
+			PrimaryPostID: selectedDayFailedGroups[i].PrimaryPostID,
+			AccountIDs:    append([]string(nil), selectedDayFailedGroups[i].AccountIDs...),
+		}, currentViewURL)
+	}
+	selectedDayFailedCount := len(selectedDayFailedEnvelopes)
 	mediaLibrary, err := s.listMediaItems(r.Context(), 200, uiLoc)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
@@ -579,8 +597,10 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		SelectedDayPublishedItems:  nil,
 		SelectedDayPendingGroups:   selectedDayPendingGroups,
 		SelectedDayPublishedGroups: selectedDayPublishedGroups,
+		SelectedDayFailedGroups:    selectedDayFailedGroups,
 		SelectedDayPendingCount:    selectedDayPendingCount,
 		SelectedDayPublishedCount:  selectedDayPublishedCount,
+		SelectedDayFailedCount:     selectedDayFailedCount,
 		DatePickerMonthNames:       datePickerMonthNames,
 		DatePickerWeekdayNames:     datePickerWeekdayNames,
 	})

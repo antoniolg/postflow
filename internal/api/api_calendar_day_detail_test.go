@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"html"
 	"net/http"
 	"net/http/httptest"
@@ -112,6 +113,113 @@ func TestCalendarDayDetailShowsPendingBeforePublished(t *testing.T) {
 	}
 	if !(pendingIdx < separatorIdx && separatorIdx < publishedIdx) {
 		t.Fatalf("expected pending section before separator and published section")
+	}
+}
+
+func TestCalendarDayDetailShowsFailedSeparatelyFromPending(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	settingsForm := url.Values{}
+	settingsForm.Set("timezone", "UTC")
+	settingsReq := httptest.NewRequest(http.MethodPost, "/settings/timezone", bytes.NewBufferString(settingsForm.Encode()))
+	settingsReq.Header.Set("content-type", "application/x-www-form-urlencoded")
+	settingsW := httptest.NewRecorder()
+	h.ServeHTTP(settingsW, settingsReq)
+	if settingsW.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303 on timezone update, got %d", settingsW.Code)
+	}
+
+	selectedDay := time.Date(2026, time.February, 26, 0, 0, 0, 0, time.UTC)
+	accountID := testAccountID(t, store)
+
+	pendingBody, _ := json.Marshal(map[string]any{
+		"account_id":   accountID,
+		"text":         "pending item should stay pending",
+		"scheduled_at": selectedDay.Add(10 * time.Hour).Format(time.RFC3339),
+	})
+	pendingReq := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(pendingBody))
+	pendingW := httptest.NewRecorder()
+	h.ServeHTTP(pendingW, pendingReq)
+	if pendingW.Code != http.StatusCreated {
+		t.Fatalf("expected 201 for pending post, got %d", pendingW.Code)
+	}
+
+	failedBody, _ := json.Marshal(map[string]any{
+		"account_id":   accountID,
+		"text":         "failed item should move to failed",
+		"scheduled_at": selectedDay.Add(11 * time.Hour).Format(time.RFC3339),
+		"max_attempts": 1,
+	})
+	failedReq := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(failedBody))
+	failedW := httptest.NewRecorder()
+	h.ServeHTTP(failedW, failedReq)
+	if failedW.Code != http.StatusCreated {
+		t.Fatalf("expected 201 for failed seed post, got %d", failedW.Code)
+	}
+	var failedResp map[string]any
+	if err := json.Unmarshal(failedW.Body.Bytes(), &failedResp); err != nil {
+		t.Fatalf("decode failed seed response: %v", err)
+	}
+	failedID, _ := failedResp["id"].(string)
+	if failedID == "" {
+		t.Fatalf("expected failed post id")
+	}
+	if err := store.RecordPublishFailure(t.Context(), failedID, errors.New("hard failure"), 30*time.Second); err != nil {
+		t.Fatalf("record publish failure: %v", err)
+	}
+
+	monthParam := selectedDay.Format("2006-01")
+	dayParam := selectedDay.Format("2006-01-02")
+	calendarReq := httptest.NewRequest(http.MethodGet, "/?view=calendar&month="+monthParam+"&day="+dayParam, nil)
+	calendarW := httptest.NewRecorder()
+	h.ServeHTTP(calendarW, calendarReq)
+	if calendarW.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", calendarW.Code)
+	}
+
+	body := calendarW.Body.String()
+	panelStart := strings.Index(body, "<aside class=\"day-panel\" aria-label=\"Day detail\">")
+	if panelStart == -1 {
+		t.Fatalf("expected day panel in calendar view")
+	}
+	panelEndRel := strings.Index(body[panelStart:], "</aside>")
+	if panelEndRel == -1 {
+		t.Fatalf("expected day panel closing tag")
+	}
+	panel := body[panelStart : panelStart+panelEndRel]
+
+	if !strings.Contains(panel, "to publish (1)") {
+		t.Fatalf("expected pending section to count only scheduled items")
+	}
+	if strings.Contains(panel, "to publish (2)") {
+		t.Fatalf("did not expect failed items to remain counted under pending")
+	}
+	if !strings.Contains(panel, "failed (1)") {
+		t.Fatalf("expected failed section header in day panel")
+	}
+	if !strings.Contains(panel, "hard failure") {
+		t.Fatalf("expected failed section to show latest error")
+	}
+
+	separatorIdx := strings.Index(panel, "class=\"day-separator\">failed</div>")
+	pendingIdx := strings.Index(panel, "pending item should stay pending")
+	failedIdx := strings.Index(panel, "failed item should move to failed")
+	if pendingIdx == -1 || separatorIdx == -1 || failedIdx == -1 {
+		t.Fatalf("expected pending item, failed separator, and failed item in day panel")
+	}
+	if !(pendingIdx < separatorIdx && separatorIdx < failedIdx) {
+		t.Fatalf("expected failed section to render after pending section")
+	}
+	if strings.Contains(panel[:separatorIdx], "failed item should move to failed") {
+		t.Fatalf("did not expect failed item inside pending section")
 	}
 }
 

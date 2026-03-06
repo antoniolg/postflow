@@ -183,8 +183,10 @@ type pageData struct {
 	SelectedDayPublishedItems  []dayDetailItem
 	SelectedDayPendingGroups   []publicationGroupItem
 	SelectedDayPublishedGroups []publicationGroupItem
+	SelectedDayFailedGroups    []failedGroupItem
 	SelectedDayPendingCount    int
 	SelectedDayPublishedCount  int
+	SelectedDayFailedCount     int
 	DatePickerMonthNames       []string
 	DatePickerWeekdayNames     []string
 }
