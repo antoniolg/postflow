@@ -81,8 +81,10 @@ func TestLinkedInValidateDraftRules(t *testing.T) {
 
 func TestLinkedInPublishCommentMode(t *testing.T) {
 	var sawCommentEndpoint bool
+	targetURN := "urn:li:ugcPost:7096760097833439232"
+	encodedTargetURN := url.PathEscape(targetURN)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v2/socialActions/root_post_1/comments" {
+		if got := r.URL.EscapedPath(); got != "/v2/socialActions/"+encodedTargetURN+"/comments" {
 			http.NotFound(w, r)
 			return
 		}
@@ -97,11 +99,17 @@ func TestLinkedInPublishCommentMode(t *testing.T) {
 		if actor, _ := payload["actor"].(string); strings.TrimSpace(actor) != "urn:li:person:member_1" {
 			t.Fatalf("unexpected actor %q", actor)
 		}
+		if object, _ := payload["object"].(string); strings.TrimSpace(object) != targetURN {
+			t.Fatalf("unexpected object %q", object)
+		}
+		if _, hasParentComment := payload["parentComment"]; hasParentComment {
+			t.Fatalf("did not expect parentComment for root post comment")
+		}
 		msg, _ := payload["message"].(map[string]any)
 		if text, _ := msg["text"].(string); strings.TrimSpace(text) != "comment text" {
 			t.Fatalf("unexpected comment text %q", text)
 		}
-		_, _ = w.Write([]byte(`{"id":"li_comment_1"}`))
+		_, _ = w.Write([]byte(`{"id":"li_comment_1","commentUrn":"urn:li:comment:(urn:li:ugcPost:7096760097833439232,li_comment_1)","object":"urn:li:ugcPost:7096760097833439232"}`))
 	}))
 	defer server.Close()
 
@@ -113,7 +121,7 @@ func TestLinkedInPublishCommentMode(t *testing.T) {
 		Text: "comment text",
 	}, PublishOptions{
 		Mode:             PublishModeComment,
-		ParentExternalID: "root_post_1",
+		ParentExternalID: encodedTargetURN,
 	})
 	if err != nil {
 		t.Fatalf("publish comment: %v", err)
@@ -121,18 +129,19 @@ func TestLinkedInPublishCommentMode(t *testing.T) {
 	if !sawCommentEndpoint {
 		t.Fatalf("expected linkedin comment endpoint call")
 	}
-	if externalID != "li_comment_1" {
+	if externalID != "urn:li:comment:(urn:li:ugcPost:7096760097833439232,li_comment_1)" {
 		t.Fatalf("unexpected external id %q", externalID)
 	}
 }
 
 func TestLinkedInPublishCommentModeUsesRestliHeaderID(t *testing.T) {
+	targetURN := "urn:li:ugcPost:7096760097833439232"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v2/socialActions/root_post_1/comments" {
+		if got := r.URL.EscapedPath(); got != "/v2/socialActions/"+url.PathEscape(targetURN)+"/comments" {
 			http.NotFound(w, r)
 			return
 		}
-		w.Header().Set("x-restli-id", "urn:li:comment:(ugcPost:1,2)")
+		w.Header().Set("x-restli-id", "7100646796353826816")
 		w.WriteHeader(http.StatusCreated)
 	}))
 	defer server.Close()
@@ -145,13 +154,52 @@ func TestLinkedInPublishCommentModeUsesRestliHeaderID(t *testing.T) {
 		Text: "comment text",
 	}, PublishOptions{
 		Mode:             PublishModeComment,
-		ParentExternalID: "root_post_1",
+		ParentExternalID: targetURN,
 	})
 	if err != nil {
 		t.Fatalf("publish comment with restli header: %v", err)
 	}
-	if externalID != "urn:li:comment:(ugcPost:1,2)" {
+	if externalID != "urn:li:comment:(urn:li:ugcPost:7096760097833439232,7100646796353826816)" {
 		t.Fatalf("unexpected external id %q", externalID)
+	}
+}
+
+func TestLinkedInPublishNestedCommentModeUsesParentComment(t *testing.T) {
+	parentCommentURN := "urn:li:comment:(urn:li:ugcPost:7096760097833439232,7100646796353826816)"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.EscapedPath(); got != "/v2/socialActions/"+url.PathEscape(parentCommentURN)+"/comments" {
+			http.NotFound(w, r)
+			return
+		}
+		var payload map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode nested comment payload: %v", err)
+		}
+		if object, _ := payload["object"].(string); strings.TrimSpace(object) != "urn:li:ugcPost:7096760097833439232" {
+			t.Fatalf("unexpected nested comment object %q", object)
+		}
+		if parentComment, _ := payload["parentComment"].(string); strings.TrimSpace(parentComment) != parentCommentURN {
+			t.Fatalf("unexpected parentComment %q", parentComment)
+		}
+		_, _ = w.Write([]byte(`{"commentUrn":"urn:li:comment:(urn:li:ugcPost:7096760097833439232,7100646796353826817)","object":"urn:li:ugcPost:7096760097833439232"}`))
+	}))
+	defer server.Close()
+
+	provider := NewLinkedInProvider(LinkedInProviderConfig{APIBaseURL: server.URL})
+	externalID, err := provider.Publish(context.Background(), domain.SocialAccount{
+		Platform:          domain.PlatformLinkedIn,
+		ExternalAccountID: "member_1",
+	}, Credentials{AccessToken: "token-1"}, domain.Post{
+		Text: "nested comment text",
+	}, PublishOptions{
+		Mode:             PublishModeComment,
+		ParentExternalID: parentCommentURN,
+	})
+	if err != nil {
+		t.Fatalf("publish nested comment: %v", err)
+	}
+	if externalID != "urn:li:comment:(urn:li:ugcPost:7096760097833439232,7100646796353826817)" {
+		t.Fatalf("unexpected nested comment external id %q", externalID)
 	}
 }
 

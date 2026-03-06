@@ -185,13 +185,22 @@ func (p *LinkedInProvider) Publish(ctx context.Context, account domain.SocialAcc
 }
 
 func (p *LinkedInProvider) publishComment(ctx context.Context, accessToken, memberID, parentExternalID, text string) (string, error) {
-	target := strings.TrimSpace(parentExternalID)
+	target := normalizeLinkedInTargetURN(parentExternalID)
 	if target == "" {
 		return "", fmt.Errorf("linkedin comment target is required")
 	}
+	objectURN := target
 	payload := map[string]any{
 		"actor":   "urn:li:person:" + strings.TrimSpace(memberID),
+		"object":  target,
 		"message": map[string]any{"text": strings.TrimSpace(text)},
+	}
+	if parentCommentURN, ok := linkedinParentCommentURN(target); ok {
+		payload["parentComment"] = parentCommentURN
+		if rootObjectURN := linkedinCommentObjectURN(parentCommentURN); rootObjectURN != "" {
+			payload["object"] = rootObjectURN
+			objectURN = rootObjectURN
+		}
 	}
 	raw, _ := json.Marshal(payload)
 	endpoint := strings.TrimRight(p.cfg.APIBaseURL, "/") + "/v2/socialActions/" + url.PathEscape(target) + "/comments"
@@ -211,20 +220,74 @@ func (p *LinkedInProvider) publishComment(ctx context.Context, accessToken, memb
 	if resp.StatusCode >= 300 {
 		return "", fmt.Errorf("linkedin comment failed: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
-	externalID := strings.TrimSpace(resp.Header.Get("x-restli-id"))
-	if externalID != "" {
-		return externalID, nil
-	}
 	var out struct {
-		ID string `json:"id"`
+		ID         string `json:"id"`
+		CommentURN string `json:"commentUrn"`
+		Object     string `json:"object"`
 	}
 	if len(body) > 0 {
 		_ = json.Unmarshal(body, &out)
+	}
+	if commentURN := strings.TrimSpace(out.CommentURN); commentURN != "" {
+		return commentURN, nil
+	}
+	responseObjectURN := strings.TrimSpace(out.Object)
+	if responseObjectURN == "" {
+		responseObjectURN = objectURN
+	}
+	externalID := strings.TrimSpace(resp.Header.Get("x-restli-id"))
+	if externalID != "" {
+		if synthesized := buildLinkedInCommentURN(responseObjectURN, externalID); synthesized != "" {
+			return synthesized, nil
+		}
+		return externalID, nil
+	}
+	if synthesized := buildLinkedInCommentURN(responseObjectURN, strings.TrimSpace(out.ID)); synthesized != "" {
+		return synthesized, nil
 	}
 	if strings.TrimSpace(out.ID) == "" {
 		return "", fmt.Errorf("linkedin comment response missing id")
 	}
 	return strings.TrimSpace(out.ID), nil
+}
+
+func normalizeLinkedInTargetURN(raw string) string {
+	target := strings.TrimSpace(raw)
+	if target == "" {
+		return ""
+	}
+	if decoded, err := url.PathUnescape(target); err == nil && strings.TrimSpace(decoded) != "" {
+		target = strings.TrimSpace(decoded)
+	}
+	return target
+}
+
+func linkedinParentCommentURN(target string) (string, bool) {
+	target = strings.TrimSpace(target)
+	return target, strings.HasPrefix(target, "urn:li:comment:")
+}
+
+func linkedinCommentObjectURN(commentURN string) string {
+	commentURN = strings.TrimSpace(commentURN)
+	const prefix = "urn:li:comment:("
+	if !strings.HasPrefix(commentURN, prefix) || !strings.HasSuffix(commentURN, ")") {
+		return ""
+	}
+	inner := strings.TrimSuffix(strings.TrimPrefix(commentURN, prefix), ")")
+	comma := strings.LastIndex(inner, ",")
+	if comma <= 0 {
+		return ""
+	}
+	return strings.TrimSpace(inner[:comma])
+}
+
+func buildLinkedInCommentURN(objectURN, commentID string) string {
+	objectURN = strings.TrimSpace(objectURN)
+	commentID = strings.TrimSpace(commentID)
+	if objectURN == "" || commentID == "" {
+		return ""
+	}
+	return fmt.Sprintf("urn:li:comment:(%s,%s)", objectURN, commentID)
 }
 
 func (p *LinkedInProvider) uploadAsset(ctx context.Context, memberID, accessToken string, media domain.Media, recipe string) (string, error) {
