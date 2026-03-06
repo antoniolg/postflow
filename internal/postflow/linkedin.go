@@ -213,7 +213,6 @@ func (p *LinkedInProvider) publishComment(ctx context.Context, accessToken, memb
 	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(accessToken))
 	req.Header.Set("Linkedin-Version", linkedInRestVersion)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Restli-Protocol-Version", "2.0.0")
 	resp, err := p.client.Do(req)
 	if err != nil {
 		return "", err

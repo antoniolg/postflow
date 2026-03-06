@@ -95,6 +95,9 @@ func TestLinkedInPublishCommentMode(t *testing.T) {
 		if got := strings.TrimSpace(r.Header.Get("Linkedin-Version")); got != linkedInRestVersion {
 			t.Fatalf("unexpected Linkedin-Version header %q", got)
 		}
+		if got := strings.TrimSpace(r.Header.Get("X-Restli-Protocol-Version")); got != "" {
+			t.Fatalf("did not expect X-Restli-Protocol-Version on rest comment endpoint, got %q", got)
+		}
 		var payload map[string]any
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 			t.Fatalf("decode comment payload: %v", err)
@@ -215,6 +218,9 @@ func TestLinkedInPublishCommentModeAcceptsShareURNTargets(t *testing.T) {
 		}
 		if got := strings.TrimSpace(r.Header.Get("Linkedin-Version")); got != linkedInRestVersion {
 			t.Fatalf("unexpected Linkedin-Version header %q", got)
+		}
+		if got := strings.TrimSpace(r.Header.Get("X-Restli-Protocol-Version")); got != "" {
+			t.Fatalf("did not expect X-Restli-Protocol-Version on rest comment endpoint, got %q", got)
 		}
 		var payload map[string]any
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
