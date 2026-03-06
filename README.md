@@ -134,6 +134,7 @@ Main MCP tools available:
 Thread payload support (same shape in API/MCP/CLI):
 - `segments`: `[{ "text": "...", "media_ids": ["med_x"] }]`
 - If `segments` is present, step `1` is the root post and steps `2..N` are follow-ups.
+- Publishing semantics: X follow-ups are chained as replies; other supported thread platforms publish follow-ups as comments on the root post.
 - Backward compatibility is preserved for legacy `text` + `media_ids`.
 - `postflow_edit_post` accepts optional `media_ids` to replace media on editable posts (`[]` clears all media).
 - Editing without `intent` and without `scheduled_at` preserves the current scheduling state.

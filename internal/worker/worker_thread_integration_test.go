@@ -15,12 +15,14 @@ func TestWorkerPublishesThreadInOrderAcrossCycles(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
-		name            string
-		platform        domain.Platform
-		expectedChildOp postflow.PublishMode
+		name                          string
+		platform                      domain.Platform
+		expectedChildOp               postflow.PublishMode
+		expectedGrandchildParentScope string
 	}{
-		{name: "x uses reply mode for thread child", platform: domain.PlatformX, expectedChildOp: postflow.PublishModeReply},
-		{name: "linkedin uses comment mode for thread child", platform: domain.PlatformLinkedIn, expectedChildOp: postflow.PublishModeComment},
+		{name: "x uses reply mode for thread descendants", platform: domain.PlatformX, expectedChildOp: postflow.PublishModeReply, expectedGrandchildParentScope: "previous"},
+		{name: "linkedin comments stay anchored on the root post", platform: domain.PlatformLinkedIn, expectedChildOp: postflow.PublishModeComment, expectedGrandchildParentScope: "root"},
+		{name: "facebook comments stay anchored on the root post", platform: domain.PlatformFacebook, expectedChildOp: postflow.PublishModeComment, expectedGrandchildParentScope: "root"},
 	}
 
 	for _, tc := range testCases {
@@ -30,7 +32,7 @@ func TestWorkerPublishesThreadInOrderAcrossCycles(t *testing.T) {
 
 			store := openWorkerTestStore(t)
 			account := createWorkerTestAccountForPlatform(t, store, tc.platform)
-			rootPost, childPost := createWorkerThreadPosts(t, store, account.ID, tc.platform)
+			rootPost, childPost, grandchildPost := createWorkerThreadPosts(t, store, account.ID, tc.platform)
 			provider := &recordingWorkerProvider{platform: tc.platform}
 			creds := workerCredentialsStore{worker: Worker{Store: store, Cipher: newWorkerTestCipher(t)}}
 
@@ -92,6 +94,38 @@ func TestWorkerPublishesThreadInOrderAcrossCycles(t *testing.T) {
 				t.Fatalf("expected child parent_external_id=%s, got %s", strings.TrimSpace(*rootAfterFirstRun.ExternalID), second.parentExternalID)
 			}
 
+			runPublishCycleOnce(t, store, postflow.NewProviderRegistry(provider), creds, 5*time.Second, 2*time.Second)
+
+			grandchildAfterThirdRun, err := store.GetPost(t.Context(), grandchildPost.ID)
+			if err != nil {
+				t.Fatalf("get grandchild post after third run: %v", err)
+			}
+			if grandchildAfterThirdRun.Status != domain.PostStatusPublished {
+				t.Fatalf("expected grandchild status=published after third run, got %s", grandchildAfterThirdRun.Status)
+			}
+			if grandchildAfterThirdRun.ExternalID == nil || strings.TrimSpace(*grandchildAfterThirdRun.ExternalID) == "" {
+				t.Fatalf("expected grandchild external id after third run")
+			}
+
+			if len(provider.calls) != 3 {
+				t.Fatalf("expected three publish calls after third run, got %d", len(provider.calls))
+			}
+			third := provider.calls[2]
+			if third.postID != grandchildPost.ID {
+				t.Fatalf("expected grandchild publish third, got post %s", third.postID)
+			}
+			if third.mode != tc.expectedChildOp {
+				t.Fatalf("expected grandchild publish mode %s, got %s", tc.expectedChildOp, third.mode)
+			}
+
+			expectedGrandchildParent := strings.TrimSpace(*childAfterSecondRun.ExternalID)
+			if tc.expectedGrandchildParentScope == "root" {
+				expectedGrandchildParent = strings.TrimSpace(*rootAfterFirstRun.ExternalID)
+			}
+			if third.parentExternalID != expectedGrandchildParent {
+				t.Fatalf("expected grandchild parent_external_id=%s, got %s", expectedGrandchildParent, third.parentExternalID)
+			}
+
 			dlq, err := store.ListDeadLetters(t.Context(), 10)
 			if err != nil {
 				t.Fatalf("list dead letters: %v", err)
@@ -135,7 +169,7 @@ func (p *recordingWorkerProvider) RefreshIfNeeded(_ context.Context, _ domain.So
 	return credentials, false, nil
 }
 
-func createWorkerThreadPosts(t *testing.T, store *db.Store, accountID string, platform domain.Platform) (domain.Post, domain.Post) {
+func createWorkerThreadPosts(t *testing.T, store *db.Store, accountID string, platform domain.Platform) (domain.Post, domain.Post, domain.Post) {
 	t.Helper()
 
 	threadGroupID := "thd_" + strings.ReplaceAll(strings.ToLower(t.Name()), "/", "_")
@@ -174,5 +208,24 @@ func createWorkerThreadPosts(t *testing.T, store *db.Store, accountID string, pl
 		t.Fatalf("create thread child: %v", err)
 	}
 
-	return rootCreated.Post, childCreated.Post
+	childID := strings.TrimSpace(childCreated.Post.ID)
+	grandchildCreated, err := store.CreatePost(t.Context(), db.CreatePostParams{
+		Post: domain.Post{
+			AccountID:      accountID,
+			Platform:       platform,
+			Text:           "thread grandchild",
+			Status:         domain.PostStatusScheduled,
+			ScheduledAt:    time.Now().UTC().Add(-30 * time.Second),
+			MaxAttempts:    3,
+			ThreadGroupID:  threadGroupID,
+			ThreadPosition: 3,
+			ParentPostID:   &childID,
+			RootPostID:     &rootID,
+		},
+	})
+	if err != nil {
+		t.Fatalf("create thread grandchild: %v", err)
+	}
+
+	return rootCreated.Post, childCreated.Post, grandchildCreated.Post
 }

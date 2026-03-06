@@ -90,16 +90,21 @@ func (r Runner) RunOnce(ctx context.Context) {
 			Mode: postflow.PublishModeRoot,
 		}
 		if post.ParentPostID != nil && strings.TrimSpace(*post.ParentPostID) != "" {
-			parent, err := r.Store.GetPost(ctx, strings.TrimSpace(*post.ParentPostID))
+			parentPostID := strings.TrimSpace(*post.ParentPostID)
+			targetPostID := parentPostID
+			if post.Platform != domain.PlatformX && rootPostID != "" {
+				targetPostID = rootPostID
+			}
+			parent, err := r.Store.GetPost(ctx, targetPostID)
 			if err != nil {
 				_ = r.Store.RecordPublishFailure(ctx, post.ID, err, r.RetryBackoff)
-				logger.Error("worker parent lookup failed", "post_id", post.ID, "root_post_id", rootPostID, "thread_group_id", threadGroupID, "thread_position", threadPosition, "parent_post_id", strings.TrimSpace(*post.ParentPostID), "error", err)
+				logger.Error("worker parent lookup failed", "post_id", post.ID, "root_post_id", rootPostID, "thread_group_id", threadGroupID, "thread_position", threadPosition, "parent_post_id", parentPostID, "target_post_id", targetPostID, "error", err)
 				continue
 			}
 			if parent.ExternalID == nil || strings.TrimSpace(*parent.ExternalID) == "" {
 				err := errors.New("parent post external id is missing")
 				_ = r.Store.RecordPublishFailure(ctx, post.ID, err, r.RetryBackoff)
-				logger.Error("worker parent external id missing", "post_id", post.ID, "root_post_id", rootPostID, "thread_group_id", threadGroupID, "thread_position", threadPosition, "parent_post_id", parent.ID)
+				logger.Error("worker parent external id missing", "post_id", post.ID, "root_post_id", rootPostID, "thread_group_id", threadGroupID, "thread_position", threadPosition, "parent_post_id", parentPostID, "target_post_id", parent.ID)
 				continue
 			}
 			publishOpts.ParentExternalID = strings.TrimSpace(*parent.ExternalID)
