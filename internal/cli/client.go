@@ -115,9 +115,21 @@ func (c *APIClient) PostMultipartFile(ctx context.Context, path, fileField, file
 
 func createMultipartFilePart(writer *multipart.Writer, fileField, fileName, mimeType string) (io.Writer, error) {
 	header := make(textproto.MIMEHeader)
-	header.Set("Content-Disposition", multipart.FileContentDisposition(fileField, fileName))
+	header.Set("Content-Disposition", multipartFormDataContentDisposition(fileField, fileName))
 	header.Set("Content-Type", strings.TrimSpace(mimeType))
 	return writer.CreatePart(header)
+}
+
+func multipartFormDataContentDisposition(fieldName, fileName string) string {
+	value := mime.FormatMediaType("form-data", map[string]string{
+		"name":     strings.TrimSpace(fieldName),
+		"filename": strings.TrimSpace(fileName),
+	})
+	if strings.TrimSpace(value) != "" {
+		return value
+	}
+	escape := strings.NewReplacer("\\", "\\\\", `"`, "\\\"")
+	return fmt.Sprintf(`form-data; name="%s"; filename="%s"`, escape.Replace(strings.TrimSpace(fieldName)), escape.Replace(strings.TrimSpace(fileName)))
 }
 
 func detectUploadFileMimeType(file *os.File, filePath string) (string, error) {
