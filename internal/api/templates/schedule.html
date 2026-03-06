@@ -807,6 +807,14 @@
       background: var(--accent-orange);
       color: #0d0d0d;
     }
+    .day-event.prog {
+      background: #d1a24d;
+      color: #0d0d0d;
+    }
+    .day-event.fail {
+      background: #8f3f3f;
+      color: #f6dfdf;
+    }
     .event-dot { display: none; }
     .day-event-main {
       display: flex;
@@ -973,6 +981,7 @@
       cursor: pointer;
     }
     .card.scheduled { box-shadow: inset 0 0 0 1px rgba(255, 107, 53, 0.24); }
+    .card.publishing { box-shadow: inset 0 0 0 1px rgba(209, 162, 77, 0.26); }
     .card.published { box-shadow: inset 0 0 0 1px rgba(0, 212, 170, 0.22); }
     .card.draft { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
     .card.failed { box-shadow: inset 0 0 0 1px rgba(255, 68, 68, 0.24); }
@@ -998,6 +1007,10 @@
     .card.scheduled.publication-card {
       --publication-border: rgba(255, 107, 53, 0.45);
       --publication-date-color: #ffc1a8;
+    }
+    .card.publishing.publication-card {
+      --publication-border: rgba(209, 162, 77, 0.45);
+      --publication-date-color: #f0cd8d;
     }
     .card.draft.publication-card {
       --publication-border: #3a3a3a;
@@ -1180,6 +1193,69 @@
     }
     .publication-text > :last-child {
       margin-bottom: 0;
+    }
+    .publication-progress-chip {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      padding: 3px 8px;
+      border: 1px solid #57472a;
+      background: #342a18;
+      color: #f0cd8d;
+      font-size: 11px;
+      font-weight: 700;
+      min-height: 24px;
+      line-height: 1;
+    }
+    .publication-thread-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 2px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .publication-thread-step {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      min-width: 0;
+      color: #bdbdbd;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+    .publication-thread-step-index {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 20px;
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: #2b2b2b;
+      border: 1px solid #3a3a3a;
+      color: #d7d7d7;
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .publication-thread-step-text {
+      min-width: 0;
+      flex: 1 1 auto;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 3;
+      max-height: calc(1.35em * 3);
+      overflow: hidden;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+    }
+    .publication-thread-step-media {
+      flex: 0 0 auto;
+      color: #949494;
+      font-size: 11px;
+      white-space: nowrap;
     }
     .card-left {
       display: flex;
@@ -3552,16 +3628,16 @@
       <aside class="day-panel" aria-label="{{t "aria.day_detail"}}">
         <div class="day-panel-head">
           <div class="day-panel-title">{{.SelectedDayLabel}}</div>
-          <div class="day-panel-sub">// {{t "calendar.scheduled_posts" .SelectedDayPendingCount}}</div>
+          <div class="day-panel-sub">// {{t "calendar.scheduled_posts" .SelectedDayOpenCount}}</div>
         </div>
         <div class="day-panel-body">
-          {{if and (eq (len .SelectedDayPendingGroups) 0) (eq (len .SelectedDayPublishedGroups) 0) (eq (len .SelectedDayFailedGroups) 0)}}
+          {{if and (eq (len .SelectedDayPendingGroups) 0) (eq (len .SelectedDayPublishingGroups) 0) (eq (len .SelectedDayPublishedGroups) 0) (eq (len .SelectedDayFailedGroups) 0)}}
           <div class="empty">{{t "calendar.empty_day"}}</div>
           {{else}}
           {{if gt (len .SelectedDayPendingGroups) 0}}
           <div class="day-group-title">{{t "calendar.to_publish" .SelectedDayPendingCount}}</div>
           {{range .SelectedDayPendingGroups}}
-          <article class="card scheduled publication-card day-panel-publication-card {{if .EditURL}}card-editable{{end}}" data-status="scheduled" data-calendar-group="{{.PostCount}}" data-calendar-platform-count="{{len .Platforms}}" {{if .EditURL}}data-edit-url="{{.EditURL}}"{{end}}>
+          <article class="card scheduled publication-card day-panel-publication-card {{if .EditURL}}card-editable{{end}}" data-status="{{.StatusKey}}" data-calendar-group="{{.PostCount}}" data-thread-steps="{{.StepCount}}" data-calendar-platform-count="{{len .Platforms}}" {{if .EditURL}}data-edit-url="{{.EditURL}}"{{end}}>
             <div class="publication-card-head">
               <div class="publication-time">
                 {{if .ScheduledAt.IsZero}}
@@ -3591,6 +3667,7 @@
                   </span>
                   {{end}}
                   {{if .ThreadLabel}}<span class="thread-step-badge publication-thread-chip">{{.ThreadLabel}}</span>{{end}}
+                  {{if .ProgressLabel}}<span class="publication-progress-chip">{{.ProgressLabel}}</span>{{end}}
                   <span class="publication-media-chip" title="{{t "common.media_count" .MediaCount}}" aria-label="{{t "common.media_count" .MediaCount}}">
                     <svg data-lucide="image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="m21 15-5-5L5 21"></path></svg>
                     <span>{{.MediaCount}}</span>
@@ -3605,19 +3682,92 @@
               </div>
             </div>
             <div class="publication-text">{{previewMarkdown .Text}}</div>
+            {{if gt (len .FollowUpSteps) 0}}
+            <div class="publication-thread-steps">
+              {{range .FollowUpSteps}}
+              <div class="publication-thread-step">
+                <span class="publication-thread-step-index">{{.Position}}</span>
+                <div class="publication-thread-step-text">{{previewMarkdown .Text}}</div>
+                {{if gt .MediaCount 0}}<span class="publication-thread-step-media">{{t "common.media_count" .MediaCount}}</span>{{end}}
+              </div>
+              {{end}}
+            </div>
+            {{end}}
           </article>
           {{end}}
           {{end}}
-          {{if and (gt (len .SelectedDayPendingGroups) 0) (gt (len .SelectedDayPublishedGroups) 0)}}
-          <div class="day-separator">{{t "calendar.published"}}</div>
+          {{if and (gt (len .SelectedDayPendingGroups) 0) (gt (len .SelectedDayPublishingGroups) 0)}}
+          <div class="day-separator">{{t "calendar.publishing"}}</div>
           {{end}}
-          {{if and (gt (len .SelectedDayPendingGroups) 0) (eq (len .SelectedDayPublishedGroups) 0) (gt (len .SelectedDayFailedGroups) 0)}}
-          <div class="day-separator">{{t "calendar.failed"}}</div>
+          {{if gt (len .SelectedDayPublishingGroups) 0}}
+          <div class="day-group-title">{{t "calendar.publishing_count" .SelectedDayPublishingCount}}</div>
+          {{end}}
+          {{range .SelectedDayPublishingGroups}}
+          <article class="card publishing publication-card day-panel-publication-card {{if .EditURL}}card-editable{{end}}" data-status="{{.StatusKey}}" data-calendar-group="{{.PostCount}}" data-thread-steps="{{.StepCount}}" data-calendar-platform-count="{{len .Platforms}}" {{if .EditURL}}data-edit-url="{{.EditURL}}"{{end}}>
+            <div class="publication-card-head">
+              <div class="publication-time">
+                {{if .ScheduledAt.IsZero}}
+                <span class="publication-time-clock">{{t "common.no_date"}}</span>
+                {{else}}
+                <span class="publication-time-clock">{{.ScheduledAt.Format "15:04"}}</span>
+                {{end}}
+              </div>
+              <div class="publication-head-right">
+                <div class="publication-meta-row">
+                  {{range .Platforms}}
+                  <span class="publication-platform-chip" title="{{.}}">
+                    <span class="sr-only">{{.}}</span>
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      {{if eq . "x"}}
+                      <use href="#pf-brand-x"></use>
+                      {{else if eq . "linkedin"}}
+                      <use href="#pf-brand-linkedin"></use>
+                      {{else if eq . "facebook"}}
+                      <use href="#pf-brand-facebook"></use>
+                      {{else if eq . "instagram"}}
+                      <use href="#pf-brand-instagram"></use>
+                      {{else}}
+                      <use href="#pf-brand-default"></use>
+                      {{end}}
+                    </svg>
+                  </span>
+                  {{end}}
+                  {{if .ThreadLabel}}<span class="thread-step-badge publication-thread-chip">{{.ThreadLabel}}</span>{{end}}
+                  {{if .ProgressLabel}}<span class="publication-progress-chip">{{.ProgressLabel}}</span>{{end}}
+                  <span class="publication-media-chip" title="{{t "common.media_count" .MediaCount}}" aria-label="{{t "common.media_count" .MediaCount}}">
+                    <svg data-lucide="image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="m21 15-5-5L5 21"></path></svg>
+                    <span>{{.MediaCount}}</span>
+                  </span>
+                  {{if gt .PostCount 1}}<span class="publication-count-chip">x{{.PostCount}}</span>{{end}}
+                </div>
+                <form class="publication-delete-form" method="post" action="/posts/{{.PrimaryPostID}}/delete" onsubmit="return confirm('{{t "calendar.delete_publication_confirm"}}');">
+                  {{range .PostIDs}}<input type="hidden" name="ids" value="{{.}}" />{{end}}
+                  <input type="hidden" name="return_to" value="{{$.CurrentViewURL}}" />
+                  <button type="submit" class="publication-delete-btn" title="{{t "common.delete"}}" aria-label="{{t "common.delete"}}">&#10005;</button>
+                </form>
+              </div>
+            </div>
+            <div class="publication-text">{{previewMarkdown .Text}}</div>
+            {{if gt (len .FollowUpSteps) 0}}
+            <div class="publication-thread-steps">
+              {{range .FollowUpSteps}}
+              <div class="publication-thread-step">
+                <span class="publication-thread-step-index">{{.Position}}</span>
+                <div class="publication-thread-step-text">{{previewMarkdown .Text}}</div>
+                {{if gt .MediaCount 0}}<span class="publication-thread-step-media">{{t "common.media_count" .MediaCount}}</span>{{end}}
+              </div>
+              {{end}}
+            </div>
+            {{end}}
+          </article>
+          {{end}}
+          {{if and (or (gt (len .SelectedDayPendingGroups) 0) (gt (len .SelectedDayPublishingGroups) 0)) (gt (len .SelectedDayPublishedGroups) 0)}}
+          <div class="day-separator">{{t "calendar.published"}}</div>
           {{end}}
           {{if gt (len .SelectedDayPublishedGroups) 0}}
           <div class="day-group-title">{{t "calendar.published_count" .SelectedDayPublishedCount}}</div>
           {{range .SelectedDayPublishedGroups}}
-          <article class="card published publication-card day-panel-publication-card" data-status="published" data-calendar-group="{{.PostCount}}" data-calendar-platform-count="{{len .Platforms}}">
+          <article class="card published publication-card day-panel-publication-card {{if .EditURL}}card-editable{{end}}" data-status="{{.StatusKey}}" data-calendar-group="{{.PostCount}}" data-thread-steps="{{.StepCount}}" data-calendar-platform-count="{{len .Platforms}}" {{if .EditURL}}data-edit-url="{{.EditURL}}"{{end}}>
             <div class="publication-card-head">
               <div class="publication-time">
                 {{if .ScheduledAt.IsZero}}
@@ -3646,6 +3796,7 @@
                 </span>
                 {{end}}
                 {{if .ThreadLabel}}<span class="thread-step-badge publication-thread-chip">{{.ThreadLabel}}</span>{{end}}
+                {{if .ProgressLabel}}<span class="publication-progress-chip">{{.ProgressLabel}}</span>{{end}}
                 <span class="publication-media-chip" title="{{t "common.media_count" .MediaCount}}" aria-label="{{t "common.media_count" .MediaCount}}">
                   <svg data-lucide="image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="m21 15-5-5L5 21"></path></svg>
                   <span>{{.MediaCount}}</span>
@@ -3654,16 +3805,27 @@
               </div>
             </div>
             <div class="publication-text">{{previewMarkdown .Text}}</div>
+            {{if gt (len .FollowUpSteps) 0}}
+            <div class="publication-thread-steps">
+              {{range .FollowUpSteps}}
+              <div class="publication-thread-step">
+                <span class="publication-thread-step-index">{{.Position}}</span>
+                <div class="publication-thread-step-text">{{previewMarkdown .Text}}</div>
+                {{if gt .MediaCount 0}}<span class="publication-thread-step-media">{{t "common.media_count" .MediaCount}}</span>{{end}}
+              </div>
+              {{end}}
+            </div>
+            {{end}}
           </article>
           {{end}}
           {{end}}
-          {{if and (gt (len .SelectedDayFailedGroups) 0) (gt (len .SelectedDayPublishedGroups) 0)}}
+          {{if and (gt (len .SelectedDayFailedGroups) 0) (or (gt (len .SelectedDayPendingGroups) 0) (gt (len .SelectedDayPublishingGroups) 0) (gt (len .SelectedDayPublishedGroups) 0))}}
           <div class="day-separator">{{t "calendar.failed"}}</div>
           {{end}}
           {{if gt (len .SelectedDayFailedGroups) 0}}
           <div class="day-group-title">{{t "calendar.failed_count" .SelectedDayFailedCount}}</div>
           {{range .SelectedDayFailedGroups}}
-          <article class="card failed publication-card day-panel-publication-card {{if .EditURL}}card-editable{{end}}" data-status="failed" data-failed-group="{{.PostCount}}" data-failed-platform-count="{{len .Platforms}}" {{if .EditURL}}data-edit-url="{{.EditURL}}"{{end}}>
+          <article class="card failed publication-card day-panel-publication-card {{if .EditURL}}card-editable{{end}}" data-status="{{.StatusKey}}" data-failed-group="{{.PostCount}}" data-thread-steps="{{.StepCount}}" data-failed-platform-count="{{len .Platforms}}" {{if .EditURL}}data-edit-url="{{.EditURL}}"{{end}}>
             <div class="publication-card-head">
               <div class="publication-time">
                 <span class="publication-time-date">{{.ScheduledAtLabel}}</span>
@@ -3689,6 +3851,7 @@
                   </span>
                   {{end}}
                   {{if .ThreadLabel}}<span class="thread-step-badge publication-thread-chip">{{.ThreadLabel}}</span>{{end}}
+                  {{if .ProgressLabel}}<span class="publication-progress-chip">{{.ProgressLabel}}</span>{{end}}
                   <span class="publication-media-chip" title="{{t "common.media_count" .MediaCount}}" aria-label="{{t "common.media_count" .MediaCount}}">
                     <svg data-lucide="image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="m21 15-5-5L5 21"></path></svg>
                     <span>{{.MediaCount}}</span>
@@ -3698,6 +3861,17 @@
               </div>
             </div>
             <div class="publication-text">{{previewMarkdown .Text}}</div>
+            {{if gt (len .FollowUpSteps) 0}}
+            <div class="publication-thread-steps">
+              {{range .FollowUpSteps}}
+              <div class="publication-thread-step">
+                <span class="publication-thread-step-index">{{.Position}}</span>
+                <div class="publication-thread-step-text">{{previewMarkdown .Text}}</div>
+                {{if gt .MediaCount 0}}<span class="publication-thread-step-media">{{t "common.media_count" .MediaCount}}</span>{{end}}
+              </div>
+              {{end}}
+            </div>
+            {{end}}
             <div class="meta">
               <span>{{t "failed.attempts" .Attempts .MaxAttempts}}</span>
               <span>{{t "failed.failed_at" .FailedAtLabel}}</span>
@@ -3714,8 +3888,10 @@
 
       {{if eq .View "publications"}}
       <section class="list publications-grid">
-        {{range .PublicationGroups}}
-	        <article class="card scheduled publication-card card-editable" data-platform="{{if .MultiPlatform}}multi{{else}}{{.PrimaryPlatform}}{{end}}" data-publication-group="{{.PostCount}}" data-publication-platform-count="{{len .Platforms}}" data-edit-url="{{.EditURL}}">
+        {{if gt (len .PublicationPublishingGroups) 0}}
+        <div class="day-group-title">{{t "calendar.publishing_count" (len .PublicationPublishingGroups)}}</div>
+        {{range .PublicationPublishingGroups}}
+	        <article class="card publishing publication-card card-editable" data-status="{{.StatusKey}}" data-platform="{{if .MultiPlatform}}multi{{else}}{{.PrimaryPlatform}}{{end}}" data-publication-group="{{.PostCount}}" data-thread-steps="{{.StepCount}}" data-publication-platform-count="{{len .Platforms}}" data-edit-url="{{.EditURL}}">
           <div class="publication-card-head">
             <div class="publication-time">
               {{if .ScheduledAt.IsZero}}
@@ -3746,6 +3922,7 @@
                 </span>
                 {{end}}
                 {{if .ThreadLabel}}<span class="thread-step-badge publication-thread-chip">{{.ThreadLabel}}</span>{{end}}
+                {{if .ProgressLabel}}<span class="publication-progress-chip">{{.ProgressLabel}}</span>{{end}}
                 <span class="publication-media-chip" title="{{t "common.media_count" .MediaCount}}" aria-label="{{t "common.media_count" .MediaCount}}">
                   <svg data-lucide="image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="m21 15-5-5L5 21"></path></svg>
                   <span>{{.MediaCount}}</span>
@@ -3760,9 +3937,86 @@
             </div>
           </div>
           <div class="publication-text">{{previewMarkdown .Text}}</div>
+          {{if gt (len .FollowUpSteps) 0}}
+          <div class="publication-thread-steps">
+            {{range .FollowUpSteps}}
+            <div class="publication-thread-step">
+              <span class="publication-thread-step-index">{{.Position}}</span>
+              <div class="publication-thread-step-text">{{previewMarkdown .Text}}</div>
+              {{if gt .MediaCount 0}}<span class="publication-thread-step-media">{{t "common.media_count" .MediaCount}}</span>{{end}}
+            </div>
+            {{end}}
+          </div>
+          {{end}}
+        </article>
+        {{end}}
+        {{if gt (len .PublicationScheduledGroups) 0}}
+        <div class="day-separator">{{t "calendar.to_publish" (len .PublicationScheduledGroups)}}</div>
+        {{end}}
+        {{end}}
+        {{range .PublicationScheduledGroups}}
+	        <article class="card scheduled publication-card card-editable" data-status="{{.StatusKey}}" data-platform="{{if .MultiPlatform}}multi{{else}}{{.PrimaryPlatform}}{{end}}" data-publication-group="{{.PostCount}}" data-thread-steps="{{.StepCount}}" data-publication-platform-count="{{len .Platforms}}" data-edit-url="{{.EditURL}}">
+          <div class="publication-card-head">
+            <div class="publication-time">
+              {{if .ScheduledAt.IsZero}}
+              <span class="publication-time-date">{{t "common.no_date"}}</span>
+              {{else}}
+              <span class="publication-time-date">{{.ScheduledAt.Format "2006-01-02"}}</span>
+              <span class="publication-time-clock">{{.ScheduledAt.Format "15:04"}}</span>
+              {{end}}
+            </div>
+            <div class="publication-head-right">
+              <div class="publication-meta-row">
+                {{range .Platforms}}
+                <span class="publication-platform-chip" title="{{.}}">
+                  <span class="sr-only">{{.}}</span>
+                  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    {{if eq . "x"}}
+                    <use href="#pf-brand-x"></use>
+                    {{else if eq . "linkedin"}}
+                    <use href="#pf-brand-linkedin"></use>
+                    {{else if eq . "facebook"}}
+                    <use href="#pf-brand-facebook"></use>
+                    {{else if eq . "instagram"}}
+                    <use href="#pf-brand-instagram"></use>
+                    {{else}}
+                    <use href="#pf-brand-default"></use>
+                    {{end}}
+                  </svg>
+                </span>
+                {{end}}
+                {{if .ThreadLabel}}<span class="thread-step-badge publication-thread-chip">{{.ThreadLabel}}</span>{{end}}
+                {{if .ProgressLabel}}<span class="publication-progress-chip">{{.ProgressLabel}}</span>{{end}}
+                <span class="publication-media-chip" title="{{t "common.media_count" .MediaCount}}" aria-label="{{t "common.media_count" .MediaCount}}">
+                  <svg data-lucide="image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="m21 15-5-5L5 21"></path></svg>
+                  <span>{{.MediaCount}}</span>
+                </span>
+                {{if gt .PostCount 1}}<span class="publication-count-chip">x{{.PostCount}}</span>{{end}}
+              </div>
+              <form class="publication-delete-form" method="post" action="/posts/{{.PrimaryPostID}}/delete" onsubmit="return confirm('{{t "calendar.delete_publication_confirm"}}');">
+                {{range .PostIDs}}<input type="hidden" name="ids" value="{{.}}" />{{end}}
+                <input type="hidden" name="return_to" value="{{$.CurrentViewURL}}" />
+                <button type="submit" class="publication-delete-btn" title="{{t "common.delete"}}" aria-label="{{t "common.delete"}}">&#10005;</button>
+              </form>
+            </div>
+          </div>
+          <div class="publication-text">{{previewMarkdown .Text}}</div>
+          {{if gt (len .FollowUpSteps) 0}}
+          <div class="publication-thread-steps">
+            {{range .FollowUpSteps}}
+            <div class="publication-thread-step">
+              <span class="publication-thread-step-index">{{.Position}}</span>
+              <div class="publication-thread-step-text">{{previewMarkdown .Text}}</div>
+              {{if gt .MediaCount 0}}<span class="publication-thread-step-media">{{t "common.media_count" .MediaCount}}</span>{{end}}
+            </div>
+            {{end}}
+          </div>
+          {{end}}
         </article>
         {{else}}
-        <div class="empty">{{t "publications.empty" .PublicationsWindowDays}}</div>
+          {{if eq (len $.PublicationPublishingGroups) 0}}
+        <div class="empty">{{t "publications.empty" $.PublicationsWindowDays}}</div>
+          {{end}}
         {{end}}
       </section>
       {{end}}
@@ -3770,7 +4024,7 @@
 	      {{if eq .View "drafts"}}
 	      <section class="list publications-grid">
 	        {{range .DraftGroups}}
-	        <article class="card draft publication-card card-editable" data-status="draft" data-draft-group="{{.PostCount}}" data-draft-platform-count="{{len .Platforms}}" data-edit-url="{{.EditURL}}">
+	        <article class="card draft publication-card card-editable" data-status="{{.StatusKey}}" data-draft-group="{{.PostCount}}" data-thread-steps="{{.StepCount}}" data-draft-platform-count="{{len .Platforms}}" data-edit-url="{{.EditURL}}">
           <div class="publication-card-head">
             <div class="publication-head-right">
               <div class="publication-meta-row">
@@ -3793,6 +4047,7 @@
                 </span>
                 {{end}}
                 {{if .ThreadLabel}}<span class="thread-step-badge publication-thread-chip">{{.ThreadLabel}}</span>{{end}}
+                {{if .ProgressLabel}}<span class="publication-progress-chip">{{.ProgressLabel}}</span>{{end}}
                 <span class="publication-media-chip" title="{{t "common.media_count" .MediaCount}}" aria-label="{{t "common.media_count" .MediaCount}}">
                   <svg data-lucide="image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="m21 15-5-5L5 21"></path></svg>
                   <span>{{.MediaCount}}</span>
@@ -3807,6 +4062,17 @@
             </div>
           </div>
           <div class="publication-text">{{previewMarkdown .Text}}</div>
+          {{if gt (len .FollowUpSteps) 0}}
+          <div class="publication-thread-steps">
+            {{range .FollowUpSteps}}
+            <div class="publication-thread-step">
+              <span class="publication-thread-step-index">{{.Position}}</span>
+              <div class="publication-thread-step-text">{{previewMarkdown .Text}}</div>
+              {{if gt .MediaCount 0}}<span class="publication-thread-step-media">{{t "common.media_count" .MediaCount}}</span>{{end}}
+            </div>
+            {{end}}
+          </div>
+          {{end}}
           {{if eq .PostCount 1}}
           <div class="card-actions">
             <form method="post" action="/posts/{{.PrimaryPostID}}/schedule">
@@ -3837,7 +4103,7 @@
           </form>
         </div>
         {{range .FailedGroups}}
-        <article class="card failed publication-card card-editable" data-failed-group="{{.PostCount}}" data-failed-platform-count="{{len .Platforms}}" data-edit-url="{{.EditURL}}">
+        <article class="card failed publication-card card-editable" data-status="{{.StatusKey}}" data-failed-group="{{.PostCount}}" data-thread-steps="{{.StepCount}}" data-failed-platform-count="{{len .Platforms}}" data-edit-url="{{.EditURL}}">
           <div class="publication-card-head">
             <div class="publication-time-with-select">
               <span class="failed-select">
@@ -3867,6 +4133,7 @@
               </span>
               {{end}}
               {{if .ThreadLabel}}<span class="thread-step-badge publication-thread-chip">{{.ThreadLabel}}</span>{{end}}
+              {{if .ProgressLabel}}<span class="publication-progress-chip">{{.ProgressLabel}}</span>{{end}}
               <span class="publication-media-chip" title="{{t "common.media_count" .MediaCount}}" aria-label="{{t "common.media_count" .MediaCount}}">
                 <svg data-lucide="image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="m21 15-5-5L5 21"></path></svg>
                 <span>{{.MediaCount}}</span>
@@ -3875,6 +4142,17 @@
             </div>
           </div>
           <div class="publication-text">{{previewMarkdown .Text}}</div>
+          {{if gt (len .FollowUpSteps) 0}}
+          <div class="publication-thread-steps">
+            {{range .FollowUpSteps}}
+            <div class="publication-thread-step">
+              <span class="publication-thread-step-index">{{.Position}}</span>
+              <div class="publication-thread-step-text">{{previewMarkdown .Text}}</div>
+              {{if gt .MediaCount 0}}<span class="publication-thread-step-media">{{t "common.media_count" .MediaCount}}</span>{{end}}
+            </div>
+            {{end}}
+          </div>
+          {{end}}
           <div class="meta">
             <span>{{t "failed.attempts" .Attempts .MaxAttempts}}</span>
             <span>{{t "failed.failed_at" .FailedAtLabel}}</span>

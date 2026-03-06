@@ -58,32 +58,31 @@ type failedQueueItem struct {
 	ScheduledAtLabel string
 }
 
-type publicationGroupItem struct {
-	PrimaryPostID   string
-	PostIDs         []string
-	PrimaryPlatform domain.Platform
-	MultiPlatform   bool
-	Platforms       []domain.Platform
-	AccountIDs      []string
-	PostCount       int
-	ScheduledAt     time.Time
-	Text            string
-	ThreadLabel     string
-	MediaCount      int
-	EditURL         string
+type publicationStepPreview struct {
+	Position   int
+	Text       string
+	MediaCount int
 }
 
-type failedGroupItem struct {
+type publicationGroupItem struct {
 	PrimaryPostID    string
-	DeadLetterIDs    []string
-	DeadLetterIDsCSV string
+	PostIDs          []string
+	PrimaryPlatform  domain.Platform
+	MultiPlatform    bool
 	Platforms        []domain.Platform
 	AccountIDs       []string
 	PostCount        int
+	ScheduledAt      time.Time
 	ScheduledAtLabel string
 	Text             string
 	ThreadLabel      string
+	StepCount        int
+	ProgressLabel    string
+	FollowUpSteps    []publicationStepPreview
 	MediaCount       int
+	StatusKey        string
+	DeadLetterIDs    []string
+	DeadLetterIDsCSV string
 	Attempts         int
 	MaxAttempts      int
 	FailedAtLabel    string
@@ -115,78 +114,83 @@ type createThreadSegment struct {
 }
 
 type pageData struct {
-	Lang                       string
-	View                       string
-	ActiveNavView              string
-	UITimezone                 string
-	TimezoneConfigured         bool
-	AppVersion                 string
-	MCPURL                     string
-	MCPAuthHint                string
-	MCPConfigJSON              string
-	MCPClaudeCommand           string
-	MCPCodexCommand            string
-	MCPCodexConfigTOML         string
-	Items                      []domain.Post
-	Publications               []domain.Post
-	PublicationGroups          []publicationGroupItem
-	Drafts                     []domain.Post
-	DraftGroups                []publicationGroupItem
-	FailedItems                []failedQueueItem
-	FailedGroups               []failedGroupItem
-	CurrentViewURL             string
-	CreateViewURL              string
-	ReturnTo                   string
-	BackURL                    string
-	Accounts                   []domain.SocialAccount
-	EditingPost                *domain.Post
-	CreateInitialMedia         []createMediaAttachment
-	CreateInitialSegments      []createThreadSegment
-	CreateAccountID            string
-	CreateAccountIDs           []string
-	CreateText                 string
-	CreateScheduledLocal       string
-	CreateError                string
-	CreateSuccess              string
-	FailedError                string
-	FailedSuccess              string
-	SettingsError              string
-	SettingsSuccess            string
-	AccountsError              string
-	AccountsSuccess            string
-	MediaError                 string
-	MediaSuccess               string
-	TotalAccountCount          int
-	ConnectedAccountCount      int
-	ScheduledCount             int
-	PublicationsWindowDays     int
-	DraftCount                 int
-	FailedCount                int
-	SettingsAccounts           []settingsAccountItem
-	MediaLibrary               []mediaListItem
-	CreateRecentMedia          []mediaListItem
-	MediaInUseCount            int
-	MediaTotalSizeLabel        string
-	NextRunLabel               string
-	CalendarMonthLabel         string
-	WeekdayLabels              []string
-	CalendarWeeks              [][]calendarDay
-	PrevMonthParam             string
-	NextMonthParam             string
-	CurrentMonthParam          string
-	TodayMonthParam            string
-	TodayDayKey                string
-	SelectedDayKey             string
-	SelectedDayLabel           string
-	SelectedDayItems           []dayDetailItem
-	SelectedDayPendingItems    []dayDetailItem
-	SelectedDayPublishedItems  []dayDetailItem
-	SelectedDayPendingGroups   []publicationGroupItem
-	SelectedDayPublishedGroups []publicationGroupItem
-	SelectedDayFailedGroups    []failedGroupItem
-	SelectedDayPendingCount    int
-	SelectedDayPublishedCount  int
-	SelectedDayFailedCount     int
-	DatePickerMonthNames       []string
-	DatePickerWeekdayNames     []string
+	Lang                        string
+	View                        string
+	ActiveNavView               string
+	UITimezone                  string
+	TimezoneConfigured          bool
+	AppVersion                  string
+	MCPURL                      string
+	MCPAuthHint                 string
+	MCPConfigJSON               string
+	MCPClaudeCommand            string
+	MCPCodexCommand             string
+	MCPCodexConfigTOML          string
+	Items                       []domain.Post
+	Publications                []domain.Post
+	PublicationGroups           []publicationGroupItem
+	PublicationScheduledGroups  []publicationGroupItem
+	PublicationPublishingGroups []publicationGroupItem
+	Drafts                      []domain.Post
+	DraftGroups                 []publicationGroupItem
+	FailedItems                 []failedQueueItem
+	FailedGroups                []publicationGroupItem
+	CurrentViewURL              string
+	CreateViewURL               string
+	ReturnTo                    string
+	BackURL                     string
+	Accounts                    []domain.SocialAccount
+	EditingPost                 *domain.Post
+	CreateInitialMedia          []createMediaAttachment
+	CreateInitialSegments       []createThreadSegment
+	CreateAccountID             string
+	CreateAccountIDs            []string
+	CreateText                  string
+	CreateScheduledLocal        string
+	CreateError                 string
+	CreateSuccess               string
+	FailedError                 string
+	FailedSuccess               string
+	SettingsError               string
+	SettingsSuccess             string
+	AccountsError               string
+	AccountsSuccess             string
+	MediaError                  string
+	MediaSuccess                string
+	TotalAccountCount           int
+	ConnectedAccountCount       int
+	ScheduledCount              int
+	PublicationsWindowDays      int
+	DraftCount                  int
+	FailedCount                 int
+	SettingsAccounts            []settingsAccountItem
+	MediaLibrary                []mediaListItem
+	CreateRecentMedia           []mediaListItem
+	MediaInUseCount             int
+	MediaTotalSizeLabel         string
+	NextRunLabel                string
+	CalendarMonthLabel          string
+	WeekdayLabels               []string
+	CalendarWeeks               [][]calendarDay
+	PrevMonthParam              string
+	NextMonthParam              string
+	CurrentMonthParam           string
+	TodayMonthParam             string
+	TodayDayKey                 string
+	SelectedDayKey              string
+	SelectedDayLabel            string
+	SelectedDayItems            []dayDetailItem
+	SelectedDayPendingItems     []dayDetailItem
+	SelectedDayPublishedItems   []dayDetailItem
+	SelectedDayPendingGroups    []publicationGroupItem
+	SelectedDayPublishingGroups []publicationGroupItem
+	SelectedDayPublishedGroups  []publicationGroupItem
+	SelectedDayFailedGroups     []publicationGroupItem
+	SelectedDayPendingCount     int
+	SelectedDayPublishingCount  int
+	SelectedDayPublishedCount   int
+	SelectedDayFailedCount      int
+	SelectedDayOpenCount        int
+	DatePickerMonthNames        []string
+	DatePickerWeekdayNames      []string
 }

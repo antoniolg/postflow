@@ -68,18 +68,34 @@ func groupCalendarEventsByContent(posts []domain.Post, threadLabelFor func(domai
 }
 
 func calendarStatusMeta(status domain.PostStatus) (statusClass string, statusLabel string, statusKey string) {
-	statusClass = "drft"
-	statusLabel = "DRFT"
-	statusKey = "draft"
 	switch status {
 	case domain.PostStatusPublished:
-		statusClass = "live"
-		statusLabel = "LIVE"
-		statusKey = "published"
+		return "live", "LIVE", "published"
 	case domain.PostStatusScheduled:
-		statusClass = "schd"
-		statusLabel = "SCHD"
-		statusKey = "scheduled"
+		return "schd", "SCHD", "scheduled"
+	case domain.PostStatusPublishing:
+		return "prog", "PROG", "publishing"
+	case domain.PostStatusFailed:
+		return "fail", "FAIL", "failed"
+	case domain.PostStatusCanceled:
+		return "cncl", "CNCL", "canceled"
 	}
-	return statusClass, statusLabel, statusKey
+	return "drft", "DRFT", "draft"
+}
+
+func calendarStatusMetaFromGroup(statusKey string) (statusClass string, statusLabel string, normalized string) {
+	switch strings.TrimSpace(statusKey) {
+	case "published":
+		return "live", "LIVE", "published"
+	case "scheduled":
+		return "schd", "SCHD", "scheduled"
+	case "publishing":
+		return "prog", "PROG", "publishing"
+	case "failed":
+		return "fail", "FAIL", "failed"
+	case "canceled":
+		return "cncl", "CNCL", "canceled"
+	default:
+		return "drft", "DRFT", "draft"
+	}
 }

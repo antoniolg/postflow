@@ -14,12 +14,12 @@ type failedPostEnvelope struct {
 	LastError    string
 }
 
-func groupFailedPosts(items []failedPostEnvelope, threadLabelFor func(domain.Post) string, uiLoc *time.Location, noDateLabel string) []failedGroupItem {
+func groupFailedPosts(items []failedPostEnvelope, threadLabelFor func(domain.Post) string, uiLoc *time.Location, noDateLabel string) []publicationGroupItem {
 	if len(items) == 0 {
 		return nil
 	}
 	indexByKey := make(map[string]int, len(items))
-	out := make([]failedGroupItem, 0, len(items))
+	out := make([]publicationGroupItem, 0, len(items))
 	platformSets := make([]map[domain.Platform]struct{}, 0, len(items))
 	accountSets := make([]map[string]struct{}, 0, len(items))
 
@@ -45,7 +45,7 @@ func groupFailedPosts(items []failedPostEnvelope, threadLabelFor func(domain.Pos
 			if uiLoc != nil {
 				failedAt = failedAt.In(uiLoc)
 			}
-			out = append(out, failedGroupItem{
+			out = append(out, publicationGroupItem{
 				PrimaryPostID:    item.Post.ID,
 				DeadLetterIDs:    make([]string, 0, 2),
 				Platforms:        make([]domain.Platform, 0, 2),

@@ -341,8 +341,8 @@ func TestCalendarDayPanelGroupsSameContentAcrossNetworks(t *testing.T) {
 	if !strings.Contains(body, "data-calendar-platform-count=\"3\"") {
 		t.Fatalf("expected grouped calendar card to include three unique platforms")
 	}
-	if !strings.Contains(body, "to publish (3)") {
-		t.Fatalf("expected day panel to keep pending count by publications, not grouped cards")
+	if !strings.Contains(body, "to publish (1)") {
+		t.Fatalf("expected day panel pending count to reflect grouped logical publications")
 	}
 
 	cardRe := regexp.MustCompile(`(?s)<article class="card scheduled publication-card day-panel-publication-card[^>]*data-calendar-group="3"[^>]*>.*?</article>`)
@@ -407,9 +407,120 @@ func TestCalendarGridGroupsSameContentAcrossNetworks(t *testing.T) {
 	if !strings.Contains(body, "data-event-platform-count=\"4\"") {
 		t.Fatalf("expected grouped calendar grid row to include four unique platforms")
 	}
-	selectedDayCountRe := regexp.MustCompile(`(?s)<div class="day-cell [^"]*selected[^"]*">.*?<span class="day-count">4</span>`)
+	selectedDayCountRe := regexp.MustCompile(`(?s)<div class="day-cell [^"]*selected[^"]*">.*?<span class="day-count">1</span>`)
 	if !selectedDayCountRe.MatchString(body) {
-		t.Fatalf("expected selected day cell badge to keep total publication count")
+		t.Fatalf("expected selected day cell badge to reflect grouped logical publications")
+	}
+}
+
+func TestPartiallyPublishedThreadStaysGroupedInPublishingSection(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	accountID := testAccountID(t, store)
+	scheduledAt := time.Now().UTC().Add(2 * time.Hour).Truncate(time.Minute)
+	createBody, _ := json.Marshal(map[string]any{
+		"account_id":   accountID,
+		"scheduled_at": scheduledAt.Format(time.RFC3339),
+		"segments": []map[string]any{
+			{"text": "thread root"},
+			{"text": "thread follow up"},
+		},
+	})
+	createReq := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(createBody))
+	createW := httptest.NewRecorder()
+	h.ServeHTTP(createW, createReq)
+	if createW.Code != http.StatusCreated {
+		t.Fatalf("expected 201 for thread create, got %d", createW.Code)
+	}
+
+	var createResp struct {
+		Items []domain.Post `json:"items"`
+	}
+	if err := json.Unmarshal(createW.Body.Bytes(), &createResp); err != nil {
+		t.Fatalf("decode thread create response: %v", err)
+	}
+	if len(createResp.Items) != 2 {
+		t.Fatalf("expected 2 thread items, got %d", len(createResp.Items))
+	}
+
+	rootID := ""
+	for _, item := range createResp.Items {
+		if item.ThreadPosition == 1 {
+			rootID = item.ID
+			break
+		}
+	}
+	if rootID == "" {
+		t.Fatalf("expected root post id in thread create response")
+	}
+	if err := store.MarkPublished(t.Context(), rootID, "x-root-123"); err != nil {
+		t.Fatalf("mark root published: %v", err)
+	}
+
+	publicationsReq := httptest.NewRequest(http.MethodGet, "/?view=publications", nil)
+	publicationsW := httptest.NewRecorder()
+	h.ServeHTTP(publicationsW, publicationsReq)
+	if publicationsW.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", publicationsW.Code)
+	}
+
+	body := publicationsW.Body.String()
+	if !strings.Contains(body, "publishing (1)") {
+		t.Fatalf("expected partially published thread to appear in publishing section")
+	}
+	if strings.Count(body, "class=\"card publishing publication-card card-editable\"") != 1 {
+		t.Fatalf("expected a single grouped publishing card for partial thread")
+	}
+	if !strings.Contains(body, "data-thread-steps=\"2\"") {
+		t.Fatalf("expected grouped publishing card to expose total step count")
+	}
+	if !strings.Contains(body, ">2 steps<") {
+		t.Fatalf("expected grouped publishing card to show total steps badge")
+	}
+	if !strings.Contains(body, ">1/2 published<") {
+		t.Fatalf("expected grouped publishing card to show partial progress badge")
+	}
+	if strings.Contains(body, "published (1)") {
+		t.Fatalf("partially published thread should not move to published section yet")
+	}
+}
+
+func TestThreadStepPreviewTextUsesVisualClamp(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+	_ = testAccountID(t, store)
+
+	req := httptest.NewRequest(http.MethodGet, "/?view=publications", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, ".publication-thread-step-text {\n      min-width: 0;\n      flex: 1 1 auto;\n      display: -webkit-box;") {
+		t.Fatalf("expected thread step preview styles to use clamped box layout")
+	}
+	if !strings.Contains(body, "-webkit-line-clamp: 3;") {
+		t.Fatalf("expected thread step preview styles to clamp to three lines")
+	}
+	if !strings.Contains(body, "overflow-wrap: anywhere;") {
+		t.Fatalf("expected thread step preview styles to wrap long unbroken tokens")
 	}
 }
 
