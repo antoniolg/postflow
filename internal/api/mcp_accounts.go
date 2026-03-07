@@ -19,6 +19,7 @@ type mcpListAccountsOutput struct {
 
 type mcpCreateStaticAccountInput struct {
 	Platform          string         `json:"platform" jsonschema:"Platform: x|linkedin|facebook|instagram."`
+	AccountKind       string         `json:"account_kind,omitempty" jsonschema:"Optional account kind. LinkedIn supports personal|organization. Other platforms use default."`
 	DisplayName       string         `json:"display_name,omitempty" jsonschema:"Optional display name."`
 	ExternalAccountID string         `json:"external_account_id" jsonschema:"Network account ID or handle."`
 	Credentials       map[string]any `json:"credentials" jsonschema:"Credential payload. Must include access_token. X also requires access_token_secret."`
@@ -69,6 +70,10 @@ func (s Server) mcpCreateStaticAccountTool(ctx context.Context, _ *mcp.CallToolR
 	if platform == "" {
 		return nil, mcpCreateStaticAccountOutput{}, errors.New("platform is required")
 	}
+	accountKind := normalizeAccountKind(platform, in.AccountKind)
+	if accountKind == "" {
+		return nil, mcpCreateStaticAccountOutput{}, errors.New("account_kind is invalid for platform")
+	}
 	if _, ok := s.providerRegistry().Get(platform); !ok {
 		return nil, mcpCreateStaticAccountOutput{}, errors.New("provider is not configured for platform")
 	}
@@ -86,6 +91,7 @@ func (s Server) mcpCreateStaticAccountTool(ctx context.Context, _ *mcp.CallToolR
 
 	account, err := s.Store.UpsertAccount(ctx, db.UpsertAccountParams{
 		Platform:          platform,
+		AccountKind:       accountKind,
 		DisplayName:       strings.TrimSpace(in.DisplayName),
 		ExternalAccountID: strings.TrimSpace(in.ExternalAccountID),
 		AuthMethod:        domain.AuthMethodStatic,

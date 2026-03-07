@@ -84,13 +84,14 @@ Use `.env.example` as template. These are the key ones:
 |---|---|---|
 | X | `X_CLIENT_ID`, `X_CLIENT_SECRET` | X Developer Portal OAuth 2.0 app credentials for account connection |
 | X (static optional) | `X_API_KEY`, `X_API_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_TOKEN_SECRET` | Static OAuth1 credentials for bootstrap/default X publishing |
-| LinkedIn | `LINKEDIN_CLIENT_ID`, `LINKEDIN_CLIENT_SECRET` | LinkedIn Developer app |
+| LinkedIn | `LINKEDIN_CLIENT_ID`, `LINKEDIN_CLIENT_SECRET` | LinkedIn Developer app with member posting enabled. To connect company pages, the app must also have organization posting/admin scopes approved. |
 | Facebook/Instagram | `META_APP_ID`, `META_APP_SECRET` | Meta Developers app |
 
 Important:
 - If you want real publishing, set `POSTFLOW_DRIVER=live`.
 - For local testing without real publishing, keep `POSTFLOW_DRIVER=mock`.
 - OAuth account connection is available for X, LinkedIn, Facebook, and Instagram.
+- LinkedIn OAuth connects the personal profile and, when available, any organization pages the user administers.
 - X also supports static credentials via env vars or `/accounts/static` / `postflow accounts create-static`.
 - In production (Coolify), set secrets in the platform UI, not in committed files.
 

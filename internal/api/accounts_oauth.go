@@ -191,6 +191,7 @@ func (s Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	for _, item := range connected {
 		account, err := s.Store.UpsertAccount(r.Context(), db.UpsertAccountParams{
 			Platform:          item.Platform,
+			AccountKind:       item.AccountKind,
 			DisplayName:       item.DisplayName,
 			ExternalAccountID: item.ExternalAccountID,
 			AuthMethod:        domain.AuthMethodOAuth,
@@ -294,6 +295,10 @@ func normalizePlatform(raw string) domain.Platform {
 	default:
 		return ""
 	}
+}
+
+func normalizeAccountKind(platform domain.Platform, raw string) domain.AccountKind {
+	return domain.NormalizeAccountKind(platform, domain.AccountKind(strings.ToLower(strings.TrimSpace(raw))))
 }
 
 func mustID(prefix string) string {

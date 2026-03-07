@@ -817,6 +817,8 @@ components:
           type: string
         platform:
           $ref: '#/components/schemas/Platform'
+        account_kind:
+          $ref: '#/components/schemas/AccountKind'
         display_name:
           type: string
         external_account_id:
@@ -843,6 +845,8 @@ components:
       properties:
         platform:
           $ref: '#/components/schemas/Platform'
+        account_kind:
+          $ref: '#/components/schemas/AccountKind'
         display_name:
           type: string
         external_account_id:
@@ -850,6 +854,10 @@ components:
         credentials:
           type: object
           additionalProperties: true
+
+    AccountKind:
+      type: string
+      enum: [default, personal, organization]
 
     CreatePostRequest:
       type: object

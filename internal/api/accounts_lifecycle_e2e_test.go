@@ -48,6 +48,7 @@ func (p *oauthLifecycleProvider) HandleOAuthCallback(_ context.Context, _ postfl
 	return []postflow.ConnectedAccount{
 		{
 			Platform:          domain.PlatformLinkedIn,
+			AccountKind:       domain.AccountKindPersonal,
 			DisplayName:       "LinkedIn OAuth",
 			ExternalAccountID: "li-oauth-e2e",
 			Credentials: postflow.Credentials{
@@ -57,6 +58,17 @@ func (p *oauthLifecycleProvider) HandleOAuthCallback(_ context.Context, _ postfl
 				Extra: map[string]string{
 					"scope": "r_liteprofile w_member_social",
 				},
+			},
+		},
+		{
+			Platform:          domain.PlatformLinkedIn,
+			AccountKind:       domain.AccountKindOrganization,
+			DisplayName:       "LinkedIn Org OAuth",
+			ExternalAccountID: "li-org-oauth-e2e",
+			Credentials: postflow.Credentials{
+				AccessToken:  "oauth_access_token",
+				RefreshToken: "oauth_refresh_token",
+				TokenType:    "Bearer",
 			},
 		},
 	}, nil
@@ -231,15 +243,22 @@ func TestOAuthJSONLifecycleIncludesReplayInvalidAndExpiredState(t *testing.T) {
 		Items    []domain.SocialAccount `json:"items"`
 	}
 	mustDecodeJSON(t, callbackRaw, &callbackPayload)
-	if callbackPayload.Platform != domain.PlatformLinkedIn || callbackPayload.Count != 1 || len(callbackPayload.Items) != 1 {
+	if callbackPayload.Platform != domain.PlatformLinkedIn || callbackPayload.Count != 2 || len(callbackPayload.Items) != 2 {
 		t.Fatalf("unexpected oauth callback payload: %+v", callbackPayload)
 	}
-	persistedAfterFirst, err := store.GetAccountByPlatformExternalID(t.Context(), domain.PlatformLinkedIn, "li-oauth-e2e")
+	persistedAfterFirst, err := store.GetAccountByPlatformExternalID(t.Context(), domain.PlatformLinkedIn, domain.AccountKindPersonal, "li-oauth-e2e")
 	if err != nil {
 		t.Fatalf("expected linked account to be persisted after oauth callback: %v", err)
 	}
 	if persistedAfterFirst.ID != callbackPayload.Items[0].ID {
 		t.Fatalf("expected callback payload account id %s to match persisted id %s", callbackPayload.Items[0].ID, persistedAfterFirst.ID)
+	}
+	persistedOrgAfterFirst, err := store.GetAccountByPlatformExternalID(t.Context(), domain.PlatformLinkedIn, domain.AccountKindOrganization, "li-org-oauth-e2e")
+	if err != nil {
+		t.Fatalf("expected linked organization account to be persisted after oauth callback: %v", err)
+	}
+	if persistedOrgAfterFirst.ID != callbackPayload.Items[1].ID {
+		t.Fatalf("expected callback payload org account id %s to match persisted id %s", callbackPayload.Items[1].ID, persistedOrgAfterFirst.ID)
 	}
 
 	encrypted, err := store.GetAccountCredentials(t.Context(), callbackPayload.Items[0].ID)
@@ -268,18 +287,25 @@ func TestOAuthJSONLifecycleIncludesReplayInvalidAndExpiredState(t *testing.T) {
 	if replayPayload.Status != "already_processed" {
 		t.Fatalf("expected replay status already_processed, got %q", replayPayload.Status)
 	}
-	persistedAfterReplay, err := store.GetAccountByPlatformExternalID(t.Context(), domain.PlatformLinkedIn, "li-oauth-e2e")
+	persistedAfterReplay, err := store.GetAccountByPlatformExternalID(t.Context(), domain.PlatformLinkedIn, domain.AccountKindPersonal, "li-oauth-e2e")
 	if err != nil {
 		t.Fatalf("expected linked account to remain persisted after replay: %v", err)
 	}
 	if persistedAfterReplay.ID != persistedAfterFirst.ID {
 		t.Fatalf("expected replay to keep same linked account id, got first=%s replay=%s", persistedAfterFirst.ID, persistedAfterReplay.ID)
 	}
+	persistedOrgAfterReplay, err := store.GetAccountByPlatformExternalID(t.Context(), domain.PlatformLinkedIn, domain.AccountKindOrganization, "li-org-oauth-e2e")
+	if err != nil {
+		t.Fatalf("expected linked organization account to remain persisted after replay: %v", err)
+	}
+	if persistedOrgAfterReplay.ID != persistedOrgAfterFirst.ID {
+		t.Fatalf("expected replay to keep same linked org account id, got first=%s replay=%s", persistedOrgAfterFirst.ID, persistedOrgAfterReplay.ID)
+	}
 	accountsAfterReplay, err := store.ListAccounts(t.Context())
 	if err != nil {
 		t.Fatalf("list accounts after oauth replay: %v", err)
 	}
-	if len(accountsAfterReplay) != 1 {
+	if len(accountsAfterReplay) != 2 {
 		t.Fatalf("expected replay to avoid duplicating linked accounts, got %d", len(accountsAfterReplay))
 	}
 

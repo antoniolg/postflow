@@ -252,6 +252,43 @@ func TestLinkedInPublishCommentModeAcceptsShareURNTargets(t *testing.T) {
 	}
 }
 
+func TestLinkedInPublishCommentModeUsesOrganizationActor(t *testing.T) {
+	targetURN := "urn:li:ugcPost:7096760097833439232"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.EscapedPath(); got != "/v2/socialActions/"+url.PathEscape(targetURN)+"/comments" {
+			http.NotFound(w, r)
+			return
+		}
+		var payload map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode organization comment payload: %v", err)
+		}
+		if actor, _ := payload["actor"].(string); strings.TrimSpace(actor) != "urn:li:organization:org_1" {
+			t.Fatalf("unexpected actor %q", actor)
+		}
+		_, _ = w.Write([]byte(`{"id":"li_comment_org_1","object":"urn:li:ugcPost:7096760097833439232"}`))
+	}))
+	defer server.Close()
+
+	provider := NewLinkedInProvider(LinkedInProviderConfig{APIBaseURL: server.URL})
+	externalID, err := provider.Publish(context.Background(), domain.SocialAccount{
+		Platform:          domain.PlatformLinkedIn,
+		AccountKind:       domain.AccountKindOrganization,
+		ExternalAccountID: "org_1",
+	}, Credentials{AccessToken: "token-1"}, domain.Post{
+		Text: "organization comment",
+	}, PublishOptions{
+		Mode:             PublishModeComment,
+		ParentExternalID: targetURN,
+	})
+	if err != nil {
+		t.Fatalf("publish organization comment: %v", err)
+	}
+	if externalID != "urn:li:comment:(urn:li:ugcPost:7096760097833439232,li_comment_org_1)" {
+		t.Fatalf("unexpected external id %q", externalID)
+	}
+}
+
 func TestLinkedInRefreshOAuthAndCallbackFlows(t *testing.T) {
 	t.Run("refreshes expiring token", func(t *testing.T) {
 		var refreshCalls int
@@ -378,6 +415,8 @@ func TestLinkedInRefreshOAuthAndCallbackFlows(t *testing.T) {
 				_, _ = io.WriteString(w, `{"access_token":"li-access","expires_in":3600}`)
 			case "/v2/userinfo":
 				_, _ = io.WriteString(w, `{"sub":"member_7","name":"Grace Hopper"}`)
+			case "/v2/organizationalEntityAcls":
+				_, _ = io.WriteString(w, `{"elements":[{"organizationalTarget":"urn:li:organization:987","organizationalTarget~":{"localizedName":"Acme Co"}}]}`)
 			case "/v2/me":
 				meCalls++
 				_, _ = io.WriteString(w, `{"id":"member_legacy"}`)
@@ -400,14 +439,17 @@ func TestLinkedInRefreshOAuthAndCallbackFlows(t *testing.T) {
 		if err != nil {
 			t.Fatalf("handle oauth callback with userinfo: %v", err)
 		}
-		if len(accounts) != 1 {
-			t.Fatalf("expected one connected account, got %d", len(accounts))
+		if len(accounts) != 2 {
+			t.Fatalf("expected personal and organization accounts, got %d", len(accounts))
 		}
 		if meCalls != 0 {
 			t.Fatalf("expected no /v2/me calls when userinfo works, got %d", meCalls)
 		}
-		if accounts[0].ExternalAccountID != "member_7" || accounts[0].DisplayName != "Grace Hopper" {
-			t.Fatalf("unexpected account details: %+v", accounts[0])
+		if accounts[0].AccountKind != domain.AccountKindPersonal || accounts[0].ExternalAccountID != "member_7" || accounts[0].DisplayName != "Grace Hopper" {
+			t.Fatalf("unexpected personal account details: %+v", accounts[0])
+		}
+		if accounts[1].AccountKind != domain.AccountKindOrganization || accounts[1].ExternalAccountID != "987" || accounts[1].DisplayName != "Acme Co" {
+			t.Fatalf("unexpected organization account details: %+v", accounts[1])
 		}
 	})
 }

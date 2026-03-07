@@ -10,6 +10,8 @@ type settingsAccountItem struct {
 	ID          string
 	DisplayName string
 	Platform    domain.Platform
+	AccountKind domain.AccountKind
+	AccountMeta string
 	XPremium    bool
 	AuthMethod  domain.AuthMethod
 	Status      domain.AccountStatus

@@ -18,6 +18,35 @@ const (
 	AuthMethodOAuth  AuthMethod = "oauth"
 )
 
+type AccountKind string
+
+const (
+	AccountKindDefault      AccountKind = "default"
+	AccountKindPersonal     AccountKind = "personal"
+	AccountKindOrganization AccountKind = "organization"
+)
+
+func NormalizeAccountKind(platform Platform, raw AccountKind) AccountKind {
+	switch platform {
+	case PlatformLinkedIn:
+		switch raw {
+		case "", AccountKindDefault, AccountKindPersonal:
+			return AccountKindPersonal
+		case AccountKindOrganization:
+			return AccountKindOrganization
+		default:
+			return ""
+		}
+	default:
+		switch raw {
+		case "", AccountKindDefault:
+			return AccountKindDefault
+		default:
+			return ""
+		}
+	}
+}
+
 type AccountStatus string
 
 const (
@@ -50,6 +79,7 @@ type Media struct {
 type SocialAccount struct {
 	ID                string        `json:"id"`
 	Platform          Platform      `json:"platform"`
+	AccountKind       AccountKind   `json:"account_kind"`
 	DisplayName       string        `json:"display_name"`
 	ExternalAccountID string        `json:"external_account_id"`
 	XPremium          bool          `json:"x_premium"`

@@ -29,6 +29,8 @@ type LinkedInProvider struct {
 	client *http.Client
 }
 
+const linkedInOAuthScope = "openid profile w_member_social rw_organization_admin w_organization_social"
+
 func NewLinkedInProvider(cfg LinkedInProviderConfig) *LinkedInProvider {
 	if strings.TrimSpace(cfg.AuthBaseURL) == "" {
 		cfg.AuthBaseURL = "https://www.linkedin.com"
@@ -78,8 +80,8 @@ func (p *LinkedInProvider) Publish(ctx context.Context, account domain.SocialAcc
 	if token == "" {
 		return "", fmt.Errorf("linkedin access token missing")
 	}
-	memberID := strings.TrimSpace(account.ExternalAccountID)
-	if memberID == "" {
+	actorURN := linkedinActorURN(account)
+	if actorURN == "" {
 		return "", fmt.Errorf("linkedin external account id is required")
 	}
 	if opts.Mode == PublishModeComment {
@@ -90,7 +92,7 @@ func (p *LinkedInProvider) Publish(ctx context.Context, account domain.SocialAcc
 		if parentExternalID == "" {
 			return "", fmt.Errorf("linkedin parent external id is required for comment mode")
 		}
-		return p.publishComment(ctx, token, memberID, parentExternalID, postText)
+		return p.publishComment(ctx, token, actorURN, parentExternalID, postText)
 	}
 	assetURNs := make([]string, 0, len(post.Media))
 	videoCount := 0
@@ -112,9 +114,9 @@ func (p *LinkedInProvider) Publish(ctx context.Context, account domain.SocialAcc
 		)
 		switch {
 		case isImageMedia(media):
-			assetURN, err = p.uploadAsset(ctx, memberID, token, media, "urn:li:digitalmediaRecipe:feedshare-image")
+			assetURN, err = p.uploadAsset(ctx, actorURN, token, media, "urn:li:digitalmediaRecipe:feedshare-image")
 		case isVideoMedia(media):
-			assetURN, err = p.uploadAsset(ctx, memberID, token, media, "urn:li:digitalmediaRecipe:feedshare-video")
+			assetURN, err = p.uploadAsset(ctx, actorURN, token, media, "urn:li:digitalmediaRecipe:feedshare-video")
 		default:
 			return "", fmt.Errorf("linkedin requires image or video media")
 		}
@@ -139,7 +141,7 @@ func (p *LinkedInProvider) Publish(ctx context.Context, account domain.SocialAcc
 		}
 	}
 	payload := map[string]any{
-		"author":         "urn:li:person:" + memberID,
+		"author":         actorURN,
 		"lifecycleState": "PUBLISHED",
 		"specificContent": map[string]any{
 			"com.linkedin.ugc.ShareContent": map[string]any{
@@ -184,14 +186,14 @@ func (p *LinkedInProvider) Publish(ctx context.Context, account domain.SocialAcc
 	return strings.TrimSpace(out.ID), nil
 }
 
-func (p *LinkedInProvider) publishComment(ctx context.Context, accessToken, memberID, parentExternalID, text string) (string, error) {
+func (p *LinkedInProvider) publishComment(ctx context.Context, accessToken, actorURN, parentExternalID, text string) (string, error) {
 	target := normalizeLinkedInTargetURN(parentExternalID)
 	if target == "" {
 		return "", fmt.Errorf("linkedin comment target is required")
 	}
 	objectURN := target
 	payload := map[string]any{
-		"actor":   "urn:li:person:" + strings.TrimSpace(memberID),
+		"actor":   strings.TrimSpace(actorURN),
 		"object":  target,
 		"message": map[string]any{"text": strings.TrimSpace(text)},
 	}
@@ -289,8 +291,11 @@ func buildLinkedInCommentURN(objectURN, commentID string) string {
 	return fmt.Sprintf("urn:li:comment:(%s,%s)", objectURN, commentID)
 }
 
-func (p *LinkedInProvider) uploadAsset(ctx context.Context, memberID, accessToken string, media domain.Media, recipe string) (string, error) {
-	ownerURN := "urn:li:person:" + strings.TrimSpace(memberID)
+func (p *LinkedInProvider) uploadAsset(ctx context.Context, ownerURN, accessToken string, media domain.Media, recipe string) (string, error) {
+	ownerURN = strings.TrimSpace(ownerURN)
+	if ownerURN == "" {
+		return "", fmt.Errorf("linkedin asset owner is required")
+	}
 	registerPayload := map[string]any{
 		"registerUploadRequest": map[string]any{
 			"owner":   ownerURN,
@@ -454,7 +459,7 @@ func (p *LinkedInProvider) StartOAuth(_ context.Context, in OAuthStartInput) (OA
 	values.Set("client_id", p.cfg.ClientID)
 	values.Set("redirect_uri", in.RedirectURL)
 	values.Set("state", in.State)
-	values.Set("scope", "w_member_social openid profile")
+	values.Set("scope", linkedInOAuthScope)
 	values.Set("prompt", "consent")
 	return OAuthStartOutput{AuthURL: strings.TrimRight(p.cfg.AuthBaseURL, "/") + "/oauth/v2/authorization?" + values.Encode()}, nil
 }
@@ -509,12 +514,30 @@ func (p *LinkedInProvider) HandleOAuthCallback(ctx context.Context, in OAuthCall
 		expiresAt := time.Now().UTC().Add(time.Duration(tokenResp.ExpiresIn) * time.Second)
 		creds.ExpiresAt = &expiresAt
 	}
-	return []ConnectedAccount{{
+	accounts := []ConnectedAccount{{
 		Platform:          domain.PlatformLinkedIn,
+		AccountKind:       domain.AccountKindPersonal,
 		DisplayName:       displayName,
 		ExternalAccountID: memberID,
 		Credentials:       creds,
-	}}, nil
+	}}
+	organizations, err := p.fetchOrganizations(ctx, tokenResp.AccessToken)
+	if err == nil {
+		for _, org := range organizations {
+			orgID := strings.TrimSpace(org.ID)
+			if orgID == "" {
+				continue
+			}
+			accounts = append(accounts, ConnectedAccount{
+				Platform:          domain.PlatformLinkedIn,
+				AccountKind:       domain.AccountKindOrganization,
+				DisplayName:       firstNonEmpty(strings.TrimSpace(org.Name), "LinkedIn organization "+orgID),
+				ExternalAccountID: orgID,
+				Credentials:       creds,
+			})
+		}
+	}
+	return accounts, nil
 }
 
 func (p *LinkedInProvider) fetchMemberProfile(ctx context.Context, accessToken string) (memberID, displayName string, err error) {
@@ -602,4 +625,83 @@ func (p *LinkedInProvider) fetchMemberProfileFromMe(ctx context.Context, accessT
 		displayName = "LinkedIn " + memberID
 	}
 	return memberID, displayName, nil
+}
+
+type linkedInOrganization struct {
+	ID   string
+	Name string
+}
+
+func (p *LinkedInProvider) fetchOrganizations(ctx context.Context, accessToken string) ([]linkedInOrganization, error) {
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		strings.TrimRight(p.cfg.APIBaseURL, "/")+"/v2/organizationalEntityAcls?q=roleAssignee&role=ADMINISTRATOR&projection=(elements*(organizationalTarget,organizationalTarget~(localizedName,vanityName)))",
+		nil,
+	)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(accessToken))
+	req.Header.Set("X-Restli-Protocol-Version", "2.0.0")
+	req.Header.Set("LinkedIn-Version", "202601")
+
+	resp, err := p.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+	if resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("organization acl status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	var out struct {
+		Elements []struct {
+			OrganizationalTarget string `json:"organizationalTarget"`
+			Target               struct {
+				LocalizedName string `json:"localizedName"`
+				VanityName    string `json:"vanityName"`
+			} `json:"organizationalTarget~"`
+		} `json:"elements"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, err
+	}
+	organizations := make([]linkedInOrganization, 0, len(out.Elements))
+	for _, element := range out.Elements {
+		orgID := linkedInOrganizationID(element.OrganizationalTarget)
+		if orgID == "" {
+			continue
+		}
+		organizations = append(organizations, linkedInOrganization{
+			ID:   orgID,
+			Name: strings.TrimSpace(element.Target.LocalizedName),
+		})
+	}
+	return organizations, nil
+}
+
+func linkedInOrganizationID(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	idx := strings.LastIndex(raw, ":")
+	if idx < 0 || idx == len(raw)-1 {
+		return raw
+	}
+	return strings.TrimSpace(raw[idx+1:])
+}
+
+func linkedinActorURN(account domain.SocialAccount) string {
+	externalID := strings.TrimSpace(account.ExternalAccountID)
+	if externalID == "" {
+		return ""
+	}
+	switch domain.NormalizeAccountKind(account.Platform, account.AccountKind) {
+	case domain.AccountKindOrganization:
+		return "urn:li:organization:" + externalID
+	default:
+		return "urn:li:person:" + externalID
+	}
 }

@@ -12,9 +12,10 @@ import (
 )
 
 type migration struct {
-	Version int
-	Name    string
-	Up      func(ctx context.Context, tx *sql.Tx) error
+	Version            int
+	Name               string
+	DisableForeignKeys bool
+	Up                 func(ctx context.Context, tx *sql.Tx) error
 }
 
 var dbMigrations = []migration{
@@ -32,6 +33,12 @@ var dbMigrations = []migration{
 		Version: 3,
 		Name:    "posts_threads",
 		Up:      migrationAddPostsThreads,
+	},
+	{
+		Version:            4,
+		Name:               "accounts_account_kind",
+		DisableForeignKeys: true,
+		Up:                 migrationAddAccountsAccountKind,
 	},
 }
 
@@ -71,12 +78,30 @@ func (s *Store) applyMigrations(ctx context.Context) error {
 			continue
 		}
 
-		tx, err := s.db.BeginTx(ctx, nil)
+		conn, err := s.db.Conn(ctx)
 		if err != nil {
+			return err
+		}
+		if m.DisableForeignKeys {
+			if _, err := conn.ExecContext(ctx, `PRAGMA foreign_keys = OFF;`); err != nil {
+				conn.Close()
+				return err
+			}
+		}
+		tx, err := conn.BeginTx(ctx, nil)
+		if err != nil {
+			if m.DisableForeignKeys {
+				_, _ = conn.ExecContext(ctx, `PRAGMA foreign_keys = ON;`)
+			}
+			conn.Close()
 			return err
 		}
 		if err := m.Up(ctx, tx); err != nil {
 			_ = tx.Rollback()
+			if m.DisableForeignKeys {
+				_, _ = conn.ExecContext(ctx, `PRAGMA foreign_keys = ON;`)
+			}
+			conn.Close()
 			return fmt.Errorf("apply migration %03d_%s: %w", m.Version, m.Name, err)
 		}
 		if _, err := tx.ExecContext(
@@ -87,9 +112,26 @@ func (s *Store) applyMigrations(ctx context.Context) error {
 			time.Now().UTC().Format(time.RFC3339Nano),
 		); err != nil {
 			_ = tx.Rollback()
+			if m.DisableForeignKeys {
+				_, _ = conn.ExecContext(ctx, `PRAGMA foreign_keys = ON;`)
+			}
+			conn.Close()
 			return err
 		}
 		if err := tx.Commit(); err != nil {
+			if m.DisableForeignKeys {
+				_, _ = conn.ExecContext(ctx, `PRAGMA foreign_keys = ON;`)
+			}
+			conn.Close()
+			return err
+		}
+		if m.DisableForeignKeys {
+			if _, err := conn.ExecContext(ctx, `PRAGMA foreign_keys = ON;`); err != nil {
+				conn.Close()
+				return err
+			}
+		}
+		if err := conn.Close(); err != nil {
 			return err
 		}
 	}
@@ -294,6 +336,64 @@ func migrationAddPostsThreads(ctx context.Context, tx *sql.Tx) error {
 		`CREATE INDEX IF NOT EXISTS idx_posts_root ON posts(root_post_id);`,
 	}
 	for _, query := range indexes {
+		if _, err := tx.ExecContext(ctx, query); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func migrationAddAccountsAccountKind(ctx context.Context, tx *sql.Tx) error {
+	queries := []string{
+		`CREATE TABLE accounts_next (
+			id TEXT PRIMARY KEY,
+			platform TEXT NOT NULL,
+			account_kind TEXT NOT NULL,
+			display_name TEXT NOT NULL,
+			external_account_id TEXT NOT NULL,
+			x_premium INTEGER NOT NULL DEFAULT 0,
+			auth_method TEXT NOT NULL,
+			status TEXT NOT NULL,
+			last_error TEXT,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL,
+			UNIQUE(platform, account_kind, external_account_id)
+		);`,
+		`INSERT INTO accounts_next (
+			id,
+			platform,
+			account_kind,
+			display_name,
+			external_account_id,
+			x_premium,
+			auth_method,
+			status,
+			last_error,
+			created_at,
+			updated_at
+		)
+		SELECT
+			id,
+			platform,
+			CASE
+				WHEN TRIM(COALESCE(platform, '')) = 'linkedin' THEN 'personal'
+				ELSE 'default'
+			END,
+			display_name,
+			external_account_id,
+			COALESCE(x_premium, 0),
+			auth_method,
+			status,
+			last_error,
+			created_at,
+			updated_at
+		FROM accounts;`,
+		`DROP TABLE accounts;`,
+		`ALTER TABLE accounts_next RENAME TO accounts;`,
+		`CREATE INDEX IF NOT EXISTS idx_accounts_platform ON accounts(platform);`,
+		`CREATE INDEX IF NOT EXISTS idx_accounts_platform_kind ON accounts(platform, account_kind);`,
+	}
+	for _, query := range queries {
 		if _, err := tx.ExecContext(ctx, query); err != nil {
 			return err
 		}

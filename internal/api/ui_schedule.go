@@ -248,6 +248,8 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 			ID:          account.ID,
 			DisplayName: account.DisplayName,
 			Platform:    account.Platform,
+			AccountKind: account.AccountKind,
+			AccountMeta: settingsAccountMeta(uiLang, account),
 			XPremium:    account.XPremium,
 			AuthMethod:  account.AuthMethod,
 			Status:      account.Status,
@@ -541,6 +543,16 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 			_, ok := selectedCreateAccountIDs[strings.TrimSpace(accountID)]
 			return ok
 		},
+		"accountOptionLabel": func(account domain.SocialAccount) string {
+			parts := []string{strings.TrimSpace(account.DisplayName), strings.TrimSpace(string(account.Platform))}
+			switch domain.NormalizeAccountKind(account.Platform, account.AccountKind) {
+			case domain.AccountKindPersonal:
+				parts = append(parts, uiMessage(uiLang, "settings.account_kind.personal"))
+			case domain.AccountKindOrganization:
+				parts = append(parts, uiMessage(uiLang, "settings.account_kind.organization"))
+			}
+			return strings.Join(parts, " · ")
+		},
 		"toJSON": func(v any) template.JS {
 			raw, err := json.Marshal(v)
 			if err != nil {
@@ -815,4 +827,16 @@ func calendarSelectedDayFromCreateQuery(q url.Values, loc *time.Location) (time.
 		return time.Time{}, false
 	}
 	return parsedDay, true
+}
+
+func settingsAccountMeta(uiLang string, account domain.SocialAccount) string {
+	parts := []string{string(account.Platform)}
+	switch domain.NormalizeAccountKind(account.Platform, account.AccountKind) {
+	case domain.AccountKindPersonal:
+		parts = append(parts, uiMessage(uiLang, "settings.account_kind.personal"))
+	case domain.AccountKindOrganization:
+		parts = append(parts, uiMessage(uiLang, "settings.account_kind.organization"))
+	}
+	parts = append(parts, string(account.AuthMethod))
+	return strings.Join(parts, " · ")
 }

@@ -4200,7 +4200,7 @@
 	                    data-account-id="{{.ID}}"
 	                    data-platform="{{.Platform}}"
 	                    data-x-premium="{{if and (eq .Platform "x") .XPremium}}1{{else}}0{{end}}"
-	                    aria-label="{{.DisplayName}} · {{.Platform}}"
+	                    aria-label="{{accountOptionLabel .}}"
 	                    aria-pressed="{{if accountSelected .ID}}true{{else}}false{{end}}">
 	                    <span class="network-chip-icon" aria-hidden="true">
 	                      <svg viewBox="0 0 24 24" fill="currentColor">
@@ -4230,7 +4230,7 @@
 	                </div>
 	                <select id="create-account-select" name="account_ids" multiple data-account-select class="is-hidden" aria-hidden="true" tabindex="-1">
 	                  {{range .Accounts}}
-	                  <option value="{{.ID}}" data-platform="{{.Platform}}" data-x-premium="{{if and (eq .Platform "x") .XPremium}}1{{else}}0{{end}}" {{if accountSelected .ID}}selected{{end}}>{{.DisplayName}} · {{.Platform}}</option>
+	                  <option value="{{.ID}}" data-platform="{{.Platform}}" data-x-premium="{{if and (eq .Platform "x") .XPremium}}1{{else}}0{{end}}" {{if accountSelected .ID}}selected{{end}}>{{accountOptionLabel .}}</option>
 	                  {{end}}
 	                </select>
 	                <input type="hidden" id="create-primary-account-id" name="account_id" value="{{.CreateAccountID}}" />
@@ -4395,7 +4395,7 @@
               <div class="settings-account-head">
                 <div>
                   <div class="settings-account-title">{{.DisplayName}}</div>
-                  <div class="settings-account-meta">{{.Platform}} · {{.AuthMethod}}</div>
+                  <div class="settings-account-meta">{{.AccountMeta}}</div>
                 </div>
                 <span class="settings-account-status {{.StatusClass}}">{{.StatusLabel}}</span>
               </div>

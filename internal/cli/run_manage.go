@@ -10,6 +10,8 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+
+	"github.com/antoniolg/postflow/internal/domain"
 )
 
 type healthResponse struct {
@@ -29,6 +31,7 @@ type accountsListResponse struct {
 type accountDTO struct {
 	ID                string `json:"id"`
 	Platform          string `json:"platform"`
+	AccountKind       string `json:"account_kind"`
 	DisplayName       string `json:"display_name"`
 	ExternalAccountID string `json:"external_account_id"`
 	XPremium          bool   `json:"x_premium"`
@@ -238,7 +241,12 @@ func runAccounts(ctx context.Context, client *APIClient, cfg config, args []stri
 		printOutput(stdout, cfg.asJSON, out, func() {
 			fmt.Fprintf(stdout, "count: %d\n", out.Count)
 			for _, item := range out.Items {
-				fmt.Fprintf(stdout, "- %s %s [%s] status=%s premium=%t\n", item.ID, item.Platform, item.ExternalAccountID, item.Status, item.XPremium)
+				kind := strings.TrimSpace(item.AccountKind)
+				if kind == "" || kind == string(domain.AccountKindDefault) {
+					fmt.Fprintf(stdout, "- %s %s [%s] status=%s premium=%t\n", item.ID, item.Platform, item.ExternalAccountID, item.Status, item.XPremium)
+					continue
+				}
+				fmt.Fprintf(stdout, "- %s %s/%s [%s] status=%s premium=%t\n", item.ID, item.Platform, kind, item.ExternalAccountID, item.Status, item.XPremium)
 			}
 		})
 		return 0
@@ -262,6 +270,7 @@ func runAccountsCreateStatic(ctx context.Context, client *APIClient, cfg config,
 	fs := flag.NewFlagSet("accounts create-static", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	platform := fs.String("platform", "", "Platform: x|linkedin|facebook|instagram")
+	accountKind := fs.String("account-kind", "", "Optional account kind. LinkedIn supports personal|organization")
 	displayName := fs.String("display-name", "", "Display name")
 	externalAccountID := fs.String("external-account-id", "", "External account id")
 	premiumRaw := fs.String("x-premium", "", "Optional: true|false for x accounts")
@@ -283,6 +292,7 @@ func runAccountsCreateStatic(ctx context.Context, client *APIClient, cfg config,
 
 	payload := map[string]any{
 		"platform":            strings.TrimSpace(*platform),
+		"account_kind":        strings.TrimSpace(*accountKind),
 		"display_name":        strings.TrimSpace(*displayName),
 		"external_account_id": strings.TrimSpace(*externalAccountID),
 		"credentials":         credentials,

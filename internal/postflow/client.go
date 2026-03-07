@@ -38,6 +38,7 @@ type Credentials struct {
 
 type ConnectedAccount struct {
 	Platform          domain.Platform
+	AccountKind       domain.AccountKind
 	DisplayName       string
 	ExternalAccountID string
 	Credentials       Credentials

@@ -171,3 +171,79 @@ func TestLinkedInPublishUploadsVideoAsset(t *testing.T) {
 		t.Fatalf("expected shareMediaCategory VIDEO")
 	}
 }
+
+func TestLinkedInPublishAsOrganizationUsesOrganizationURNs(t *testing.T) {
+	var ownerURN string
+	var authorURN string
+	var baseURL string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/v2/assets" && r.URL.Query().Get("action") == "registerUpload":
+			var payload map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode register upload payload: %v", err)
+			}
+			register, _ := payload["registerUploadRequest"].(map[string]any)
+			ownerURN, _ = register["owner"].(string)
+			_, _ = w.Write([]byte(`{
+				"value": {
+					"asset": "urn:li:digitalmediaAsset:org123",
+					"uploadMechanism": {
+						"com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest": {
+							"uploadUrl": "` + baseURL + `/upload"
+						}
+					}
+				}
+			}`))
+		case r.URL.Path == "/upload":
+			w.WriteHeader(http.StatusCreated)
+		case r.URL.Path == "/v2/ugcPosts":
+			var payload map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode post payload: %v", err)
+			}
+			authorURN, _ = payload["author"].(string)
+			w.Header().Set("x-restli-id", "li_org_post_1")
+			w.WriteHeader(http.StatusCreated)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	baseURL = server.URL
+
+	imagePath := filepath.Join(t.TempDir(), "upload.jpg")
+	if err := os.WriteFile(imagePath, []byte("image-binary"), 0o644); err != nil {
+		t.Fatalf("write image: %v", err)
+	}
+
+	provider := NewLinkedInProvider(LinkedInProviderConfig{APIBaseURL: server.URL})
+	externalID, err := provider.Publish(context.Background(), domain.SocialAccount{
+		Platform:          domain.PlatformLinkedIn,
+		AccountKind:       domain.AccountKindOrganization,
+		ExternalAccountID: "org_99",
+	}, Credentials{
+		AccessToken: "token-1",
+	}, domain.Post{
+		Text: "hello linkedin organization",
+		Media: []domain.Media{{
+			ID:           "med_li_org_1",
+			Kind:         "image",
+			OriginalName: "upload.jpg",
+			StoragePath:  imagePath,
+			MimeType:     "image/jpeg",
+		}},
+	}, PublishOptions{})
+	if err != nil {
+		t.Fatalf("publish organization post: %v", err)
+	}
+	if externalID != "li_org_post_1" {
+		t.Fatalf("unexpected external id %q", externalID)
+	}
+	if ownerURN != "urn:li:organization:org_99" {
+		t.Fatalf("expected organization owner urn, got %q", ownerURN)
+	}
+	if authorURN != "urn:li:organization:org_99" {
+		t.Fatalf("expected organization author urn, got %q", authorURN)
+	}
+}

@@ -20,6 +20,7 @@ var (
 
 type UpsertAccountParams struct {
 	Platform          domain.Platform
+	AccountKind       domain.AccountKind
 	DisplayName       string
 	ExternalAccountID string
 	XPremium          *bool
@@ -33,6 +34,10 @@ func (s *Store) UpsertAccount(ctx context.Context, params UpsertAccountParams) (
 	externalID := strings.TrimSpace(params.ExternalAccountID)
 	if platform == "" {
 		return domain.SocialAccount{}, fmt.Errorf("platform is required")
+	}
+	accountKind := domain.NormalizeAccountKind(platform, params.AccountKind)
+	if accountKind == "" {
+		return domain.SocialAccount{}, fmt.Errorf("account_kind is invalid for platform %s", platform)
 	}
 	if externalID == "" {
 		return domain.SocialAccount{}, fmt.Errorf("external_account_id is required")
@@ -55,7 +60,7 @@ func (s *Store) UpsertAccount(ctx context.Context, params UpsertAccountParams) (
 	}
 	now := time.Now().UTC()
 
-	existing, err := s.GetAccountByPlatformExternalID(ctx, platform, externalID)
+	existing, err := s.GetAccountByPlatformExternalID(ctx, platform, accountKind, externalID)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return domain.SocialAccount{}, err
 	}
@@ -69,9 +74,9 @@ func (s *Store) UpsertAccount(ctx context.Context, params UpsertAccountParams) (
 		}
 		_, updateErr := s.db.ExecContext(ctx, `
 			UPDATE accounts
-			SET display_name = ?, x_premium = ?, auth_method = ?, status = ?, last_error = ?, updated_at = ?
+			SET account_kind = ?, display_name = ?, x_premium = ?, auth_method = ?, status = ?, last_error = ?, updated_at = ?
 			WHERE id = ?
-		`, displayName, boolToSQLiteInt(nextXPremium), authMethod, status, sqlNullString(params.LastError), now.Format(time.RFC3339Nano), existing.ID)
+		`, accountKind, displayName, boolToSQLiteInt(nextXPremium), authMethod, status, sqlNullString(params.LastError), now.Format(time.RFC3339Nano), existing.ID)
 		if updateErr != nil {
 			return domain.SocialAccount{}, updateErr
 		}
@@ -83,9 +88,9 @@ func (s *Store) UpsertAccount(ctx context.Context, params UpsertAccountParams) (
 		return domain.SocialAccount{}, err
 	}
 	_, err = s.db.ExecContext(ctx, `
-		INSERT INTO accounts (id, platform, display_name, external_account_id, x_premium, auth_method, status, last_error, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, id, platform, displayName, externalID, boolToSQLiteInt(xPremium), authMethod, status, sqlNullString(params.LastError), now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano))
+		INSERT INTO accounts (id, platform, account_kind, display_name, external_account_id, x_premium, auth_method, status, last_error, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, id, platform, accountKind, displayName, externalID, boolToSQLiteInt(xPremium), authMethod, status, sqlNullString(params.LastError), now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano))
 	if err != nil {
 		return domain.SocialAccount{}, err
 	}
@@ -137,10 +142,10 @@ func (s *Store) GetAccount(ctx context.Context, id string) (domain.SocialAccount
 	var xPremium int
 	var created, updated string
 	err := s.db.QueryRowContext(ctx, `
-		SELECT id, platform, display_name, external_account_id, x_premium, auth_method, status, last_error, created_at, updated_at
+		SELECT id, platform, account_kind, display_name, external_account_id, x_premium, auth_method, status, last_error, created_at, updated_at
 		FROM accounts
 		WHERE id = ?
-	`, strings.TrimSpace(id)).Scan(&out.ID, &out.Platform, &out.DisplayName, &out.ExternalAccountID, &xPremium, &out.AuthMethod, &out.Status, &lastError, &created, &updated)
+	`, strings.TrimSpace(id)).Scan(&out.ID, &out.Platform, &out.AccountKind, &out.DisplayName, &out.ExternalAccountID, &xPremium, &out.AuthMethod, &out.Status, &lastError, &created, &updated)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return domain.SocialAccount{}, ErrAccountNotFound
@@ -154,14 +159,25 @@ func (s *Store) GetAccount(ctx context.Context, id string) (domain.SocialAccount
 		}
 	}
 	out.XPremium = xPremium != 0
+	out.AccountKind = domain.NormalizeAccountKind(out.Platform, out.AccountKind)
 	out.CreatedAt, _ = time.Parse(time.RFC3339Nano, created)
 	out.UpdatedAt, _ = time.Parse(time.RFC3339Nano, updated)
 	return out, nil
 }
 
-func (s *Store) GetAccountByPlatformExternalID(ctx context.Context, platform domain.Platform, externalAccountID string) (domain.SocialAccount, error) {
+func (s *Store) GetAccountByPlatformExternalID(ctx context.Context, platform domain.Platform, accountKind domain.AccountKind, externalAccountID string) (domain.SocialAccount, error) {
 	var id string
-	err := s.db.QueryRowContext(ctx, `SELECT id FROM accounts WHERE platform = ? AND external_account_id = ?`, strings.TrimSpace(string(platform)), strings.TrimSpace(externalAccountID)).Scan(&id)
+	normalizedKind := domain.NormalizeAccountKind(platform, accountKind)
+	if normalizedKind == "" {
+		return domain.SocialAccount{}, fmt.Errorf("account_kind is invalid for platform %s", platform)
+	}
+	err := s.db.QueryRowContext(
+		ctx,
+		`SELECT id FROM accounts WHERE platform = ? AND account_kind = ? AND external_account_id = ?`,
+		strings.TrimSpace(string(platform)),
+		strings.TrimSpace(string(normalizedKind)),
+		strings.TrimSpace(externalAccountID),
+	).Scan(&id)
 	if err != nil {
 		return domain.SocialAccount{}, err
 	}
@@ -170,9 +186,9 @@ func (s *Store) GetAccountByPlatformExternalID(ctx context.Context, platform dom
 
 func (s *Store) ListAccounts(ctx context.Context) ([]domain.SocialAccount, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, platform, display_name, external_account_id, x_premium, auth_method, status, last_error, created_at, updated_at
+		SELECT id, platform, account_kind, display_name, external_account_id, x_premium, auth_method, status, last_error, created_at, updated_at
 		FROM accounts
-		ORDER BY platform ASC, display_name ASC
+		ORDER BY platform ASC, account_kind ASC, display_name ASC
 	`)
 	if err != nil {
 		return nil, err
@@ -184,7 +200,7 @@ func (s *Store) ListAccounts(ctx context.Context) ([]domain.SocialAccount, error
 		var lastError sql.NullString
 		var xPremium int
 		var created, updated string
-		if err := rows.Scan(&item.ID, &item.Platform, &item.DisplayName, &item.ExternalAccountID, &xPremium, &item.AuthMethod, &item.Status, &lastError, &created, &updated); err != nil {
+		if err := rows.Scan(&item.ID, &item.Platform, &item.AccountKind, &item.DisplayName, &item.ExternalAccountID, &xPremium, &item.AuthMethod, &item.Status, &lastError, &created, &updated); err != nil {
 			return nil, err
 		}
 		if lastError.Valid {
@@ -194,6 +210,7 @@ func (s *Store) ListAccounts(ctx context.Context) ([]domain.SocialAccount, error
 			}
 		}
 		item.XPremium = xPremium != 0
+		item.AccountKind = domain.NormalizeAccountKind(item.Platform, item.AccountKind)
 		item.CreatedAt, _ = time.Parse(time.RFC3339Nano, created)
 		item.UpdatedAt, _ = time.Parse(time.RFC3339Nano, updated)
 		out = append(out, item)

@@ -96,7 +96,7 @@ func TestOAuthCallbackReplayInHTMLFlowReturnsSuccess(t *testing.T) {
 	if !strings.Contains(location1, "accounts_success=") {
 		t.Fatalf("expected success redirect in first callback, got %q", location1)
 	}
-	linkedAfterFirst, err := store.GetAccountByPlatformExternalID(t.Context(), domain.PlatformLinkedIn, "linkedin_test_id")
+	linkedAfterFirst, err := store.GetAccountByPlatformExternalID(t.Context(), domain.PlatformLinkedIn, domain.AccountKindPersonal, "linkedin_test_id")
 	if err != nil {
 		t.Fatalf("expected linkedin account persisted after first callback: %v", err)
 	}
@@ -129,7 +129,7 @@ func TestOAuthCallbackReplayInHTMLFlowReturnsSuccess(t *testing.T) {
 	if !strings.Contains(location2, "accounts_success=oauth+callback+already+processed") {
 		t.Fatalf("expected replay callback success message, got %q", location2)
 	}
-	linkedAfterReplay, err := store.GetAccountByPlatformExternalID(t.Context(), domain.PlatformLinkedIn, "linkedin_test_id")
+	linkedAfterReplay, err := store.GetAccountByPlatformExternalID(t.Context(), domain.PlatformLinkedIn, domain.AccountKindPersonal, "linkedin_test_id")
 	if err != nil {
 		t.Fatalf("expected linkedin account to remain persisted after replay: %v", err)
 	}

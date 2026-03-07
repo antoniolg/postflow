@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/antoniolg/postflow/internal/domain"
 )
 
 func TestOpenMigratesLegacySchemaWithoutDataLoss(t *testing.T) {
@@ -45,6 +47,14 @@ func TestOpenMigratesLegacySchemaWithoutDataLoss(t *testing.T) {
 	}
 	if xPremium != 0 {
 		t.Fatalf("expected x_premium default 0, got %d", xPremium)
+	}
+
+	var accountKind string
+	if err := store.db.QueryRowContext(t.Context(), `SELECT account_kind FROM accounts WHERE id = ?`, accountID).Scan(&accountKind); err != nil {
+		t.Fatalf("query account_kind: %v", err)
+	}
+	if accountKind != string(domain.AccountKindDefault) {
+		t.Fatalf("expected account_kind default, got %q", accountKind)
 	}
 
 	var migrationCount int

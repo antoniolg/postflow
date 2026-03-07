@@ -14,6 +14,7 @@ func createTestAccount(t *testing.T, store *Store, platform domain.Platform) dom
 	}
 	account, err := store.UpsertAccount(context.Background(), UpsertAccountParams{
 		Platform:          platform,
+		AccountKind:       domain.NormalizeAccountKind(platform, ""),
 		DisplayName:       "Test Account",
 		ExternalAccountID: "test-" + string(platform),
 		AuthMethod:        domain.AuthMethodStatic,

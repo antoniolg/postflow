@@ -14,6 +14,7 @@ import (
 
 type createStaticAccountRequest struct {
 	Platform          string         `json:"platform"`
+	AccountKind       string         `json:"account_kind,omitempty"`
 	DisplayName       string         `json:"display_name"`
 	ExternalAccountID string         `json:"external_account_id"`
 	Credentials       map[string]any `json:"credentials"`
@@ -46,6 +47,11 @@ func (s Server) handleCreateStaticAccount(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusBadRequest, errors.New("platform is required"))
 		return
 	}
+	accountKind := normalizeAccountKind(platform, req.AccountKind)
+	if accountKind == "" {
+		writeError(w, http.StatusBadRequest, errors.New("account_kind is invalid for platform"))
+		return
+	}
 	provider, ok := s.providerRegistry().Get(platform)
 	if !ok {
 		writeError(w, http.StatusBadRequest, errors.New("provider is not configured for platform"))
@@ -68,6 +74,7 @@ func (s Server) handleCreateStaticAccount(w http.ResponseWriter, r *http.Request
 	}
 	account, err := s.Store.UpsertAccount(r.Context(), db.UpsertAccountParams{
 		Platform:          platform,
+		AccountKind:       accountKind,
 		DisplayName:       strings.TrimSpace(req.DisplayName),
 		ExternalAccountID: strings.TrimSpace(req.ExternalAccountID),
 		AuthMethod:        domain.AuthMethodStatic,
