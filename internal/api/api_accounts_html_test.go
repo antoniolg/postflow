@@ -89,7 +89,6 @@ func TestSettingsViewRendersAccountsBlockWithActions(t *testing.T) {
 		t.Fatalf("expected delete action for disconnected account")
 	}
 	for _, oauthStartPath := range []string{
-		"action=\"/oauth/x/start\"",
 		"action=\"/oauth/linkedin/start\"",
 		"action=\"/oauth/facebook/start\"",
 		"action=\"/oauth/instagram/start\"",
@@ -97,6 +96,12 @@ func TestSettingsViewRendersAccountsBlockWithActions(t *testing.T) {
 		if !strings.Contains(body, oauthStartPath) {
 			t.Fatalf("expected oauth start action %s in settings", oauthStartPath)
 		}
+	}
+	if strings.Contains(body, "action=\"/oauth/x/start\"") {
+		t.Fatalf("did not expect x oauth action in settings")
+	}
+	if !strings.Contains(body, "x currently uses static credentials via env, API, or CLI") {
+		t.Fatalf("expected x static credentials hint in settings")
 	}
 	if !strings.Contains(body, "@media (max-width: 520px)") {
 		t.Fatalf("expected mobile breakpoint css in settings view")

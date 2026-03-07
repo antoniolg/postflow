@@ -160,7 +160,8 @@ paths:
 
   /oauth/{platform}/start:
     post:
-      summary: Start OAuth for a platform
+      summary: Start OAuth for a supported platform
+      description: Supported OAuth platforms are linkedin, facebook, and instagram. X uses static credentials via /accounts/static.
       parameters:
         - $ref: '#/components/parameters/PlatformPath'
       responses:
@@ -172,7 +173,7 @@ paths:
                 type: object
                 properties:
                   platform:
-                    $ref: '#/components/schemas/Platform'
+                    $ref: '#/components/schemas/OAuthPlatform'
                   auth_url:
                     type: string
                   state:
@@ -186,6 +187,7 @@ paths:
   /oauth/{platform}/callback:
     get:
       summary: Complete OAuth and create/update account(s)
+      description: Supported OAuth platforms are linkedin, facebook, and instagram. X uses static credentials via /accounts/static.
       parameters:
         - $ref: '#/components/parameters/PlatformPath'
         - in: query
@@ -207,7 +209,7 @@ paths:
                 type: object
                 properties:
                   platform:
-                    $ref: '#/components/schemas/Platform'
+                    $ref: '#/components/schemas/OAuthPlatform'
                   count:
                     type: integer
                   items:
@@ -786,7 +788,7 @@ components:
       name: platform
       required: true
       schema:
-        $ref: '#/components/schemas/Platform'
+        $ref: '#/components/schemas/OAuthPlatform'
 
   responses:
     Error:
@@ -803,6 +805,10 @@ components:
     Platform:
       type: string
       enum: [x, linkedin, facebook, instagram]
+
+    OAuthPlatform:
+      type: string
+      enum: [linkedin, facebook, instagram]
 
     Account:
       type: object
