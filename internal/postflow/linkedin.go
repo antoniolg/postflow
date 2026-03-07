@@ -521,8 +521,11 @@ func (p *LinkedInProvider) HandleOAuthCallback(ctx context.Context, in OAuthCall
 		ExternalAccountID: memberID,
 		Credentials:       creds,
 	}}
-	organizations, err := p.fetchOrganizations(ctx, tokenResp.AccessToken)
-	if err == nil {
+	if linkedInScopeIncludesOrganizationAccess(tokenResp.Scope) {
+		organizations, err := p.fetchOrganizations(ctx, tokenResp.AccessToken)
+		if err != nil {
+			return nil, fmt.Errorf("linkedin organization discovery failed: %w", err)
+		}
 		for _, org := range organizations {
 			orgID := strings.TrimSpace(org.ID)
 			if orgID == "" {
@@ -633,10 +636,84 @@ type linkedInOrganization struct {
 }
 
 func (p *LinkedInProvider) fetchOrganizations(ctx context.Context, accessToken string) ([]linkedInOrganization, error) {
+	return p.fetchOrganizationsREST(ctx, accessToken)
+}
+
+func (p *LinkedInProvider) fetchOrganizationsREST(ctx context.Context, accessToken string) ([]linkedInOrganization, error) {
+	organizationIDs := make([]string, 0, 4)
+	seen := make(map[string]struct{}, 4)
+	start := 0
+	for {
+		req, err := http.NewRequestWithContext(
+			ctx,
+			http.MethodGet,
+			fmt.Sprintf(
+				"%s/rest/organizationAcls?q=roleAssignee&state=APPROVED&count=100&start=%d",
+				strings.TrimRight(p.cfg.APIBaseURL, "/"),
+				start,
+			),
+			nil,
+		)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(accessToken))
+		req.Header.Set("X-Restli-Protocol-Version", "2.0.0")
+		req.Header.Set("LinkedIn-Version", "202601")
+
+		resp, err := p.client.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+		resp.Body.Close()
+		if resp.StatusCode >= 300 {
+			return nil, fmt.Errorf("organization acl status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
+		}
+		var out struct {
+			Elements []struct {
+				Role               string `json:"role"`
+				Organization       string `json:"organization"`
+				OrganizationTarget string `json:"organizationTarget"`
+			} `json:"elements"`
+			Paging struct {
+				Count int `json:"count"`
+				Start int `json:"start"`
+			} `json:"paging"`
+		}
+		if err := json.Unmarshal(body, &out); err != nil {
+			return nil, err
+		}
+		for _, element := range out.Elements {
+			if !linkedInRoleCanPublishOrganization(element.Role) {
+				continue
+			}
+			orgID := linkedInOrganizationID(firstNonEmpty(element.OrganizationTarget, element.Organization))
+			if orgID == "" {
+				continue
+			}
+			if _, ok := seen[orgID]; ok {
+				continue
+			}
+			seen[orgID] = struct{}{}
+			organizationIDs = append(organizationIDs, orgID)
+		}
+		if len(out.Elements) == 0 || len(out.Elements) < 100 {
+			break
+		}
+		start += len(out.Elements)
+	}
+	if len(organizationIDs) == 0 {
+		return nil, nil
+	}
+	return p.fetchOrganizationLookup(ctx, accessToken, organizationIDs)
+}
+
+func (p *LinkedInProvider) fetchOrganizationLookup(ctx context.Context, accessToken string, ids []string) ([]linkedInOrganization, error) {
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodGet,
-		strings.TrimRight(p.cfg.APIBaseURL, "/")+"/v2/organizationalEntityAcls?q=roleAssignee&role=ADMINISTRATOR&projection=(elements*(organizationalTarget,organizationalTarget~(localizedName,vanityName)))",
+		fmt.Sprintf("%s/rest/organizationsLookup?ids=List(%s)", strings.TrimRight(p.cfg.APIBaseURL, "/"), strings.Join(ids, ",")),
 		nil,
 	)
 	if err != nil {
@@ -653,32 +730,60 @@ func (p *LinkedInProvider) fetchOrganizations(ctx context.Context, accessToken s
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 	if resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("organization acl status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return nil, fmt.Errorf("organization lookup status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 	var out struct {
-		Elements []struct {
-			OrganizationalTarget string `json:"organizationalTarget"`
-			Target               struct {
-				LocalizedName string `json:"localizedName"`
-				VanityName    string `json:"vanityName"`
-			} `json:"organizationalTarget~"`
-		} `json:"elements"`
+		Results map[string]struct {
+			LocalizedName string `json:"localizedName"`
+			Name          struct {
+				Localized map[string]string `json:"localized"`
+			} `json:"name"`
+		} `json:"results"`
 	}
 	if err := json.Unmarshal(body, &out); err != nil {
 		return nil, err
 	}
-	organizations := make([]linkedInOrganization, 0, len(out.Elements))
-	for _, element := range out.Elements {
-		orgID := linkedInOrganizationID(element.OrganizationalTarget)
-		if orgID == "" {
+	organizations := make([]linkedInOrganization, 0, len(ids))
+	for _, id := range ids {
+		item, ok := out.Results[strings.TrimSpace(id)]
+		if !ok {
+			organizations = append(organizations, linkedInOrganization{ID: strings.TrimSpace(id)})
 			continue
 		}
+		name := strings.TrimSpace(item.LocalizedName)
+		if name == "" {
+			for _, localized := range item.Name.Localized {
+				if strings.TrimSpace(localized) != "" {
+					name = strings.TrimSpace(localized)
+					break
+				}
+			}
+		}
 		organizations = append(organizations, linkedInOrganization{
-			ID:   orgID,
-			Name: strings.TrimSpace(element.Target.LocalizedName),
+			ID:   strings.TrimSpace(id),
+			Name: name,
 		})
 	}
 	return organizations, nil
+}
+
+func linkedInRoleCanPublishOrganization(role string) bool {
+	switch strings.ToUpper(strings.TrimSpace(role)) {
+	case "ADMINISTRATOR", "DIRECT_SPONSORED_CONTENT_POSTER", "CONTENT_ADMIN", "CONTENT_ADMINISTRATOR":
+		return true
+	default:
+		return false
+	}
+}
+
+func linkedInScopeIncludesOrganizationAccess(scope string) bool {
+	for _, item := range strings.Fields(strings.TrimSpace(scope)) {
+		switch strings.TrimSpace(item) {
+		case "rw_organization_admin", "w_organization_social", "r_organization_social", "r_organization_admin":
+			return true
+		}
+	}
+	return false
 }
 
 func linkedInOrganizationID(raw string) string {

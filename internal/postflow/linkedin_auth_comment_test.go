@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -356,6 +357,13 @@ func TestLinkedInRefreshOAuthAndCallbackFlows(t *testing.T) {
 		if query.Get("client_id") != "client-id" || query.Get("state") != "state-123" {
 			t.Fatalf("unexpected query in auth url: %s", parsed.RawQuery)
 		}
+		scope := strings.Fields(query.Get("scope"))
+		expectedScopes := []string{"openid", "profile", "w_member_social", "rw_organization_admin", "w_organization_social"}
+		for _, expected := range expectedScopes {
+			if !slices.Contains(scope, expected) {
+				t.Fatalf("expected oauth scope %q in auth url, got %q", expected, query.Get("scope"))
+			}
+		}
 	})
 
 	t.Run("callback falls back to /me when /userinfo fails", func(t *testing.T) {
@@ -412,11 +420,13 @@ func TestLinkedInRefreshOAuthAndCallbackFlows(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch r.URL.Path {
 			case "/oauth/v2/accessToken":
-				_, _ = io.WriteString(w, `{"access_token":"li-access","expires_in":3600}`)
+				_, _ = io.WriteString(w, `{"access_token":"li-access","expires_in":3600,"scope":"openid profile w_member_social rw_organization_admin w_organization_social"}`)
 			case "/v2/userinfo":
 				_, _ = io.WriteString(w, `{"sub":"member_7","name":"Grace Hopper"}`)
-			case "/v2/organizationalEntityAcls":
-				_, _ = io.WriteString(w, `{"elements":[{"organizationalTarget":"urn:li:organization:987","organizationalTarget~":{"localizedName":"Acme Co"}}]}`)
+			case "/rest/organizationAcls":
+				_, _ = io.WriteString(w, `{"elements":[{"role":"ADMINISTRATOR","organizationTarget":"urn:li:organization:987"}],"paging":{"start":0,"count":100}}`)
+			case "/rest/organizationsLookup":
+				_, _ = io.WriteString(w, `{"results":{"987":{"localizedName":"Acme Co"}}}`)
 			case "/v2/me":
 				meCalls++
 				_, _ = io.WriteString(w, `{"id":"member_legacy"}`)
