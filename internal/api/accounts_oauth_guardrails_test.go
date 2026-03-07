@@ -160,7 +160,7 @@ func TestOAuthCallbackHTMLMissingCodeUsesSafeRedirect(t *testing.T) {
 func TestOAuthCallbackOutcomeCacheBehavior(t *testing.T) {
 	resetRecentOAuthCallbackOutcomes(t)
 
-	rememberOAuthCallbackOutcome("state_success", true, "1 account connected")
+	rememberOAuthCallbackOutcome("state_success", true, "1 account connected", "")
 	success, ok := recentOAuthCallbackOutcome("state_success")
 	if !ok || !success.Success || success.Message != "1 account connected" {
 		t.Fatalf("expected remembered success outcome, got ok=%v outcome=%+v", ok, success)

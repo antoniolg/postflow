@@ -18,7 +18,8 @@ import (
 )
 
 type oauthReplayTestProvider struct {
-	callbackErr error
+	callbackErr       error
+	connectedAccounts []postflow.ConnectedAccount
 }
 
 func (p *oauthReplayTestProvider) Platform() domain.Platform {
@@ -45,9 +46,13 @@ func (p *oauthReplayTestProvider) HandleOAuthCallback(_ context.Context, _ postf
 	if p.callbackErr != nil {
 		return nil, p.callbackErr
 	}
+	if len(p.connectedAccounts) > 0 {
+		return append([]postflow.ConnectedAccount(nil), p.connectedAccounts...), nil
+	}
 	return []postflow.ConnectedAccount{
 		{
 			Platform:          domain.PlatformLinkedIn,
+			AccountKind:       domain.AccountKindPersonal,
 			DisplayName:       "LinkedIn Test",
 			ExternalAccountID: "linkedin_test_id",
 			Credentials: postflow.Credentials{
@@ -56,6 +61,31 @@ func (p *oauthReplayTestProvider) HandleOAuthCallback(_ context.Context, _ postf
 			},
 		},
 	}, nil
+}
+
+func oauthReplaySelectionAccounts() []postflow.ConnectedAccount {
+	return []postflow.ConnectedAccount{
+		{
+			Platform:          domain.PlatformLinkedIn,
+			AccountKind:       domain.AccountKindPersonal,
+			DisplayName:       "LinkedIn Personal",
+			ExternalAccountID: "linkedin-personal-test-id",
+			Credentials: postflow.Credentials{
+				AccessToken: "personal-token",
+				TokenType:   "Bearer",
+			},
+		},
+		{
+			Platform:          domain.PlatformLinkedIn,
+			AccountKind:       domain.AccountKindOrganization,
+			DisplayName:       "LinkedIn Org",
+			ExternalAccountID: "linkedin-org-test-id",
+			Credentials: postflow.Credentials{
+				AccessToken: "org-token",
+				TokenType:   "Bearer",
+			},
+		},
+	}
 }
 
 func TestOAuthCallbackReplayInHTMLFlowReturnsSuccess(t *testing.T) {

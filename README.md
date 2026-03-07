@@ -92,6 +92,7 @@ Important:
 - For local testing without real publishing, keep `POSTFLOW_DRIVER=mock`.
 - OAuth account connection is available for X, LinkedIn, Facebook, and Instagram.
 - LinkedIn OAuth connects the personal profile and, when available, any organization pages the user administers.
+- In the web UI, if an OAuth provider returns multiple accounts, PostFlow shows a selection step before saving them.
 - X also supports static credentials via env vars or `/accounts/static` / `postflow accounts create-static`.
 - In production (Coolify), set secrets in the platform UI, not in committed files.
 

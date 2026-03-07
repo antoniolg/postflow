@@ -40,6 +40,11 @@ var dbMigrations = []migration{
 		DisableForeignKeys: true,
 		Up:                 migrationAddAccountsAccountKind,
 	},
+	{
+		Version: 5,
+		Name:    "oauth_pending_account_selections",
+		Up:      migrationAddOAuthPendingAccountSelections,
+	},
 }
 
 func (s *Store) hasPendingMigrations(ctx context.Context) (bool, error) {
@@ -392,6 +397,27 @@ func migrationAddAccountsAccountKind(ctx context.Context, tx *sql.Tx) error {
 		`ALTER TABLE accounts_next RENAME TO accounts;`,
 		`CREATE INDEX IF NOT EXISTS idx_accounts_platform ON accounts(platform);`,
 		`CREATE INDEX IF NOT EXISTS idx_accounts_platform_kind ON accounts(platform, account_kind);`,
+	}
+	for _, query := range queries {
+		if _, err := tx.ExecContext(ctx, query); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func migrationAddOAuthPendingAccountSelections(ctx context.Context, tx *sql.Tx) error {
+	queries := []string{
+		`CREATE TABLE IF NOT EXISTS oauth_pending_account_selections (
+			id TEXT PRIMARY KEY,
+			platform TEXT NOT NULL,
+			ciphertext BLOB NOT NULL,
+			nonce BLOB NOT NULL,
+			key_version INTEGER NOT NULL,
+			expires_at TEXT NOT NULL,
+			created_at TEXT NOT NULL
+		);`,
+		`CREATE INDEX IF NOT EXISTS idx_oauth_pending_account_selections_expires_at ON oauth_pending_account_selections(expires_at);`,
 	}
 	for _, query := range queries {
 		if _, err := tx.ExecContext(ctx, query); err != nil {

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/antoniolg/postflow/internal/db"
 	"github.com/antoniolg/postflow/internal/domain"
 	"github.com/antoniolg/postflow/internal/textfmt"
 )
@@ -44,6 +46,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	settingsSuccess := strings.TrimSpace(r.URL.Query().Get("tz_success"))
 	accountsError := strings.TrimSpace(r.URL.Query().Get("accounts_error"))
 	accountsSuccess := strings.TrimSpace(r.URL.Query().Get("accounts_success"))
+	oauthSelectID := strings.TrimSpace(r.URL.Query().Get("oauth_select"))
 	mediaError := strings.TrimSpace(r.URL.Query().Get("media_error"))
 	mediaSuccess := strings.TrimSpace(r.URL.Query().Get("media_success"))
 	displayMonth := time.Date(nowLocal.Year(), nowLocal.Month(), 1, 0, 0, 0, 0, uiLoc)
@@ -257,6 +260,21 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 			StatusLabel: statusLabel,
 			LastError:   lastError,
 		})
+	}
+	var oauthPendingSelection *oauthPendingSelectionView
+	if view == "settings" && oauthSelectID != "" {
+		payload, err := s.loadOAuthPendingSelection(r.Context(), oauthSelectID)
+		if err != nil {
+			if accountsError == "" {
+				if errors.Is(err, sql.ErrNoRows) || errors.Is(err, db.ErrOAuthPendingAccountSelectionExpired) {
+					accountsError = uiMessage(uiLang, "settings.oauth_selection_expired")
+				} else {
+					accountsError = err.Error()
+				}
+			}
+		} else {
+			oauthPendingSelection = buildOAuthPendingSelectionView(uiLang, oauthSelectID, payload)
+		}
 	}
 
 	firstWeekday := int(monthStartLocal.Weekday())
@@ -608,6 +626,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		SettingsSuccess:             settingsSuccess,
 		AccountsError:               accountsError,
 		AccountsSuccess:             accountsSuccess,
+		OAuthPendingSelection:       oauthPendingSelection,
 		MediaError:                  mediaError,
 		MediaSuccess:                mediaSuccess,
 		TotalAccountCount:           len(accounts),

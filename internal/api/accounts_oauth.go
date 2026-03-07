@@ -174,7 +174,7 @@ func (s Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		RedirectURL:  s.oauthCallbackURL(r, platform),
 	})
 	if err != nil {
-		rememberOAuthCallbackOutcome(recorded.State, false, err.Error())
+		rememberOAuthCallbackOutcome(recorded.State, false, err.Error(), "")
 		slog.Error("oauth callback provider failed",
 			"platform", platform,
 			"state", oauthStateLabel(recorded.State),
@@ -187,52 +187,43 @@ func (s Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	created := make([]domain.SocialAccount, 0, len(connected))
-	for _, item := range connected {
-		account, err := s.Store.UpsertAccount(r.Context(), db.UpsertAccountParams{
-			Platform:          item.Platform,
-			AccountKind:       item.AccountKind,
-			DisplayName:       item.DisplayName,
-			ExternalAccountID: item.ExternalAccountID,
-			AuthMethod:        domain.AuthMethodOAuth,
-			Status:            domain.AccountStatusConnected,
+	if shouldPromptOAuthAccountSelection(isHTML, connected) {
+		selectionID, err := s.createOAuthPendingSelection(r.Context(), oauthPendingSelectionPayload{
+			OAuthState: recorded.State,
+			Platform:   platform,
+			Accounts:   connected,
 		})
 		if err != nil {
-			rememberOAuthCallbackOutcome(recorded.State, false, "failed to persist account")
-			slog.Error("oauth callback persist account failed",
-				"platform", platform,
-				"state", oauthStateLabel(recorded.State),
-				"error", err.Error(),
-			)
+			rememberOAuthCallbackOutcome(recorded.State, false, "failed to prepare account selection", "")
 			if isHTML {
-				http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", "failed to persist account"), http.StatusSeeOther)
+				http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", "failed to prepare account selection"), http.StatusSeeOther)
 				return
 			}
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
-		if err := s.saveCredentials(r.Context(), account.ID, item.Credentials); err != nil {
-			rememberOAuthCallbackOutcome(recorded.State, false, "failed to save account credentials")
-			slog.Error("oauth callback save credentials failed",
-				"platform", platform,
-				"state", oauthStateLabel(recorded.State),
-				"account_id", account.ID,
-				"error", err.Error(),
-			)
-			if isHTML {
-				http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", "failed to save account credentials"), http.StatusSeeOther)
-				return
-			}
-			writeError(w, http.StatusInternalServerError, err)
+		rememberOAuthCallbackOutcome(recorded.State, true, "", selectionID)
+		http.Redirect(w, r, oauthSelectionSettingsURL(selectionID), http.StatusSeeOther)
+		return
+	}
+
+	created, err := s.persistConnectedAccounts(r.Context(), connected)
+	if err != nil {
+		rememberOAuthCallbackOutcome(recorded.State, false, err.Error(), "")
+		slog.Error("oauth callback persist accounts failed",
+			"platform", platform,
+			"state", oauthStateLabel(recorded.State),
+			"error", err.Error(),
+		)
+		if isHTML {
+			http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", err.Error()), http.StatusSeeOther)
 			return
 		}
-		created = append(created, account)
+		writeError(w, http.StatusInternalServerError, err)
+		return
 	}
-	msg := fmt.Sprintf("%d accounts connected", len(created))
-	if len(created) == 1 {
-		msg = "1 account connected"
-	}
-	rememberOAuthCallbackOutcome(recorded.State, true, msg)
+	msg := oauthConnectedAccountsSuccessMessage(len(created))
+	rememberOAuthCallbackOutcome(recorded.State, true, msg, "")
 	if isHTML {
 		http.Redirect(w, r, withQueryValue(returnTo, "accounts_success", msg), http.StatusSeeOther)
 		return
@@ -333,23 +324,25 @@ func newOAuthCodeVerifier() string {
 const settingsViewURL = "/?view=settings"
 
 type oauthCallbackOutcome struct {
-	Success   bool
-	Message   string
-	ExpiresAt time.Time
+	Success     bool
+	Message     string
+	SelectionID string
+	ExpiresAt   time.Time
 }
 
 var recentOAuthCallbackOutcomes sync.Map
 
-func rememberOAuthCallbackOutcome(state string, success bool, message string) {
+func rememberOAuthCallbackOutcome(state string, success bool, message, selectionID string) {
 	state = strings.TrimSpace(state)
 	if state == "" {
 		return
 	}
 	now := time.Now().UTC()
 	recentOAuthCallbackOutcomes.Store(state, oauthCallbackOutcome{
-		Success:   success,
-		Message:   strings.TrimSpace(message),
-		ExpiresAt: now.Add(2 * time.Minute),
+		Success:     success,
+		Message:     strings.TrimSpace(message),
+		SelectionID: strings.TrimSpace(selectionID),
+		ExpiresAt:   now.Add(2 * time.Minute),
 	})
 	recentOAuthCallbackOutcomes.Range(func(key, value any) bool {
 		outcome, ok := value.(oauthCallbackOutcome)
@@ -382,6 +375,10 @@ func recentOAuthCallbackOutcome(state string) (oauthCallbackOutcome, bool) {
 }
 
 func writeOAuthReplayOutcome(w http.ResponseWriter, r *http.Request, platform domain.Platform, returnTo string, isHTML bool, outcome oauthCallbackOutcome) {
+	if isHTML && strings.TrimSpace(outcome.SelectionID) != "" {
+		http.Redirect(w, r, oauthSelectionSettingsURL(outcome.SelectionID), http.StatusSeeOther)
+		return
+	}
 	message := strings.TrimSpace(outcome.Message)
 	if message == "" {
 		if outcome.Success {

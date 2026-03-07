@@ -20,6 +20,20 @@ type settingsAccountItem struct {
 	LastError   string
 }
 
+type oauthPendingSelectionItem struct {
+	Key             string
+	DisplayName     string
+	AccountMeta     string
+	DefaultSelected bool
+}
+
+type oauthPendingSelectionView struct {
+	ID       string
+	Platform domain.Platform
+	Count    int
+	Items    []oauthPendingSelectionItem
+}
+
 type calendarEvent struct {
 	TimeLabel     string
 	StatusClass   string
@@ -157,6 +171,7 @@ type pageData struct {
 	SettingsSuccess             string
 	AccountsError               string
 	AccountsSuccess             string
+	OAuthPendingSelection       *oauthPendingSelectionView
 	MediaError                  string
 	MediaSuccess                string
 	TotalAccountCount           int

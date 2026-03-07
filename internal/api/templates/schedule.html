@@ -2758,6 +2758,65 @@
       line-height: 1.35;
       word-break: break-word;
     }
+    .settings-selection-card {
+      border: 1px solid rgba(255, 107, 53, 0.28);
+      border-radius: 12px;
+      background: rgba(255, 107, 53, 0.08);
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .settings-selection-head {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .settings-selection-form {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .settings-selection-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .settings-selection-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: rgba(18, 18, 18, 0.36);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      cursor: pointer;
+    }
+    .settings-selection-item .failed-checkbox {
+      margin-top: 1px;
+      flex: 0 0 auto;
+    }
+    .settings-selection-copy {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+    .settings-selection-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .settings-selection-cancel {
+      min-height: 28px;
+      padding: 6px 10px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+    }
     .media-library-item {
       border: 0;
       border-radius: 12px;
@@ -4386,6 +4445,34 @@
         <div class="editor-body">
           {{if .AccountsError}}<div class="alert error">{{.AccountsError}}</div>{{end}}
           {{if .AccountsSuccess}}<div class="alert success">{{.AccountsSuccess}}</div>{{end}}
+          {{if .OAuthPendingSelection}}
+          <div class="settings-selection-card">
+            <div class="settings-selection-head">
+              <div class="settings-account-title">{{t "settings.oauth_selection_title"}}</div>
+              <div class="settings-account-meta">{{t "settings.oauth_selection_hint" .OAuthPendingSelection.Count}}</div>
+            </div>
+            <form method="post" action="/oauth/select" class="settings-selection-form">
+              <input type="hidden" name="selection_id" value="{{.OAuthPendingSelection.ID}}" />
+              <input type="hidden" name="return_to" value="/?view=settings" />
+              <div class="settings-selection-list">
+                {{range .OAuthPendingSelection.Items}}
+                <label class="settings-selection-item">
+                  <input class="failed-checkbox" type="checkbox" name="account_key" value="{{.Key}}" {{if .DefaultSelected}}checked{{end}} />
+                  <span class="settings-selection-copy">
+                    <span class="settings-account-title">{{.DisplayName}}</span>
+                    <span class="settings-account-meta">{{.AccountMeta}}</span>
+                  </span>
+                </label>
+                {{end}}
+              </div>
+              <div class="settings-selection-actions">
+                <button type="submit" class="btn-primary">{{t "settings.oauth_selection_submit"}}</button>
+                <button type="submit" class="btn-secondary" name="connect_all" value="1">{{t "settings.oauth_selection_all"}}</button>
+                <a class="btn-secondary settings-selection-cancel" href="/?view=settings">{{t "common.cancel"}}</a>
+              </div>
+            </form>
+          </div>
+          {{end}}
           <div class="meta">
             <span class="meta-soft">{{t "settings.connected_total" .ConnectedAccountCount .TotalAccountCount}}</span>
           </div>
