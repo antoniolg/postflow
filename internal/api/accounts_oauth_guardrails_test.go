@@ -157,25 +157,30 @@ func TestOAuthCallbackHTMLMissingCodeUsesSafeRedirect(t *testing.T) {
 	}
 }
 
-func TestOAuthCompletedStateCacheBehavior(t *testing.T) {
-	resetRecentCompletedOAuthStates(t)
+func TestOAuthCallbackOutcomeCacheBehavior(t *testing.T) {
+	resetRecentOAuthCallbackOutcomes(t)
 
-	rememberCompletedOAuthState("state_recent")
-	if !wasRecentlyCompletedOAuthState("state_recent") {
-		t.Fatalf("expected remembered state to be considered recently completed")
+	rememberOAuthCallbackOutcome("state_success", true, "1 account connected")
+	success, ok := recentOAuthCallbackOutcome("state_success")
+	if !ok || !success.Success || success.Message != "1 account connected" {
+		t.Fatalf("expected remembered success outcome, got ok=%v outcome=%+v", ok, success)
 	}
-	if wasRecentlyCompletedOAuthState("missing") {
-		t.Fatalf("did not expect missing state to be considered recently completed")
-	}
-
-	recentCompletedOAuthStates.Store("state_invalid_type", "not-a-time")
-	if wasRecentlyCompletedOAuthState("state_invalid_type") {
-		t.Fatalf("invalid typed state should not be considered recently completed")
+	if _, ok := recentOAuthCallbackOutcome("missing"); ok {
+		t.Fatalf("did not expect missing state to have cached outcome")
 	}
 
-	recentCompletedOAuthStates.Store("state_expired", time.Now().UTC().Add(-1*time.Minute))
-	if wasRecentlyCompletedOAuthState("state_expired") {
-		t.Fatalf("expired state should not be considered recently completed")
+	recentOAuthCallbackOutcomes.Store("state_invalid_type", "not-an-outcome")
+	if _, ok := recentOAuthCallbackOutcome("state_invalid_type"); ok {
+		t.Fatalf("invalid typed state should not have cached outcome")
+	}
+
+	recentOAuthCallbackOutcomes.Store("state_expired", oauthCallbackOutcome{
+		Success:   false,
+		Message:   "oauth callback failed",
+		ExpiresAt: time.Now().UTC().Add(-1 * time.Minute),
+	})
+	if _, ok := recentOAuthCallbackOutcome("state_expired"); ok {
+		t.Fatalf("expired state should not have cached outcome")
 	}
 }
 
@@ -207,15 +212,15 @@ func TestHandleOAuthStartGeneratesPKCECompatibleVerifier(t *testing.T) {
 	}
 }
 
-func resetRecentCompletedOAuthStates(t *testing.T) {
+func resetRecentOAuthCallbackOutcomes(t *testing.T) {
 	t.Helper()
-	recentCompletedOAuthStates.Range(func(key, _ any) bool {
-		recentCompletedOAuthStates.Delete(key)
+	recentOAuthCallbackOutcomes.Range(func(key, _ any) bool {
+		recentOAuthCallbackOutcomes.Delete(key)
 		return true
 	})
 	t.Cleanup(func() {
-		recentCompletedOAuthStates.Range(func(key, _ any) bool {
-			recentCompletedOAuthStates.Delete(key)
+		recentOAuthCallbackOutcomes.Range(func(key, _ any) bool {
+			recentOAuthCallbackOutcomes.Delete(key)
 			return true
 		})
 	})

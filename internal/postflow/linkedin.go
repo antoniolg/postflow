@@ -777,13 +777,19 @@ func linkedInRoleCanPublishOrganization(role string) bool {
 }
 
 func linkedInScopeIncludesOrganizationAccess(scope string) bool {
-	for _, item := range strings.Fields(strings.TrimSpace(scope)) {
+	for _, item := range linkedInScopeValues(scope) {
 		switch strings.TrimSpace(item) {
 		case "rw_organization_admin", "w_organization_social", "r_organization_social", "r_organization_admin":
 			return true
 		}
 	}
 	return false
+}
+
+func linkedInScopeValues(scope string) []string {
+	return strings.FieldsFunc(strings.TrimSpace(scope), func(r rune) bool {
+		return r == ',' || r == ' ' || r == '\t' || r == '\n' || r == '\r'
+	})
 }
 
 func linkedInOrganizationID(raw string) string {

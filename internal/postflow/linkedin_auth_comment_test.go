@@ -420,7 +420,7 @@ func TestLinkedInRefreshOAuthAndCallbackFlows(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch r.URL.Path {
 			case "/oauth/v2/accessToken":
-				_, _ = io.WriteString(w, `{"access_token":"li-access","expires_in":3600,"scope":"openid profile w_member_social rw_organization_admin w_organization_social"}`)
+				_, _ = io.WriteString(w, `{"access_token":"li-access","expires_in":3600,"scope":"openid,profile,w_member_social,rw_organization_admin,w_organization_social"}`)
 			case "/v2/userinfo":
 				_, _ = io.WriteString(w, `{"sub":"member_7","name":"Grace Hopper"}`)
 			case "/rest/organizationAcls":

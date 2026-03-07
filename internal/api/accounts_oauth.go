@@ -140,19 +140,13 @@ func (s Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	recorded, err := s.Store.ConsumeOAuthState(r.Context(), stateRaw)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			if wasRecentlyCompletedOAuthState(stateRaw) {
+			if outcome, ok := recentOAuthCallbackOutcome(stateRaw); ok {
 				slog.Warn("oauth callback replay detected",
 					"platform", platform,
 					"state", oauthStateLabel(stateRaw),
+					"success", outcome.Success,
 				)
-				if isHTML {
-					http.Redirect(w, r, withQueryValue(returnTo, "accounts_success", "oauth callback already processed"), http.StatusSeeOther)
-					return
-				}
-				writeJSON(w, http.StatusOK, map[string]any{
-					"platform": platform,
-					"status":   "already_processed",
-				})
+				writeOAuthReplayOutcome(w, r, platform, returnTo, isHTML, outcome)
 				return
 			}
 			slog.Warn("oauth callback state not found",
@@ -180,6 +174,12 @@ func (s Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		RedirectURL:  s.oauthCallbackURL(r, platform),
 	})
 	if err != nil {
+		rememberOAuthCallbackOutcome(recorded.State, false, err.Error())
+		slog.Error("oauth callback provider failed",
+			"platform", platform,
+			"state", oauthStateLabel(recorded.State),
+			"error", err.Error(),
+		)
 		if isHTML {
 			http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", err.Error()), http.StatusSeeOther)
 			return
@@ -198,6 +198,12 @@ func (s Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 			Status:            domain.AccountStatusConnected,
 		})
 		if err != nil {
+			rememberOAuthCallbackOutcome(recorded.State, false, "failed to persist account")
+			slog.Error("oauth callback persist account failed",
+				"platform", platform,
+				"state", oauthStateLabel(recorded.State),
+				"error", err.Error(),
+			)
 			if isHTML {
 				http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", "failed to persist account"), http.StatusSeeOther)
 				return
@@ -206,6 +212,13 @@ func (s Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := s.saveCredentials(r.Context(), account.ID, item.Credentials); err != nil {
+			rememberOAuthCallbackOutcome(recorded.State, false, "failed to save account credentials")
+			slog.Error("oauth callback save credentials failed",
+				"platform", platform,
+				"state", oauthStateLabel(recorded.State),
+				"account_id", account.ID,
+				"error", err.Error(),
+			)
 			if isHTML {
 				http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", "failed to save account credentials"), http.StatusSeeOther)
 				return
@@ -215,12 +228,12 @@ func (s Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		}
 		created = append(created, account)
 	}
-	rememberCompletedOAuthState(recorded.State)
+	msg := fmt.Sprintf("%d accounts connected", len(created))
+	if len(created) == 1 {
+		msg = "1 account connected"
+	}
+	rememberOAuthCallbackOutcome(recorded.State, true, msg)
 	if isHTML {
-		msg := fmt.Sprintf("%d accounts connected", len(created))
-		if len(created) == 1 {
-			msg = "1 account connected"
-		}
 		http.Redirect(w, r, withQueryValue(returnTo, "accounts_success", msg), http.StatusSeeOther)
 		return
 	}
@@ -319,44 +332,80 @@ func newOAuthCodeVerifier() string {
 
 const settingsViewURL = "/?view=settings"
 
-var recentCompletedOAuthStates sync.Map
+type oauthCallbackOutcome struct {
+	Success   bool
+	Message   string
+	ExpiresAt time.Time
+}
 
-func rememberCompletedOAuthState(state string) {
+var recentOAuthCallbackOutcomes sync.Map
+
+func rememberOAuthCallbackOutcome(state string, success bool, message string) {
 	state = strings.TrimSpace(state)
 	if state == "" {
 		return
 	}
 	now := time.Now().UTC()
-	expireAt := now.Add(2 * time.Minute)
-	recentCompletedOAuthStates.Store(state, expireAt)
-	recentCompletedOAuthStates.Range(func(key, value any) bool {
-		storedExpireAt, ok := value.(time.Time)
-		if !ok || !storedExpireAt.After(now) {
-			recentCompletedOAuthStates.Delete(key)
+	recentOAuthCallbackOutcomes.Store(state, oauthCallbackOutcome{
+		Success:   success,
+		Message:   strings.TrimSpace(message),
+		ExpiresAt: now.Add(2 * time.Minute),
+	})
+	recentOAuthCallbackOutcomes.Range(func(key, value any) bool {
+		outcome, ok := value.(oauthCallbackOutcome)
+		if !ok || !outcome.ExpiresAt.After(now) {
+			recentOAuthCallbackOutcomes.Delete(key)
 		}
 		return true
 	})
 }
 
-func wasRecentlyCompletedOAuthState(state string) bool {
+func recentOAuthCallbackOutcome(state string) (oauthCallbackOutcome, bool) {
 	state = strings.TrimSpace(state)
 	if state == "" {
-		return false
+		return oauthCallbackOutcome{}, false
 	}
-	raw, ok := recentCompletedOAuthStates.Load(state)
+	raw, ok := recentOAuthCallbackOutcomes.Load(state)
 	if !ok {
-		return false
+		return oauthCallbackOutcome{}, false
 	}
-	expireAt, ok := raw.(time.Time)
+	outcome, ok := raw.(oauthCallbackOutcome)
 	if !ok {
-		recentCompletedOAuthStates.Delete(state)
-		return false
+		recentOAuthCallbackOutcomes.Delete(state)
+		return oauthCallbackOutcome{}, false
 	}
-	if !expireAt.After(time.Now().UTC()) {
-		recentCompletedOAuthStates.Delete(state)
-		return false
+	if !outcome.ExpiresAt.After(time.Now().UTC()) {
+		recentOAuthCallbackOutcomes.Delete(state)
+		return oauthCallbackOutcome{}, false
 	}
-	return true
+	return outcome, true
+}
+
+func writeOAuthReplayOutcome(w http.ResponseWriter, r *http.Request, platform domain.Platform, returnTo string, isHTML bool, outcome oauthCallbackOutcome) {
+	message := strings.TrimSpace(outcome.Message)
+	if message == "" {
+		if outcome.Success {
+			message = "oauth callback already processed"
+		} else {
+			message = "oauth callback already failed"
+		}
+	}
+	if isHTML {
+		param := "accounts_success"
+		if !outcome.Success {
+			param = "accounts_error"
+		}
+		http.Redirect(w, r, withQueryValue(returnTo, param, message), http.StatusSeeOther)
+		return
+	}
+	if outcome.Success {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"platform": platform,
+			"status":   "already_processed",
+		})
+		return
+	}
+	writeError(w, http.StatusBadRequest, errors.New(message))
 }
 
 func oauthStateLabel(raw string) string {

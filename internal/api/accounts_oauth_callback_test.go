@@ -18,6 +18,7 @@ import (
 )
 
 type oauthReplayTestProvider struct {
+	callbackErr error
 }
 
 func (p *oauthReplayTestProvider) Platform() domain.Platform {
@@ -41,6 +42,9 @@ func (p *oauthReplayTestProvider) StartOAuth(_ context.Context, in postflow.OAut
 }
 
 func (p *oauthReplayTestProvider) HandleOAuthCallback(_ context.Context, _ postflow.OAuthCallbackInput) ([]postflow.ConnectedAccount, error) {
+	if p.callbackErr != nil {
+		return nil, p.callbackErr
+	}
 	return []postflow.ConnectedAccount{
 		{
 			Platform:          domain.PlatformLinkedIn,
@@ -126,8 +130,8 @@ func TestOAuthCallbackReplayInHTMLFlowReturnsSuccess(t *testing.T) {
 	if strings.Contains(location2, "accounts_error=") {
 		t.Fatalf("expected replay callback to avoid invalid state error, got %q", location2)
 	}
-	if !strings.Contains(location2, "accounts_success=oauth+callback+already+processed") {
-		t.Fatalf("expected replay callback success message, got %q", location2)
+	if !strings.Contains(location2, "accounts_success=1+account+connected") {
+		t.Fatalf("expected replay callback to preserve original success message, got %q", location2)
 	}
 	linkedAfterReplay, err := store.GetAccountByPlatformExternalID(t.Context(), domain.PlatformLinkedIn, domain.AccountKindPersonal, "linkedin_test_id")
 	if err != nil {
@@ -142,5 +146,64 @@ func TestOAuthCallbackReplayInHTMLFlowReturnsSuccess(t *testing.T) {
 	}
 	if len(accountsAfterReplay) != 1 {
 		t.Fatalf("expected replay to keep exactly one linked account, got %d", len(accountsAfterReplay))
+	}
+}
+
+func TestOAuthCallbackReplayInHTMLFlowReplaysOriginalError(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	provider := &oauthReplayTestProvider{callbackErr: errors.New("linkedin organization discovery failed")}
+	srv := Server{
+		Store:             store,
+		DataDir:           tempDir,
+		DefaultMaxRetries: 3,
+		Registry:          postflow.NewProviderRegistry(provider),
+		PublicBaseURL:     "https://postflow.example",
+	}
+	h := srv.Handler()
+
+	state := "state_error_replay_" + strings.ReplaceAll(t.Name(), "/", "_")
+	_, err = store.CreateOAuthState(t.Context(), domain.OauthState{
+		Platform:     domain.PlatformLinkedIn,
+		State:        state,
+		CodeVerifier: "verifier",
+		ExpiresAt:    time.Now().UTC().Add(5 * time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("create oauth state: %v", err)
+	}
+
+	callbackURL := "/oauth/linkedin/callback?state=" + url.QueryEscape(state) + "&code=auth_code"
+
+	req1 := httptest.NewRequest(http.MethodGet, callbackURL, nil)
+	req1.Header.Set("Accept", "text/html")
+	w1 := httptest.NewRecorder()
+	h.ServeHTTP(w1, req1)
+	if w1.Code != http.StatusSeeOther {
+		t.Fatalf("expected first callback to redirect, got %d", w1.Code)
+	}
+	location1 := w1.Header().Get("Location")
+	if !strings.Contains(location1, "accounts_error=linkedin+organization+discovery+failed") {
+		t.Fatalf("expected first callback to preserve original error, got %q", location1)
+	}
+
+	req2 := httptest.NewRequest(http.MethodGet, callbackURL, nil)
+	req2.Header.Set("Accept", "text/html")
+	w2 := httptest.NewRecorder()
+	h.ServeHTTP(w2, req2)
+	if w2.Code != http.StatusSeeOther {
+		t.Fatalf("expected replay callback to redirect, got %d", w2.Code)
+	}
+	location2 := w2.Header().Get("Location")
+	if !strings.Contains(location2, "accounts_error=linkedin+organization+discovery+failed") {
+		t.Fatalf("expected replay callback to return original error, got %q", location2)
+	}
+	if strings.Contains(location2, "invalid+oauth+state") {
+		t.Fatalf("expected replay callback to avoid invalid oauth state, got %q", location2)
 	}
 }
