@@ -2,7 +2,9 @@ package postflow
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -242,6 +244,18 @@ func mustNewXTestClient(t *testing.T, baseURL string) *XClient {
 	return client
 }
 
+func mustNewXBearerTestClient(t *testing.T, baseURL string) *XClient {
+	t.Helper()
+	client, err := NewXClient(XConfig{
+		APIBaseURL:  baseURL,
+		AccessToken: "bearer-token",
+	})
+	if err != nil {
+		t.Fatalf("NewXClient() error = %v", err)
+	}
+	return client
+}
+
 func mustWriteTempMedia(t *testing.T, filename, mimeType string, content []byte) domain.Media {
 	t.Helper()
 	dir := t.TempDir()
@@ -308,5 +322,68 @@ func TestUploadChunkedCompletesLifecycleWithStatusPolling(t *testing.T) {
 	}
 	if commands[3] != "STATUS:GET" {
 		t.Fatalf("fourth command = %q, want STATUS:GET", commands[3])
+	}
+}
+
+func TestUploadChunkedOAuth2UsesV2Endpoints(t *testing.T) {
+	commands := make([]string, 0, 4)
+	var initPayload map[string]any
+	var appendAuth string
+	var statusQuery string
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/2/media/upload/initialize":
+			commands = append(commands, "INIT:"+r.Method)
+			if got := strings.TrimSpace(r.Header.Get("Authorization")); got != "Bearer bearer-token" {
+				t.Fatalf("initialize auth = %q, want bearer auth", got)
+			}
+			body, _ := io.ReadAll(r.Body)
+			_ = json.Unmarshal(body, &initPayload)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"data":{"id":"mid_v2"}}`))
+		case r.URL.Path == "/2/media/upload/mid_v2/append":
+			commands = append(commands, "APPEND:"+r.Method)
+			appendAuth = strings.TrimSpace(r.Header.Get("Authorization"))
+			if got := r.URL.Query().Get("segment_index"); got != "0" {
+				t.Fatalf("segment_index = %q, want 0", got)
+			}
+			w.WriteHeader(http.StatusNoContent)
+		case r.URL.Path == "/2/media/upload/mid_v2/finalize":
+			commands = append(commands, "FINALIZE:"+r.Method)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"data":{"id":"mid_v2","processing_info":{"state":"pending","check_after_secs":1}}}`))
+		case r.URL.Path == "/2/media/upload":
+			commands = append(commands, "STATUS:"+r.Method)
+			statusQuery = r.URL.RawQuery
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"data":{"id":"mid_v2","processing_info":{"state":"succeeded"}}}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	client := mustNewXBearerTestClient(t, srv.URL)
+	media := mustWriteTempMedia(t, "clip.mp4", "video/mp4", []byte("video-bytes-for-test"))
+
+	mediaID, err := client.uploadChunked(context.Background(), media)
+	if err != nil {
+		t.Fatalf("uploadChunked() error = %v", err)
+	}
+	if mediaID != "mid_v2" {
+		t.Fatalf("mediaID = %q, want %q", mediaID, "mid_v2")
+	}
+	if len(commands) != 4 {
+		t.Fatalf("expected INIT/APPEND/FINALIZE/STATUS commands, got %v", commands)
+	}
+	if initPayload["media_category"] != "tweet_video" {
+		t.Fatalf("media_category = %v, want tweet_video", initPayload["media_category"])
+	}
+	if appendAuth != "Bearer bearer-token" {
+		t.Fatalf("append auth = %q, want bearer auth", appendAuth)
+	}
+	if !strings.Contains(statusQuery, "command=STATUS") || !strings.Contains(statusQuery, "media_id=mid_v2") {
+		t.Fatalf("unexpected status query %q", statusQuery)
 	}
 }

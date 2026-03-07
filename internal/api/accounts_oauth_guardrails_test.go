@@ -1,10 +1,12 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +15,35 @@ import (
 	"github.com/antoniolg/postflow/internal/domain"
 	"github.com/antoniolg/postflow/internal/postflow"
 )
+
+type pkceCaptureProvider struct {
+	lastVerifier string
+}
+
+func (p *pkceCaptureProvider) Platform() domain.Platform {
+	return domain.PlatformX
+}
+
+func (p *pkceCaptureProvider) ValidateDraft(_ context.Context, _ domain.SocialAccount, _ postflow.Draft) ([]string, error) {
+	return nil, nil
+}
+
+func (p *pkceCaptureProvider) Publish(_ context.Context, _ domain.SocialAccount, _ postflow.Credentials, _ domain.Post, _ postflow.PublishOptions) (string, error) {
+	return "ok", nil
+}
+
+func (p *pkceCaptureProvider) RefreshIfNeeded(_ context.Context, _ domain.SocialAccount, credentials postflow.Credentials) (postflow.Credentials, bool, error) {
+	return credentials, false, nil
+}
+
+func (p *pkceCaptureProvider) StartOAuth(_ context.Context, in postflow.OAuthStartInput) (postflow.OAuthStartOutput, error) {
+	p.lastVerifier = in.CodeVerifier
+	return postflow.OAuthStartOutput{AuthURL: "https://x.example/auth"}, nil
+}
+
+func (p *pkceCaptureProvider) HandleOAuthCallback(_ context.Context, _ postflow.OAuthCallbackInput) ([]postflow.ConnectedAccount, error) {
+	return nil, nil
+}
 
 func TestAccountReturnToSanitizesUnsafeTargets(t *testing.T) {
 	testCases := []struct {
@@ -145,6 +176,34 @@ func TestOAuthCompletedStateCacheBehavior(t *testing.T) {
 	recentCompletedOAuthStates.Store("state_expired", time.Now().UTC().Add(-1*time.Minute))
 	if wasRecentlyCompletedOAuthState("state_expired") {
 		t.Fatalf("expired state should not be considered recently completed")
+	}
+}
+
+func TestHandleOAuthStartGeneratesPKCECompatibleVerifier(t *testing.T) {
+	store, err := db.Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	provider := &pkceCaptureProvider{}
+	srv := Server{
+		Store:             store,
+		DefaultMaxRetries: 3,
+		Registry:          postflow.NewProviderRegistry(provider),
+		PublicBaseURL:     "https://postflow.example",
+	}
+	req := httptest.NewRequest(http.MethodPost, "/oauth/x/start", nil)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 starting oauth, got %d", rec.Code)
+	}
+	if got := len(provider.lastVerifier); got < 43 || got > 128 {
+		t.Fatalf("code_verifier length = %d, want 43..128", got)
+	}
+	if ok, _ := regexp.MatchString(`^[A-Za-z0-9._~-]{43,128}$`, provider.lastVerifier); !ok {
+		t.Fatalf("code_verifier contains invalid characters: %q", provider.lastVerifier)
 	}
 }
 

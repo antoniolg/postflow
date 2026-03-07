@@ -2,7 +2,9 @@ package api
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -43,7 +45,7 @@ func (s Server) handleOAuthStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	state := mustID("state")
-	codeVerifier := mustID("verifier")
+	codeVerifier := newOAuthCodeVerifier()
 	slog.Info("oauth start requested",
 		"platform", platform,
 		"state", oauthStateLabel(state),
@@ -300,6 +302,14 @@ func mustID(prefix string) string {
 		return fmt.Sprintf("%s_%d", prefix, time.Now().UnixNano())
 	}
 	return id
+}
+
+func newOAuthCodeVerifier() string {
+	buf := make([]byte, 48)
+	if _, err := rand.Read(buf); err != nil {
+		return mustID("verifier") + mustID("pkce")
+	}
+	return base64.RawURLEncoding.EncodeToString(buf)
 }
 
 const settingsViewURL = "/?view=settings"

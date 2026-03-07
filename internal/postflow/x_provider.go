@@ -3,17 +3,23 @@ package postflow
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strings"
+	"time"
 
 	"github.com/antoniolg/postflow/internal/domain"
 )
 
 type XProvider struct {
-	cfg XConfig
+	cfg    XConfig
+	client *http.Client
 }
 
 func NewXProvider(cfg XConfig) *XProvider {
-	return &XProvider{cfg: cfg}
+	return &XProvider{
+		cfg:    cfg,
+		client: &http.Client{Timeout: 60 * time.Second},
+	}
 }
 
 func (p *XProvider) Platform() domain.Platform {
@@ -40,8 +46,6 @@ func (p *XProvider) Publish(ctx context.Context, _ domain.SocialAccount, credent
 	tokenSecret := strings.TrimSpace(credentials.AccessTokenSecret)
 	if token == "" {
 		token = strings.TrimSpace(p.cfg.AccessToken)
-	}
-	if tokenSecret == "" {
 		tokenSecret = strings.TrimSpace(p.cfg.AccessTokenSecret)
 	}
 	client, err := NewXClient(XConfig{
@@ -58,6 +62,9 @@ func (p *XProvider) Publish(ctx context.Context, _ domain.SocialAccount, credent
 	return client.Publish(ctx, post, opts)
 }
 
-func (p *XProvider) RefreshIfNeeded(_ context.Context, _ domain.SocialAccount, credentials Credentials) (Credentials, bool, error) {
-	return credentials, false, nil
+func (p *XProvider) httpClient() *http.Client {
+	if p != nil && p.client != nil {
+		return p.client
+	}
+	return &http.Client{Timeout: 60 * time.Second}
 }

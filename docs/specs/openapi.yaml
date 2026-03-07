@@ -808,7 +808,7 @@ components:
 
     OAuthPlatform:
       type: string
-      enum: [linkedin, facebook, instagram]
+      enum: [x, linkedin, facebook, instagram]
 
     Account:
       type: object

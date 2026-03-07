@@ -34,8 +34,12 @@ type Config struct {
 type XConfig struct {
 	APIBaseURL        string
 	UploadBaseURL     string
+	AuthBaseURL       string
+	TokenURL          string
 	APIKey            string
 	APIKeySecret      string
+	ClientID          string
+	ClientSecret      string
 	AccessToken       string
 	AccessTokenSecret string
 }
@@ -106,10 +110,14 @@ func Load() (Config, error) {
 		PublicBaseURL:     strings.TrimRight(strings.TrimSpace(os.Getenv("PUBLIC_BASE_URL")), "/"),
 		MasterKeyBase64:   strings.TrimSpace(os.Getenv("POSTFLOW_MASTER_KEY")),
 		X: XConfig{
-			APIBaseURL:        getenv("X_API_BASE_URL", "https://api.twitter.com"),
+			APIBaseURL:        getenv("X_API_BASE_URL", "https://api.x.com"),
 			UploadBaseURL:     getenv("X_UPLOAD_BASE_URL", "https://upload.twitter.com"),
+			AuthBaseURL:       getenv("X_AUTH_BASE_URL", "https://x.com"),
+			TokenURL:          getenv("X_TOKEN_URL", "https://api.x.com/2/oauth2/token"),
 			APIKey:            os.Getenv("X_API_KEY"),
 			APIKeySecret:      os.Getenv("X_API_SECRET"),
+			ClientID:          strings.TrimSpace(os.Getenv("X_CLIENT_ID")),
+			ClientSecret:      strings.TrimSpace(os.Getenv("X_CLIENT_SECRET")),
 			AccessToken:       os.Getenv("X_ACCESS_TOKEN"),
 			AccessTokenSecret: os.Getenv("X_ACCESS_TOKEN_SECRET"),
 		},

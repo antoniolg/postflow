@@ -82,15 +82,16 @@ Use `.env.example` as template. These are the key ones:
 
 | Network | Variables | Where to get them |
 |---|---|---|
-| X | `X_API_KEY`, `X_API_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_TOKEN_SECRET` | X Developer Portal app credentials/tokens for static X publishing (`oauth1`) |
+| X | `X_CLIENT_ID`, `X_CLIENT_SECRET` | X Developer Portal OAuth 2.0 app credentials for account connection |
+| X (static optional) | `X_API_KEY`, `X_API_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_TOKEN_SECRET` | Static OAuth1 credentials for bootstrap/default X publishing |
 | LinkedIn | `LINKEDIN_CLIENT_ID`, `LINKEDIN_CLIENT_SECRET` | LinkedIn Developer app |
 | Facebook/Instagram | `META_APP_ID`, `META_APP_SECRET` | Meta Developers app |
 
 Important:
 - If you want real publishing, set `POSTFLOW_DRIVER=live`.
 - For local testing without real publishing, keep `POSTFLOW_DRIVER=mock`.
-- OAuth account connection is currently available for LinkedIn, Facebook, and Instagram.
-- X currently uses static credentials via env vars or `/accounts/static` / `postflow accounts create-static`.
+- OAuth account connection is available for X, LinkedIn, Facebook, and Instagram.
+- X also supports static credentials via env vars or `/accounts/static` / `postflow accounts create-static`.
 - In production (Coolify), set secrets in the platform UI, not in committed files.
 
 ---
@@ -245,7 +246,7 @@ Full production runbook:
   - check `Authorization: Bearer ...` in MCP/API clients
 - OAuth callback errors:
   - verify `PUBLIC_BASE_URL` matches your real public domain
-  - if the platform is X and the error is `oauth is not available for platform`, that is expected today; use static X credentials instead
+  - for X, verify `X_CLIENT_ID` is set and the callback URL is registered in the X app settings
 - Instagram media create errors (`code=9004`, `error_subcode=2207052`):
   - verify `PUBLIC_BASE_URL` is public/reachable from the internet (not `localhost` in production)
   - for image posts, upload JPEG (`.jpg` / `.jpeg`)

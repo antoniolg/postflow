@@ -94,3 +94,39 @@ func TestCreateStatusSupportsLegacyResponseID(t *testing.T) {
 		t.Fatalf("id = %q, want %q", id, "legacy-1")
 	}
 }
+
+func TestCreateStatusSupportsBearerAuth(t *testing.T) {
+	var gotAuth string
+	var gotBody map[string]any
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		bodyBytes, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(bodyBytes, &gotBody)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"id":"bearer-123"}}`))
+	}))
+	defer srv.Close()
+
+	client, err := NewXClient(XConfig{
+		APIBaseURL:  srv.URL,
+		AccessToken: "bearer-token",
+	})
+	if err != nil {
+		t.Fatalf("NewXClient() error = %v", err)
+	}
+
+	id, err := client.createStatus(context.Background(), "hola bearer", nil, PublishOptions{})
+	if err != nil {
+		t.Fatalf("createStatus() error = %v", err)
+	}
+	if id != "bearer-123" {
+		t.Fatalf("id = %q, want %q", id, "bearer-123")
+	}
+	if gotAuth != "Bearer bearer-token" {
+		t.Fatalf("authorization = %q, want %q", gotAuth, "Bearer bearer-token")
+	}
+	if gotBody["text"] != "hola bearer" {
+		t.Fatalf("body text = %v, want %q", gotBody["text"], "hola bearer")
+	}
+}

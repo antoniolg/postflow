@@ -4446,6 +4446,9 @@
             <span class="meta-soft">{{t "settings.connect_via_oauth"}}</span>
           </div>
           <div class="settings-connect-grid">
+            <form method="post" action="/oauth/x/start">
+              <button type="submit" class="btn-secondary">{{t "settings.connect_x"}}</button>
+            </form>
             <form method="post" action="/oauth/linkedin/start">
               <button type="submit" class="btn-secondary">{{t "settings.connect_linkedin"}}</button>
             </form>

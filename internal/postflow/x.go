@@ -7,11 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"mime/multipart"
 	"net/http"
-	"net/url"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -25,49 +21,79 @@ const (
 type XConfig struct {
 	APIBaseURL        string
 	UploadBaseURL     string
+	AuthBaseURL       string
+	TokenURL          string
 	APIKey            string
 	APIKeySecret      string
+	ClientID          string
+	ClientSecret      string
 	AccessToken       string
 	AccessTokenSecret string
 }
 
+type xAuthMode string
+
+const (
+	xAuthModeOAuth1 xAuthMode = "oauth1"
+	xAuthModeBearer xAuthMode = "bearer"
+)
+
 type XClient struct {
-	httpClient *http.Client
-	apiBaseURL string
-	uploadBase string
-	signer     oauth1Signer
+	httpClient  *http.Client
+	apiBaseURL  string
+	uploadBase  string
+	authMode    xAuthMode
+	signer      *oauth1Signer
+	bearerToken string
 }
 
 func NewXClient(cfg XConfig) (*XClient, error) {
-	if cfg.APIBaseURL == "" {
-		cfg.APIBaseURL = "https://api.twitter.com"
+	apiBaseURL := strings.TrimRight(strings.TrimSpace(cfg.APIBaseURL), "/")
+	if apiBaseURL == "" {
+		apiBaseURL = "https://api.x.com"
 	}
-	if cfg.UploadBaseURL == "" {
-		cfg.UploadBaseURL = "https://upload.twitter.com"
+	uploadBase := strings.TrimRight(strings.TrimSpace(cfg.UploadBaseURL), "/")
+	if uploadBase == "" {
+		uploadBase = "https://upload.twitter.com"
 	}
-	if cfg.APIKey == "" || cfg.APIKeySecret == "" || cfg.AccessToken == "" || cfg.AccessTokenSecret == "" {
-		return nil, errors.New("missing X credentials")
+	accessToken := strings.TrimSpace(cfg.AccessToken)
+	accessTokenSecret := strings.TrimSpace(cfg.AccessTokenSecret)
+	if accessToken == "" {
+		return nil, errors.New("missing X access token")
 	}
-	return &XClient{
+
+	client := &XClient{
 		httpClient: &http.Client{Timeout: 60 * time.Second},
-		apiBaseURL: strings.TrimRight(cfg.APIBaseURL, "/"),
-		uploadBase: strings.TrimRight(cfg.UploadBaseURL, "/"),
-		signer: newOAuth1Signer(oauth1Credentials{
-			ConsumerKey:    cfg.APIKey,
-			ConsumerSecret: cfg.APIKeySecret,
-			Token:          cfg.AccessToken,
-			TokenSecret:    cfg.AccessTokenSecret,
-		}),
-	}, nil
+		apiBaseURL: apiBaseURL,
+		uploadBase: uploadBase,
+	}
+	if accessTokenSecret != "" {
+		if strings.TrimSpace(cfg.APIKey) == "" || strings.TrimSpace(cfg.APIKeySecret) == "" {
+			return nil, errors.New("missing X oauth1 credentials")
+		}
+		signer := newOAuth1Signer(oauth1Credentials{
+			ConsumerKey:    strings.TrimSpace(cfg.APIKey),
+			ConsumerSecret: strings.TrimSpace(cfg.APIKeySecret),
+			Token:          accessToken,
+			TokenSecret:    accessTokenSecret,
+		})
+		client.authMode = xAuthModeOAuth1
+		client.signer = &signer
+		return client, nil
+	}
+
+	client.authMode = xAuthModeBearer
+	client.bearerToken = accessToken
+	return client, nil
 }
 
 func (c *XClient) Publish(ctx context.Context, post domain.Post, opts PublishOptions) (string, error) {
 	postText := formatPostTextForPublish(post.Text)
 	mediaIDs := make([]string, 0, len(post.Media))
-	for _, m := range post.Media {
-		mediaID, err := c.uploadChunked(ctx, m)
+	for _, media := range post.Media {
+		mediaID, err := c.uploadChunked(ctx, media)
 		if err != nil {
-			return "", fmt.Errorf("upload media %s: %w", m.ID, err)
+			return "", fmt.Errorf("upload media %s: %w", media.ID, err)
 		}
 		mediaIDs = append(mediaIDs, mediaID)
 	}
@@ -79,192 +105,10 @@ func (c *XClient) Publish(ctx context.Context, post domain.Post, opts PublishOpt
 }
 
 func (c *XClient) uploadChunked(ctx context.Context, media domain.Media) (string, error) {
-	f, err := os.Open(media.StoragePath)
-	if err != nil {
-		return "", err
+	if c.usesOAuth1() {
+		return c.uploadChunkedOAuth1(ctx, media)
 	}
-	defer f.Close()
-
-	mediaCategory := mediaCategoryFor(media)
-	initParams := map[string]string{
-		"command":        "INIT",
-		"total_bytes":    fmt.Sprintf("%d", media.SizeBytes),
-		"media_type":     media.MimeType,
-		"media_category": mediaCategory,
-	}
-
-	initResp, err := c.uploadCommand(ctx, initParams)
-	if err != nil {
-		return "", err
-	}
-	mediaID := initResp.MediaIDString
-	if mediaID == "" {
-		return "", errors.New("x upload INIT returned empty media_id_string")
-	}
-
-	buf := make([]byte, uploadChunkSize)
-	segment := 0
-	for {
-		n, readErr := io.ReadFull(f, buf)
-		if readErr != nil && readErr != io.EOF && readErr != io.ErrUnexpectedEOF {
-			return "", readErr
-		}
-		if n > 0 {
-			if err := c.uploadAppend(ctx, mediaID, segment, buf[:n]); err != nil {
-				return "", err
-			}
-			segment++
-		}
-		if readErr == io.EOF || readErr == io.ErrUnexpectedEOF {
-			break
-		}
-	}
-
-	finalResp, err := c.uploadCommand(ctx, map[string]string{"command": "FINALIZE", "media_id": mediaID})
-	if err != nil {
-		return "", err
-	}
-	if err := c.waitForProcessing(ctx, mediaID, finalResp.ProcessingInfo); err != nil {
-		return "", err
-	}
-	return mediaID, nil
-}
-
-type uploadResponse struct {
-	MediaIDString  string          `json:"media_id_string"`
-	ProcessingInfo *processingInfo `json:"processing_info"`
-}
-
-type processingInfo struct {
-	State         string `json:"state"`
-	CheckAfterSec int    `json:"check_after_secs"`
-	Error         *struct {
-		Code    int    `json:"code"`
-		Name    string `json:"name"`
-		Message string `json:"message"`
-	} `json:"error"`
-}
-
-func (c *XClient) uploadCommand(ctx context.Context, params map[string]string) (uploadResponse, error) {
-	return c.uploadCommandWithMethod(ctx, http.MethodPost, params)
-}
-
-func (c *XClient) uploadCommandWithMethod(ctx context.Context, method string, params map[string]string) (uploadResponse, error) {
-	u, err := url.Parse(c.uploadBase + "/1.1/media/upload.json")
-	if err != nil {
-		return uploadResponse{}, err
-	}
-	q := u.Query()
-	for k, v := range params {
-		q.Set(k, v)
-	}
-	u.RawQuery = q.Encode()
-
-	req, err := http.NewRequestWithContext(ctx, method, u.String(), nil)
-	if err != nil {
-		return uploadResponse{}, err
-	}
-	if err := signRequest(req, c.signer, nil); err != nil {
-		return uploadResponse{}, err
-	}
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return uploadResponse{}, err
-	}
-	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
-	if resp.StatusCode >= 300 {
-		return uploadResponse{}, fmt.Errorf("x upload command %s failed: status=%d body=%s", params["command"], resp.StatusCode, string(body))
-	}
-	var out uploadResponse
-	if err := json.Unmarshal(body, &out); err != nil {
-		return uploadResponse{}, err
-	}
-	return out, nil
-}
-
-func (c *XClient) uploadAppend(ctx context.Context, mediaID string, segment int, chunk []byte) error {
-	u, err := url.Parse(c.uploadBase + "/1.1/media/upload.json")
-	if err != nil {
-		return err
-	}
-	q := u.Query()
-	q.Set("command", "APPEND")
-	q.Set("media_id", mediaID)
-	q.Set("segment_index", fmt.Sprintf("%d", segment))
-	u.RawQuery = q.Encode()
-
-	var body bytes.Buffer
-	mw := multipart.NewWriter(&body)
-	part, err := mw.CreateFormFile("media", "chunk_"+filepath.Base(mediaID)+".bin")
-	if err != nil {
-		return err
-	}
-	if _, err := part.Write(chunk); err != nil {
-		return err
-	}
-	if err := mw.Close(); err != nil {
-		return err
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), &body)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", mw.FormDataContentType())
-	if err := signRequest(req, c.signer, nil); err != nil {
-		return err
-	}
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
-		return fmt.Errorf("x upload APPEND failed: status=%d body=%s", resp.StatusCode, string(body))
-	}
-	return nil
-}
-
-func (c *XClient) waitForProcessing(ctx context.Context, mediaID string, info *processingInfo) error {
-	if info == nil {
-		return nil
-	}
-	current := info
-	for {
-		switch current.State {
-		case "succeeded":
-			return nil
-		case "failed":
-			if current.Error != nil {
-				return fmt.Errorf("x processing failed: %s (%s)", current.Error.Message, current.Error.Name)
-			}
-			return errors.New("x processing failed")
-		case "pending", "in_progress":
-			wait := current.CheckAfterSec
-			if wait <= 0 {
-				wait = 2
-			}
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(time.Duration(wait) * time.Second):
-			}
-			statusResp, err := c.uploadCommandWithMethod(ctx, http.MethodGet, map[string]string{"command": "STATUS", "media_id": mediaID})
-			if err != nil {
-				return err
-			}
-			if statusResp.ProcessingInfo == nil {
-				return nil
-			}
-			current = statusResp.ProcessingInfo
-		default:
-			return fmt.Errorf("unknown processing state: %s", current.State)
-		}
-	}
+	return c.uploadChunkedOAuth2(ctx, media)
 }
 
 func (c *XClient) createStatus(ctx context.Context, text string, mediaIDs []string, opts PublishOptions) (string, error) {
@@ -286,13 +130,12 @@ func (c *XClient) createStatus(ctx context.Context, text string, mediaIDs []stri
 		return "", err
 	}
 
-	endpoint := c.apiBaseURL + "/2/tweets"
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(bodyJSON))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.apiBaseURL+"/2/tweets", bytes.NewReader(bodyJSON))
 	if err != nil {
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if err := signRequest(req, c.signer, nil); err != nil {
+	if err := c.authorizeRequest(req); err != nil {
 		return "", err
 	}
 
@@ -304,7 +147,7 @@ func (c *XClient) createStatus(ctx context.Context, text string, mediaIDs []stri
 
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 	if resp.StatusCode >= 300 {
-		return "", fmt.Errorf("x create tweet failed: status=%d body=%s", resp.StatusCode, string(body))
+		return "", fmt.Errorf("x create tweet failed: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 	var out struct {
 		Data struct {
@@ -328,9 +171,25 @@ func (c *XClient) createStatus(ctx context.Context, text string, mediaIDs []stri
 	return "", errors.New("x create tweet response missing id")
 }
 
-func mediaCategoryFor(m domain.Media) string {
-	if strings.HasPrefix(m.MimeType, "video/") {
-		return "tweet_video"
+func (c *XClient) usesOAuth1() bool {
+	return c != nil && c.authMode == xAuthModeOAuth1 && c.signer != nil
+}
+
+func (c *XClient) authorizeRequest(req *http.Request) error {
+	if c.usesOAuth1() {
+		return signRequest(req, *c.signer, nil)
 	}
-	return "tweet_image"
+	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(c.bearerToken))
+	return nil
+}
+
+func mediaCategoryFor(m domain.Media) string {
+	switch {
+	case strings.EqualFold(strings.TrimSpace(m.MimeType), "image/gif"):
+		return "tweet_gif"
+	case strings.HasPrefix(strings.TrimSpace(m.MimeType), "video/"):
+		return "tweet_video"
+	default:
+		return "tweet_image"
+	}
 }

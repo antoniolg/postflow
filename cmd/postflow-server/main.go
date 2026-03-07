@@ -123,8 +123,12 @@ func buildProviderRegistry(cfg config.Config, cipher *secure.Cipher) (*postflow.
 		xProvider := postflow.NewXProvider(postflow.XConfig{
 			APIBaseURL:        cfg.X.APIBaseURL,
 			UploadBaseURL:     cfg.X.UploadBaseURL,
+			AuthBaseURL:       cfg.X.AuthBaseURL,
+			TokenURL:          cfg.X.TokenURL,
 			APIKey:            cfg.X.APIKey,
 			APIKeySecret:      cfg.X.APIKeySecret,
+			ClientID:          cfg.X.ClientID,
+			ClientSecret:      cfg.X.ClientSecret,
 			AccessToken:       cfg.X.AccessToken,
 			AccessTokenSecret: cfg.X.AccessTokenSecret,
 		})
