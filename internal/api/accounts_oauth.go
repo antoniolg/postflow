@@ -95,6 +95,8 @@ func (s Server) handleOAuthStart(w http.ResponseWriter, r *http.Request) {
 func (s Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	isHTML := wantsHTML(r)
 	returnTo := settingsViewURL
+	callbackCtx, cancelCallback := oauthCallbackContext(r, isHTML)
+	defer cancelCallback()
 	platform, suffix, ok := parseOAuthPath(strings.TrimSpace(r.URL.Path))
 	if !ok || suffix != "callback" {
 		if isHTML {
@@ -137,7 +139,7 @@ func (s Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, errors.New("missing authorization code"))
 		return
 	}
-	recorded, err := s.Store.ConsumeOAuthState(r.Context(), stateRaw)
+	recorded, err := s.Store.ConsumeOAuthState(callbackCtx, stateRaw)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			if outcome, ok := recentOAuthCallbackOutcome(stateRaw); ok {
@@ -167,7 +169,7 @@ func (s Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	connected, err := provider.HandleOAuthCallback(r.Context(), postflow.OAuthCallbackInput{
+	connected, err := provider.HandleOAuthCallback(callbackCtx, postflow.OAuthCallbackInput{
 		Code:         code,
 		State:        recorded.State,
 		CodeVerifier: recorded.CodeVerifier,
@@ -188,7 +190,7 @@ func (s Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if shouldPromptOAuthAccountSelection(isHTML, connected) {
-		selectionID, err := s.createOAuthPendingSelection(r.Context(), oauthPendingSelectionPayload{
+		selectionID, err := s.createOAuthPendingSelection(callbackCtx, oauthPendingSelectionPayload{
 			OAuthState: recorded.State,
 			Platform:   platform,
 			Accounts:   connected,
@@ -207,7 +209,7 @@ func (s Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	created, err := s.persistConnectedAccounts(r.Context(), connected)
+	created, err := s.persistConnectedAccounts(callbackCtx, connected)
 	if err != nil {
 		rememberOAuthCallbackOutcome(recorded.State, false, err.Error(), "")
 		slog.Error("oauth callback persist accounts failed",
@@ -414,6 +416,13 @@ func oauthStateLabel(raw string) string {
 		return raw
 	}
 	return raw[:6] + "..." + raw[len(raw)-4:]
+}
+
+func oauthCallbackContext(r *http.Request, isHTML bool) (context.Context, context.CancelFunc) {
+	if !isHTML {
+		return r.Context(), func() {}
+	}
+	return context.WithTimeout(context.WithoutCancel(r.Context()), 45*time.Second)
 }
 
 func accountReturnTo(r *http.Request) string {
