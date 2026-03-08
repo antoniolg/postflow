@@ -179,6 +179,13 @@ func bootstrapXAccount(ctx context.Context, store *db.Store, cipher *secure.Ciph
 	if strings.TrimSpace(cfg.X.AccessToken) == "" || strings.TrimSpace(cfg.X.AccessTokenSecret) == "" {
 		return nil
 	}
+	disabled, err := store.GetBootstrapXAccountDisabled(ctx)
+	if err != nil {
+		return err
+	}
+	if disabled {
+		return nil
+	}
 	account, err := store.UpsertAccount(ctx, db.UpsertAccountParams{
 		Platform:          domain.PlatformX,
 		DisplayName:       "X Default",

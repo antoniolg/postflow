@@ -77,6 +77,40 @@ func TestDeleteAccountRemovesHistoricalPostsAndAccount(t *testing.T) {
 	}
 }
 
+func TestDeleteBootstrapXAccountDisablesFutureBootstrap(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	account, err := store.UpsertAccount(context.Background(), UpsertAccountParams{
+		Platform:          domain.PlatformX,
+		DisplayName:       "X Default",
+		ExternalAccountID: "x-default",
+		AuthMethod:        domain.AuthMethodStatic,
+		Status:            domain.AccountStatusConnected,
+	})
+	if err != nil {
+		t.Fatalf("create bootstrap x account: %v", err)
+	}
+	if err := store.DisconnectAccount(context.Background(), account.ID); err != nil {
+		t.Fatalf("disconnect account: %v", err)
+	}
+
+	if err := store.DeleteAccount(context.Background(), account.ID); err != nil {
+		t.Fatalf("delete account: %v", err)
+	}
+
+	disabled, err := store.GetBootstrapXAccountDisabled(context.Background())
+	if err != nil {
+		t.Fatalf("get bootstrap flag: %v", err)
+	}
+	if !disabled {
+		t.Fatalf("expected bootstrap x account to stay disabled after delete")
+	}
+}
+
 func TestUpdateAccountXPremium(t *testing.T) {
 	store, err := Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {

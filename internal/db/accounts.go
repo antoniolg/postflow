@@ -310,6 +310,10 @@ func (s *Store) DeleteAccount(ctx context.Context, id string) error {
 	if pending > 0 {
 		return ErrAccountHasPosts
 	}
+	disableBootstrapXAccount := account.Platform == domain.PlatformX &&
+		account.AuthMethod == domain.AuthMethodStatic &&
+		strings.TrimSpace(account.ExternalAccountID) == "x-default"
+
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -335,6 +339,14 @@ func (s *Store) DeleteAccount(ctx context.Context, id string) error {
 	affected, _ := result.RowsAffected()
 	if affected == 0 {
 		return ErrAccountNotFound
+	}
+	if disableBootstrapXAccount {
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO settings (key, value) VALUES (?, ?)
+			ON CONFLICT(key) DO UPDATE SET value = excluded.value
+		`, SettingBootstrapXAccountOff, "true"); err != nil {
+			return err
+		}
 	}
 	return tx.Commit()
 }
