@@ -234,6 +234,9 @@ func TestCreateViewIncludesComposerPreviewUploadAndNetworks(t *testing.T) {
 	if !strings.Contains(body, "thread-step-shell-root") || !strings.Contains(body, "data-thread-step-upload") {
 		t.Fatalf("expected thread composer UI to expose root and per-step media picker actions")
 	}
+	if !strings.Contains(body, "data-upload-drop-target=\"root\"") || !strings.Contains(body, "bindComposerDropTarget(card, { kind: \"step\", stepID: step.id })") {
+		t.Fatalf("expected thread composer to expose drag-and-drop media targets for the root post and follow-up steps")
+	}
 	if strings.Contains(body, "thread-step-media-select") {
 		t.Fatalf("did not expect legacy thread media select dropdowns in create view")
 	}

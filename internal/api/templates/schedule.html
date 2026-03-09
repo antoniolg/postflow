@@ -1975,6 +1975,11 @@
     .thread-step-card:focus-within {
       box-shadow: inset 0 0 0 1px var(--accent-orange);
     }
+    .thread-step-card-root.is-drop-target,
+    .thread-step-card.is-drop-target {
+      background: #26211d;
+      box-shadow: inset 0 0 0 1px var(--accent-orange);
+    }
     .thread-step-card-head {
       display: flex;
       align-items: flex-start;
@@ -4648,7 +4653,7 @@
                     <div class="thread-step-rail" aria-hidden="true">
                       <span class="thread-step-marker">1</span>
                     </div>
-                    <div class="thread-step-card-root" id="create-root-step-card">
+                    <div class="thread-step-card-root" id="create-root-step-card" data-upload-drop-target="root">
                       <div class="thread-step-text-wrap">
                         <textarea id="create-text" name="text" rows="1" required placeholder="{{t "create.placeholder"}}">{{.CreateText}}</textarea>
                       </div>
@@ -7023,6 +7028,7 @@
       const card = document.createElement("div");
       card.className = "thread-step-card";
       card.dataset.stepId = String(step.id);
+      card.dataset.uploadDropTarget = "step";
 
       const textWrap = document.createElement("div");
       textWrap.className = "thread-step-text-wrap";
@@ -7113,6 +7119,7 @@
       shell.appendChild(rail);
       shell.appendChild(card);
       threadStepsList.appendChild(shell);
+      bindComposerDropTarget(card, { kind: "step", stepID: step.id });
       autoResizeTextarea(textarea);
     });
 
@@ -7312,6 +7319,76 @@
       ? Array.from(types).includes("Files")
       : false;
   };
+  let composerDropDepth = new WeakMap();
+  const resetComposerDropTargets = () => {
+    composerDropDepth = new WeakMap();
+    form.querySelectorAll("[data-upload-drop-target].is-drop-target").forEach((node) => {
+      if (node instanceof HTMLElement) {
+        node.classList.remove("is-drop-target");
+      }
+    });
+  };
+  const bindComposerDropTarget = (node, target) => {
+    if (!(node instanceof HTMLElement)) {
+      return;
+    }
+
+    const setDropState = (active) => {
+      node.classList.toggle("is-drop-target", active);
+    };
+
+    node.addEventListener("dragenter", (event) => {
+      if (!eventHasFiles(event)) {
+        return;
+      }
+      event.preventDefault();
+      const nextDepth = (composerDropDepth.get(node) || 0) + 1;
+      composerDropDepth.set(node, nextDepth);
+      setDropState(true);
+      setActiveUploadTarget(target);
+    });
+
+    node.addEventListener("dragover", (event) => {
+      if (!eventHasFiles(event)) {
+        return;
+      }
+      event.preventDefault();
+      if (event.dataTransfer) {
+        event.dataTransfer.dropEffect = "copy";
+      }
+      setDropState(true);
+      setActiveUploadTarget(target);
+    });
+
+    node.addEventListener("dragleave", (event) => {
+      if (!eventHasFiles(event)) {
+        return;
+      }
+      event.preventDefault();
+      const nextDepth = Math.max(0, (composerDropDepth.get(node) || 0) - 1);
+      if (nextDepth === 0) {
+        composerDropDepth.delete(node);
+        setDropState(false);
+        return;
+      }
+      composerDropDepth.set(node, nextDepth);
+    });
+
+    node.addEventListener("drop", async (event) => {
+      if (!eventHasFiles(event)) {
+        return;
+      }
+      event.preventDefault();
+      composerDropDepth.delete(node);
+      setDropState(false);
+      setActiveUploadTarget(target);
+      const files = Array.from(event.dataTransfer?.files || []);
+      if (files.length === 0) {
+        return;
+      }
+      await processSelectedFiles(files, target);
+    });
+  };
 
   mediaDropzone.addEventListener("dragenter", (event) => {
     if (!eventHasFiles(event)) {
@@ -7356,6 +7433,12 @@
       return;
     }
     await processSelectedFiles(files, { kind: "root", stepID: 0 });
+  });
+
+  bindComposerDropTarget(createContentBox, { kind: "root", stepID: 0 });
+  window.addEventListener("dragend", resetComposerDropTargets);
+  window.addEventListener("drop", () => {
+    resetComposerDropTargets();
   });
 
   mediaList.addEventListener("click", (event) => {
