@@ -134,8 +134,11 @@ func TestAccessibilityMarkupAddsLabelsAndLandmarks(t *testing.T) {
 	if !strings.Contains(createBody, `for="date-picker-hour">' + pickerHour + '</label>`) || !strings.Contains(createBody, `for="date-picker-minute">' + pickerMinute + '</label>`) {
 		t.Fatalf("expected date picker selects to expose associated labels")
 	}
-	if !strings.Contains(createBody, ".composer-text-wrap textarea,") || !strings.Contains(createBody, ".date-picker-time select {") || !strings.Contains(createBody, "font-size: 16px;") {
+	if !strings.Contains(createBody, ".date-picker-time select {") || !strings.Contains(createBody, "font-size: 16px;") {
 		t.Fatalf("expected mobile form controls to force 16px font size to avoid iOS focus zoom")
+	}
+	if !strings.Contains(createBody, ".composer-text-wrap textarea,") && !strings.Contains(createBody, "#create-text,") {
+		t.Fatalf("expected create text area to be part of the iOS zoom avoidance rule")
 	}
 
 	settingsReq := httptest.NewRequest(http.MethodGet, "/?view=settings", nil)
@@ -207,20 +210,38 @@ func TestCreateViewIncludesComposerPreviewUploadAndNetworks(t *testing.T) {
 	if strings.Contains(body, "class=\"field create-field create-field-media\"") {
 		t.Fatalf("expected root media controls to live inside the root thread card, not in a detached media field")
 	}
-	if !strings.Contains(body, "id=\"create-root-media-summary\"") || !strings.Contains(body, "id=\"create-root-library-toggle\"") {
-		t.Fatalf("expected root thread card to expose integrated media summary and library toggle")
+	if !strings.Contains(body, "id=\"create-root-upload-button\"") {
+		t.Fatalf("expected root thread card to expose media picker trigger")
 	}
-	if !strings.Contains(body, "id=\"create-root-library-toggle\" aria-controls=\"create-root-media-browser\" aria-expanded=\"false\"") {
-		t.Fatalf("expected root media library toggle to start collapsed")
+	if !strings.Contains(body, "id=\"create-media-picker-modal\" hidden") || !strings.Contains(body, "id=\"create-media-picker-search\"") {
+		t.Fatalf("expected create view to render hidden media picker modal with search")
 	}
-	if !strings.Contains(body, "id=\"create-root-media-browser\" hidden") {
-		t.Fatalf("expected root media library browser to be hidden by default")
+		if !strings.Contains(body, "class=\"thread-composer\"") || !strings.Contains(body, "thread-step-add-row") {
+			t.Fatalf("expected create view to render the unified thread composer timeline")
+		}
+		if !strings.Contains(body, ".thread-step-card:focus-within") {
+			t.Fatalf("expected thread composer to highlight the focused step card")
+		}
+		if !strings.Contains(body, "// thread composer") {
+			t.Fatalf("expected thread composer label to match design copy")
+		}
+	if strings.Contains(body, "// post content") || strings.Contains(body, "No media attached to this step yet.") {
+		t.Fatalf("did not expect redundant composer helper copy inside the thread steps")
 	}
-	if !strings.Contains(body, "thread-builder-copy") || !strings.Contains(body, "data-thread-step-library-toggle") {
-		t.Fatalf("expected thread builder UI to expose per-step media controls")
+	if strings.Contains(body, "step #") || strings.Contains(body, "paso #") {
+		t.Fatalf("did not expect step title labels inside the thread composer")
+	}
+	if !strings.Contains(body, "thread-step-shell-root") || !strings.Contains(body, "data-thread-step-upload") {
+		t.Fatalf("expected thread composer UI to expose root and per-step media picker actions")
 	}
 	if strings.Contains(body, "thread-step-media-select") {
 		t.Fatalf("did not expect legacy thread media select dropdowns in create view")
+	}
+	if strings.Contains(body, "data-thread-step-library-toggle") {
+		t.Fatalf("did not expect inline thread library toggles once modal picker is enabled")
+	}
+	if strings.Contains(body, "composer-format-btns") {
+		t.Fatalf("did not expect markdown helper copy in thread composer")
 	}
 	if !strings.Contains(body, "id=\"create-scheduled-at\" type=\"datetime-local\" name=\"scheduled_at_local\" data-date-picker") {
 		t.Fatalf("expected create datetime input to use reusable date picker component")

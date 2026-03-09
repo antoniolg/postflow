@@ -100,14 +100,17 @@ func TestScheduleHTMLUsesBrowserLanguageWithEnglishFallback(t *testing.T) {
 	if wES.Code != http.StatusOK {
 		t.Fatalf("expected 200 for create view, got %d", wES.Code)
 	}
-	bodyES := wES.Body.String()
-	if !strings.Contains(bodyES, "<html lang=\"es\">") {
-		t.Fatalf("expected spanish html lang attribute from browser language")
-	}
-	if !strings.Contains(bodyES, "placeholder=\"Escribe tu publicacion...\"") {
-		t.Fatalf("expected spanish localized create placeholder")
-	}
-	reqESSettings := httptest.NewRequest(http.MethodGet, "/?view=settings", nil)
+		bodyES := wES.Body.String()
+		if !strings.Contains(bodyES, "<html lang=\"es\">") {
+			t.Fatalf("expected spanish html lang attribute from browser language")
+		}
+		if !strings.Contains(bodyES, "placeholder=\"Escribe tu publicación...\"") {
+			t.Fatalf("expected spanish localized create placeholder")
+		}
+		if !strings.Contains(bodyES, "// editor del hilo") {
+			t.Fatalf("expected spanish localized thread composer label")
+		}
+		reqESSettings := httptest.NewRequest(http.MethodGet, "/?view=settings", nil)
 	reqESSettings.Header.Set("Accept-Language", "es-ES,es;q=0.9,en;q=0.8")
 	wESSettings := httptest.NewRecorder()
 	h.ServeHTTP(wESSettings, reqESSettings)

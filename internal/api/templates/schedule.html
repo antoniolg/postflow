@@ -25,7 +25,7 @@
       --accent-orange: #ff6b35;
       --accent-teal: #00d4aa;
       --border: #2a2a2a;
-      --radius: 12px;
+      --radius: 16px;
     }
     @view-transition {
       navigation: auto;
@@ -88,7 +88,6 @@
     .sidebar {
       width: 220px;
       flex: 0 0 220px;
-      border-right: 1px solid #242424;
       padding: 24px 16px;
       background: #1a1a1a;
       display: flex;
@@ -125,7 +124,7 @@
       min-height: 0;
     }
     .nav-item {
-      border-radius: 16px;
+      border-radius: var(--radius);
       padding: 10px 16px;
       font-size: 13px;
       color: var(--text-secondary);
@@ -1797,7 +1796,7 @@
       border: 0;
       background: #2d2d2d;
       color: #d0d0d0;
-      border-radius: 16px;
+      border-radius: var(--radius);
       padding: 7px 12px;
       font-size: 12px;
       font-weight: 600;
@@ -1824,7 +1823,7 @@
     .empty {
       border: 1px dashed #343434;
       background: #202020;
-      border-radius: 16px;
+      border-radius: var(--radius);
       padding: 18px;
       font-size: 12px;
       color: var(--text-secondary);
@@ -1877,22 +1876,9 @@
       flex-direction: column;
       gap: 8px;
     }
-    .create-field-content .composer-text-wrap,
     .create-field-schedule .schedule-block {
       background: var(--bg-card, #212121);
-      border-radius: 12px;
-      padding: 20px;
-    }
-    .create-field-content .composer-text-wrap {
-      gap: 12px;
-      display: flex;
-      flex-direction: column;
-      min-height: clamp(320px, 46vh, 520px);
-    }
-    .create-field-content .composer-text-wrap .composer-label {
-      margin-bottom: 0;
-    }
-    .create-field-schedule .schedule-block {
+      border-radius: var(--radius);
       padding: 12px 14px;
       display: flex;
       align-items: center;
@@ -1900,132 +1886,100 @@
       gap: 10px;
       flex-wrap: wrap;
     }
-    .create-field-thread .thread-steps-block {
-      background: var(--bg-card, #212121);
-      border-radius: 12px;
-      padding: 14px;
+    .thread-composer {
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 18px;
     }
-    .thread-steps-head {
+    .thread-composer-head {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 10px;
+      gap: 12px;
     }
     .thread-steps-list {
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 0;
     }
-    .thread-step-card {
-      border: 1px solid #323232;
+    .thread-step-shell {
+      position: relative;
+      display: grid;
+      grid-template-columns: 32px minmax(0, 1fr);
+      gap: 0;
+      align-items: flex-start;
+    }
+    .thread-step-rail {
+      position: relative;
+      display: flex;
+      justify-content: center;
+      height: 100%;
+    }
+    .thread-step-rail::after {
+      content: "";
+      position: absolute;
+      top: 24px;
+      bottom: 0;
+      left: 50%;
+      width: 3px;
+      transform: translateX(-50%);
+      border-radius: 999px;
+      background: #2d2d2d;
+    }
+    .thread-step-shell-root .thread-step-rail::after,
+    .thread-steps-list .thread-step-shell:not(:last-child) .thread-step-rail::after {
+      bottom: -18px;
+    }
+    .thread-steps-list .thread-step-shell:not(:last-child) {
+      margin-bottom: 18px;
+    }
+    .thread-step-marker,
+    .thread-step-add {
+      position: relative;
+      z-index: 1;
+      width: 24px;
+      height: 24px;
       border-radius: 12px;
-      background: #252525;
-      padding: 10px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-    .thread-step-card-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-    }
-    .thread-step-title {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: #b5b5b5;
-    }
-    .thread-step-actions {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
+      justify-content: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0;
     }
-    .thread-step-actions button {
-      min-height: 28px;
-      min-width: 28px;
-      padding: 0 8px;
-      border-radius: 9px;
-      line-height: 1;
-      font-size: 12px;
-      background: #303030;
-      color: #d6d6d6;
+    .thread-step-marker {
+      background: var(--accent-orange);
+      color: #141414;
     }
-    .thread-step-actions button:hover:not(:disabled) {
-      background: #3c3c3c;
+    .thread-step-marker.is-hollow {
+      background: transparent;
+      color: var(--accent-orange);
+      box-shadow: inset 0 0 0 3px var(--accent-orange);
     }
-    .thread-step-text {
-      width: 100%;
-      min-height: 84px;
-      resize: vertical;
-      border-radius: 10px;
-      border: 1px solid #363636;
-      background: #1f1f1f;
-      color: #f4f4f4;
-      padding: 10px 11px;
-      font-size: 13px;
-      line-height: 1.4;
-    }
-    .thread-step-text:focus,
-    .thread-step-text:focus-visible {
-      outline: none;
-      border-color: var(--accent-orange);
-      box-shadow: 0 0 0 2px rgba(255, 107, 53, 0.18);
-    }
-    .thread-step-empty {
-      border: 1px dashed #353535;
-      border-radius: 10px;
-      background: #212121;
-      color: #8f8f8f;
-      font-size: 12px;
-      text-align: center;
-      padding: 12px;
-    }
-    .create-field-content .composer-text-wrap,
-    .create-field-thread .thread-steps-block {
-      background: var(--bg-card, #212121);
-      border: 1px solid #303030;
-      border-radius: 12px;
-      box-shadow: none;
-    }
-    .create-field-content .composer-text-wrap {
-      gap: 14px;
-      padding: 18px;
-      min-height: 0;
-    }
-    .create-field-thread .thread-steps-block {
-      padding: 18px;
-      gap: 16px;
-    }
-    .thread-builder-copy {
-      margin: 0;
-      max-width: 620px;
-      font-size: 12px;
-      line-height: 1.45;
-      color: #909090;
-    }
+    .thread-step-card-root,
     .thread-step-card {
-      position: relative;
-      border: 1px solid #323232;
-      border-radius: 12px;
-      background: #252525;
-      padding: 14px;
+      background: #212121;
+      border: 0;
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-left: 12px;
       display: flex;
       flex-direction: column;
       gap: 12px;
-      overflow: hidden;
+      min-height: 0;
     }
-    .thread-step-card::before {
-      content: none;
+    .thread-step-card-root.is-active,
+    .thread-step-card.is-active,
+    .thread-step-card-root:focus-within,
+    .thread-step-card:focus-within {
+      box-shadow: inset 0 0 0 1px var(--accent-orange);
     }
     .thread-step-card-head {
+      display: flex;
       align-items: flex-start;
-      gap: 12px;
+      justify-content: space-between;
+      gap: 14px;
     }
     .thread-step-heading {
       min-width: 0;
@@ -2034,130 +1988,187 @@
       gap: 4px;
     }
     .thread-step-title {
+      font-family: 'JetBrains Mono', monospace;
       font-size: 12px;
-      color: #f1f1f1;
+      text-transform: lowercase;
       letter-spacing: 0.08em;
+      color: #888888;
     }
-    .thread-step-kind {
-      display: inline-flex;
-      align-items: center;
-      align-self: flex-start;
-      min-height: 24px;
-      padding: 0 10px;
-      border-radius: 999px;
-      border: 1px solid rgba(255, 122, 0, 0.28);
-      background: rgba(255, 122, 0, 0.12);
-      color: #ffc49e;
-      font-size: 10px;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-    }
-    .thread-step-root-tag {
-      border-color: rgba(0, 212, 170, 0.28);
-      background: rgba(0, 212, 170, 0.12);
-      color: #9ff7e7;
-    }
-    #create-text,
-    .thread-step-text {
-      width: 100%;
-      min-height: 120px;
-      resize: vertical;
-      border-radius: 12px;
-      border: 1px solid #363636;
-      background: #1f1f1f;
-      color: #ffffff;
-      padding: 14px 16px;
-      box-sizing: border-box;
-      box-shadow: none;
-    }
-    #create-text {
-      min-height: clamp(220px, 30vh, 360px);
-    }
-    .composer-text-meta {
-      border-top: 1px solid #313131;
-      padding-top: 12px;
-    }
-    .thread-step-media-panel {
-      border-top: 1px solid #313131;
-      padding-top: 14px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-    .thread-step-media-toolbar {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 12px;
-      flex-wrap: wrap;
-    }
-    .thread-step-media-copy {
-      min-width: 0;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-    .thread-step-media-title {
-      font-size: 10px;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: #9b9b9b;
-    }
-    .thread-step-media-summary {
-      font-size: 12px;
-      color: #d5d5d5;
-      line-height: 1.35;
-    }
-    .thread-step-media-actions {
+    .thread-step-actions,
+    .thread-step-footer-actions {
       display: inline-flex;
       align-items: center;
       gap: 8px;
       flex-wrap: wrap;
     }
-    .thread-step-media-actions .btn-secondary {
-      min-height: 34px;
-      border-radius: 999px;
-      padding: 0 12px;
+    .thread-step-icon-btn {
+      width: 24px;
+      height: 24px;
+      border: 0;
+      border-radius: 12px;
+      background: transparent;
+      color: #7d7d7d;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      transition: color .12s ease, background .12s ease;
+    }
+    .thread-step-icon-btn:hover:not(:disabled) {
+      color: #f2f2f2;
+      background: transparent;
+    }
+    .thread-step-icon-btn:disabled {
+      opacity: 0.32;
+      cursor: not-allowed;
+    }
+    .thread-step-icon-btn svg {
+      width: 14px;
+      height: 14px;
+      display: block;
+    }
+    .thread-step-text-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      flex: 1 1 auto;
+    }
+    body[data-view="create"] .thread-step-card-root textarea,
+    body[data-view="create"] .thread-step-card textarea {
+      width: 100%;
+      min-height: 1.5em;
+      resize: none;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      color: #ffffff;
+      padding: 0;
+      margin: 0;
+      box-sizing: border-box;
+      box-shadow: none;
+      appearance: none;
+      -webkit-appearance: none;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 400;
+      letter-spacing: 0;
+      font-size: 12px;
+      line-height: 1.5;
+      display: block;
+    }
+    #create-text,
+    .thread-step-text {
+      overflow: hidden;
+    }
+    #create-text::placeholder,
+    .thread-step-text::placeholder {
+      color: #727272;
+    }
+    .thread-step-text:focus,
+    .thread-step-text:focus-visible,
+    #create-text:focus,
+    #create-text:focus-visible {
+      outline: none;
+      box-shadow: none;
+    }
+    .thread-step-media-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
     }
     .thread-step-media-list {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
-      gap: 10px;
+      grid-template-columns: repeat(auto-fill, minmax(76px, 76px));
+      gap: 8px;
+      align-content: flex-start;
     }
     .thread-step-media-list[hidden],
-    .thread-step-media-browser[hidden],
     .thread-step-media-empty[hidden] {
       display: none;
     }
     .thread-step-media-list .media-item {
-      aspect-ratio: 4 / 3;
+      aspect-ratio: 1 / 1;
       border-radius: 12px;
     }
     .thread-step-media-empty {
-      border: 1px dashed #393939;
-      border-radius: 12px;
-      background: #212121;
-      color: #8f8f8f;
+      color: #7f7f7f;
       font-size: 12px;
-      padding: 14px;
-      text-align: center;
+      line-height: 1.5;
     }
-    .thread-step-media-browser {
+    .thread-step-footer {
+      margin-top: auto;
+      padding-top: 0;
       display: flex;
-      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
       gap: 10px;
+      flex-wrap: wrap;
     }
-    .thread-step-media-grid {
+    .thread-step-empty {
+      color: #7d7d7d;
+      font-size: 12px;
+      padding: 6px 0 0 114px;
+    }
+    .thread-step-add-row {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(126px, 1fr));
-      gap: 10px;
-      max-height: 280px;
-      overflow: auto;
-      padding-right: 2px;
+      grid-template-columns: 32px minmax(0, 1fr);
+      gap: 0;
+      align-items: center;
+    }
+    .thread-step-add-rail {
+      display: flex;
+      justify-content: center;
+    }
+    .thread-step-add {
+      border: 0;
+      background: rgba(255, 255, 255, 0.05);
+      color: #7c7c7c;
+      cursor: pointer;
+      transition: color .12s ease, background .12s ease;
+    }
+    .thread-step-add:hover {
+      color: #ffffff;
+      background: rgba(255, 255, 255, 0.08);
+    }
+    .thread-step-add-copy {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: #7c7c7c;
+      letter-spacing: 0.08em;
+      text-transform: lowercase;
+      padding-left: 12px;
     }
     .create-media-card.selected {
       border-color: rgba(0, 212, 170, 0.55);
       box-shadow: inset 0 0 0 1px rgba(0, 212, 170, 0.22);
+    }
+    .create-media-card.selected::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      box-shadow: inset 0 0 0 3px var(--accent-orange);
+      pointer-events: none;
+    }
+    .create-media-card-check {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 3;
+      width: 34px;
+      height: 34px;
+      border-radius: 999px;
+      background: var(--accent-orange);
+      color: #111111;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.28);
+      pointer-events: none;
+    }
+    .create-media-card-check svg {
+      width: 18px;
+      height: 18px;
+      display: block;
     }
     .create-media-card-footer {
       position: absolute;
@@ -2200,7 +2211,7 @@
       border: 0;
       background: var(--bg-card, #212121);
       color: var(--text-secondary);
-      border-radius: 12px;
+      border-radius: var(--radius);
       width: 42px;
       height: 42px;
       padding: 0;
@@ -2250,56 +2261,37 @@
       opacity: 1;
       cursor: not-allowed;
     }
-    .composer-text-wrap {
-      border: 0;
-      border-radius: 12px;
-      background: transparent;
-      overflow: hidden;
-    }
-    .composer-text-wrap textarea {
-      border: 0;
-      border-radius: 0;
-      background: transparent;
-      width: 100%;
-      min-height: clamp(250px, 34vh, 420px);
-      resize: vertical;
-      display: block;
-      color: #ffffff;
-      padding: 0;
-    }
-    .composer-text-wrap textarea:focus,
-    .composer-text-wrap textarea:focus-visible {
-      outline: none;
-      box-shadow: none;
-    }
     .composer-text-meta {
-      border-top: 1px solid #2f2f2f;
-      padding: 10px 0 0;
       display: flex;
-      justify-content: space-between;
-      gap: 8px;
-      align-items: flex-start;
-      color: #a8a8a8;
-      font-size: 11px;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+      min-width: 0;
     }
     .char-count-list {
       display: flex;
-      flex-direction: column;
-      gap: 2px;
+      flex-direction: row;
+      flex-wrap: wrap;
+      gap: 14px;
+      align-items: center;
     }
     .char-count-line {
       display: inline-flex;
       align-items: center;
       gap: 6px;
       line-height: 1.25;
+      color: var(--accent-orange);
+      font-family: 'JetBrains Mono', monospace;
+      white-space: nowrap;
+      font-size: 10px;
     }
     .char-platform-icon {
-      width: 14px;
-      height: 14px;
+      width: 10px;
+      height: 10px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      color: #d7d7d7;
+      color: inherit;
       flex: 0 0 auto;
     }
     .char-platform-icon svg {
@@ -2311,15 +2303,10 @@
       display: inline-flex;
       align-items: center;
       min-width: 0;
+      color: inherit;
     }
     .char-over {
       color: var(--accent-orange);
-    }
-    .composer-format-btns {
-      display: flex;
-      gap: 8px;
-      font-size: 12px;
-      color: var(--text-secondary);
     }
     .media-upload-dropzone {
       border: 1px dashed #3a3a3a;
@@ -2457,6 +2444,160 @@
       grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
       gap: 10px;
       max-height: 320px;
+    }
+    .media-picker-modal[hidden] {
+      display: none;
+    }
+    .media-picker-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 90;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 28px;
+      background: rgba(8, 8, 8, 0.78);
+      backdrop-filter: blur(10px);
+    }
+    .media-picker-dialog {
+      width: min(920px, 100%);
+      max-height: min(860px, calc(100vh - 56px));
+      overflow: hidden;
+      border-radius: 34px;
+      background: #1d1d1d;
+      box-shadow: 0 28px 70px rgba(0, 0, 0, 0.42);
+      display: flex;
+      flex-direction: column;
+    }
+    .media-picker-head {
+      padding: 34px 40px 22px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .media-picker-close {
+      width: 42px;
+      height: 42px;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: #8a8a8a;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+    }
+    .media-picker-close:hover {
+      color: #f2f2f2;
+      background: rgba(255, 255, 255, 0.05);
+    }
+    .media-picker-close svg {
+      width: 22px;
+      height: 22px;
+      display: block;
+    }
+    .media-picker-body {
+      padding: 0 40px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 22px;
+      overflow: auto;
+    }
+    .media-picker-search {
+      position: relative;
+    }
+    .media-picker-search svg {
+      position: absolute;
+      left: 18px;
+      top: 50%;
+      width: 24px;
+      height: 24px;
+      transform: translateY(-50%);
+      color: #7f7f7f;
+      pointer-events: none;
+    }
+    .media-picker-search input {
+      width: 100%;
+      min-height: 76px;
+      border: 0;
+      border-radius: 22px;
+      background: #2a2a2a;
+      color: #f3f3f3;
+      padding: 0 24px 0 58px;
+      font-size: 24px;
+      line-height: 1.2;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .media-picker-search input::placeholder {
+      color: #787878;
+    }
+    .media-picker-search input:focus,
+    .media-picker-search input:focus-visible {
+      outline: none;
+      box-shadow: inset 0 0 0 2px rgba(255, 122, 0, 0.6);
+    }
+    .media-picker-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+    }
+    .media-picker-grid .create-media-card {
+      min-height: 194px;
+      border-radius: 22px;
+    }
+    .media-picker-grid .create-media-card .media-library-thumb {
+      aspect-ratio: 1 / 1;
+    }
+    .media-picker-footer {
+      margin-top: auto;
+      padding: 26px 40px 34px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 18px;
+      flex-wrap: wrap;
+    }
+    .media-picker-upload {
+      flex: 1 1 360px;
+    }
+    .media-picker-upload .media-upload-dropzone {
+      min-height: 94px;
+      border-radius: 20px;
+      background: transparent;
+    }
+    .media-picker-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      align-items: flex-start;
+    }
+    .media-picker-selection-count {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 14px;
+      color: var(--accent-orange);
+      letter-spacing: 0.04em;
+      text-transform: lowercase;
+    }
+    .media-picker-attach {
+      min-width: 158px;
+      min-height: 68px;
+      border-radius: 20px;
+      padding: 0 28px;
+      font-size: 22px;
+    }
+    .media-picker-empty {
+      border-radius: 24px;
+      background: #232323;
+      min-height: 220px;
+      display: grid;
+      place-items: center;
+      color: #7b7b7b;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 18px;
+      text-align: center;
+      padding: 24px;
     }
     .create-media-card {
       position: relative;
@@ -2933,88 +3074,91 @@
     }
     .preview-card {
       border: 0;
-      border-radius: 12px;
-      background: var(--bg-card, #212121);
+      border-radius: var(--radius);
+      background: #212121;
       padding: 16px;
       flex: 1;
       display: flex;
       flex-direction: column;
-      gap: 14px;
-    }
-    .preview-author {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 0;
+      gap: 0;
     }
     .preview-avatar {
-      width: 30px;
-      height: 30px;
+      width: 28px;
+      height: 28px;
       border-radius: 999px;
-      background: #2d2d2d;
-      color: #cfcfcf;
+      background: #303030;
+      color: transparent;
       display: grid;
       place-items: center;
       font-weight: 700;
       font-size: 12px;
-    }
-    .preview-name {
-      font-size: 12px;
-      color: #ffffff;
-      font-weight: 700;
-    }
-    .preview-handle {
-      font-size: 11px;
-      color: #a8a8a8;
+      flex: 0 0 auto;
     }
     .preview-thread {
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 0;
       min-height: 0;
     }
     .preview-step {
       display: grid;
-      grid-template-columns: 16px minmax(0, 1fr);
+      grid-template-columns: 32px minmax(0, 1fr);
       gap: 10px;
-      align-items: stretch;
+      align-items: flex-start;
+    }
+    .preview-step:last-child .preview-step-line {
+      visibility: hidden;
     }
     .preview-step-rail {
+      position: relative;
       display: flex;
       flex-direction: column;
       align-items: center;
       min-height: 100%;
-      padding-top: 6px;
+      padding-top: 4px;
     }
     .preview-step-dot {
-      width: 6px;
-      height: 6px;
+      width: 28px;
+      height: 28px;
       border-radius: 999px;
-      background: #7b7b7b;
+      background: #303030;
       flex: 0 0 auto;
-    }
-    .preview-step-root .preview-step-dot {
-      background: var(--accent-orange);
     }
     .preview-step-line {
       width: 2px;
       flex: 1 1 auto;
-      margin-top: 6px;
-      background: #343434;
-      min-height: 34px;
-    }
-    .preview-step:last-child .preview-step-line {
-      visibility: hidden;
+      margin-top: 0;
+      min-height: 36px;
+      background: #2d2d2d;
+      border-radius: 999px;
     }
     .preview-step-card {
       display: flex;
       flex-direction: column;
       gap: 8px;
       min-width: 0;
+      padding: 0 0 12px;
+    }
+    .preview-step-head {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .preview-name {
+      font-size: 12px;
+      color: #ffffff;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+    .preview-handle {
+      font-size: 11px;
+      color: #868686;
+      letter-spacing: -0.01em;
     }
     .preview-step-text {
-      font-size: 13px;
-      line-height: 1.45;
+      font-size: 11px;
+      line-height: 1.4;
       color: #ffffff;
       white-space: pre-wrap;
       word-break: break-word;
@@ -3039,9 +3183,6 @@
       display: grid;
       place-items: center;
     }
-    .preview-step-followup .preview-step-media {
-      min-height: 96px;
-    }
     .preview-step-media img {
       width: 100%;
       height: 100%;
@@ -3055,15 +3196,33 @@
       display: block;
     }
     .preview-step-media-fallback {
-      font-size: 12px;
+      font-size: 13px;
       color: #a8a8a8;
       padding: 14px;
       text-align: center;
     }
-    .preview-footer {
-      margin-top: 2px;
-      font-size: 11px;
-      color: #a8a8a8;
+    .preview-step-actions {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      color: #7f7f7f;
+      padding-top: 2px;
+    }
+    .preview-step-action {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      color: inherit;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .preview-step-action svg {
+      width: 12px;
+      height: 12px;
+      display: block;
+    }
+    .preview-step-last .preview-step-text {
+      opacity: 0.6;
     }
     .composer-submit-actions {
       justify-content: flex-end;
@@ -3079,7 +3238,6 @@
         overflow: visible;
         border-right: 0;
         border-bottom: 0;
-        border-top: 1px solid #242424;
         padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
         position: fixed;
         left: 0;
@@ -3483,11 +3641,23 @@
         gap: 12px;
       }
       .preview-step {
-        grid-template-columns: 18px minmax(0, 1fr);
+        grid-template-columns: 32px minmax(0, 1fr);
         gap: 10px;
       }
+      .preview-card {
+        border-radius: 16px;
+        padding: 16px;
+      }
+      .preview-step-dot,
+      .preview-avatar {
+        width: 28px;
+        height: 28px;
+      }
+      .preview-step-line {
+        min-height: 36px;
+      }
       .preview-step-card {
-        padding: 0;
+        padding: 0 0 12px;
       }
       .composer-submit-actions {
         display: flex;
@@ -3514,14 +3684,10 @@
         font-size: 11px;
         padding: 0 8px;
       }
-      .create-field-content .composer-text-wrap,
-      .create-field-thread .thread-steps-block {
-        padding: 14px;
-      }
       .field textarea,
       .field input[type=text],
       .field select,
-      .composer-text-wrap textarea,
+      #create-text,
       .thread-step-text,
       .date-picker-time select {
         font-size: 16px;
@@ -3529,11 +3695,25 @@
       .create-field-schedule .schedule-block {
         padding: 10px 12px;
       }
-      .thread-step-card {
-        padding: 9px;
+      .thread-step-shell,
+      .thread-step-add-row {
+        grid-template-columns: 32px minmax(0, 1fr);
+        gap: 0;
       }
-      .thread-step-text {
-        min-height: 72px;
+      .thread-step-card-root,
+      .thread-step-card {
+        border-radius: var(--radius);
+        padding: 14px;
+        margin-left: 10px;
+      }
+      .thread-step-rail::after {
+        top: 24px;
+      }
+      .thread-step-marker,
+      .thread-step-add {
+        width: 24px;
+        height: 24px;
+        font-size: 11px;
       }
     }
     @media (max-width: 520px) {
@@ -4370,76 +4550,38 @@
 	              </div>
 
               <div class="field create-field create-field-content">
-                <div class="composer-text-wrap thread-step-card thread-step-card-root">
-                  <div class="thread-step-card-head">
-                    <div class="thread-step-heading">
-                      <span class="thread-step-title">{{t "create.root_step_title"}}</span>
-                      <span class="thread-step-kind thread-step-root-tag">{{t "create.root_step"}}</span>
-                    </div>
-                  </div>
-	                  <div class="composer-label">// {{t "create.post_content"}}</div>
-	                  <textarea id="create-text" name="text" required placeholder="{{t "create.placeholder"}}">{{.CreateText}}</textarea>
-	                  <div class="composer-text-meta">
-	                    <div id="create-char-count" class="char-count-list" role="status" aria-live="polite" aria-atomic="true"><span class="char-count-line">{{t "create.char_count_initial"}}</span></div>
-	                    <span class="composer-format-btns">**bold** *italic*</span>
-	                  </div>
-                  <div class="thread-step-media-panel">
-                    <div class="thread-step-media-toolbar">
-                      <div class="thread-step-media-copy">
-                        <span class="thread-step-media-title">// {{t "create.media_attachment_max" 4}}</span>
-                        <span class="thread-step-media-summary" id="create-root-media-summary"></span>
-                      </div>
-                      <div class="thread-step-media-actions">
-                        <button type="button" class="btn-secondary" id="create-root-upload-button">{{t "create.add_media"}}</button>
-                        <button type="button" class="btn-secondary" id="create-root-library-toggle" aria-controls="create-root-media-browser" aria-expanded="false">{{t "create.step_library_open"}}</button>
-                      </div>
-                    </div>
-                    <div class="media-list thread-step-media-list" id="create-media-list"></div>
-                    <div class="thread-step-media-empty" id="create-root-media-empty">{{t "create.step_media_empty"}}</div>
-                    <div class="thread-step-media-browser" id="create-root-media-browser" hidden>
-	                    <div class="media-upload-dropzone" id="create-media-dropzone" role="button" tabindex="0" aria-label="{{t "create.add_media"}}">
-	                      <input id="create-media-input" type="file" accept="image/*,video/*" multiple hidden />
-	                      <span class="media-upload-title">{{t "create.drop_media_here"}}</span>
-	                    </div>
-	                    <div class="media-library-wrap">
-	                      <div class="composer-label">// {{t "create.recent_library"}}</div>
-                      <div class="media-library create-media-library-grid" id="create-media-library">
-                        {{range .CreateRecentMedia}}
-                        <article class="create-media-card {{if .InUse}}in-use{{end}}" data-media-library-item data-media-id="{{.ID}}" data-media-name="{{.OriginalName}}" data-media-size="{{.SizeBytes}}" data-media-mime="{{.MimeType}}" data-media-preview="{{.PreviewURL}}" role="button" tabindex="0" aria-pressed="false" aria-label="{{.OriginalName}}">
-                          <div class="media-library-thumb">
-                            {{if .IsImage}}<img src="{{.PreviewURL}}" alt="{{.OriginalName}}" loading="lazy" />{{else if .IsVideo}}<video src="{{.PreviewURL}}" muted preload="metadata" playsinline></video><span class="settings-media-video-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="8 6 19 12 8 18"/></svg></span>{{else}}<span class="settings-media-file-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg></span>{{end}}
-                          </div>
-                          <div class="create-media-overlay-actions">
-	                            <button type="button" class="btn-secondary settings-account-icon-btn create-media-icon-btn" data-media-open="{{.ID}}" aria-label="{{t "settings.open_media"}}" title="{{t "settings.open_media"}}">
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>
-                            </button>
-                            {{if .InUse}}
-	                            <span class="pill media-pill-used">{{t "common.used_count" .UsageCount}}</span>
-                            {{end}}
-                          </div>
-                          <div class="create-media-card-footer">
-                            <span class="create-media-card-name">{{.OriginalName}}</span>
-                            <span class="create-media-card-meta">{{if .IsVideo}}video{{else if .IsImage}}image{{else}}file{{end}}</span>
-                          </div>
-                        </article>
-                        {{else}}
-	                        <div class="empty">{{t "create.no_media_uploaded"}}</div>
-                        {{end}}
-                      </div>
-                    </div>
-                  </div>
-                  <span class="upload-notice" id="create-upload-notice"></span>
-                </div>
-              </div>
-
-              <div class="field create-field create-field-thread">
-                <div class="thread-steps-block">
-                  <div class="thread-steps-head">
+                <div class="thread-composer">
+                  <div class="thread-composer-head">
                     <div class="composer-label">// {{t "create.thread_steps"}}</div>
-                    <button type="button" class="btn-secondary" id="create-add-thread-step">{{t "create.add_step"}}</button>
                   </div>
-                  <p class="thread-builder-copy">{{t "create.thread_builder_hint"}}</p>
+                  <article class="thread-step-shell thread-step-shell-root">
+                    <div class="thread-step-rail" aria-hidden="true">
+                      <span class="thread-step-marker">1</span>
+                    </div>
+                    <div class="thread-step-card-root" id="create-root-step-card">
+                      <div class="thread-step-text-wrap">
+                        <textarea id="create-text" name="text" rows="1" required placeholder="{{t "create.placeholder"}}">{{.CreateText}}</textarea>
+                      </div>
+                      <div class="thread-step-media-panel">
+                        <div class="media-list thread-step-media-list" id="create-media-list"></div>
+                      <div class="thread-step-footer">
+                        <div id="create-char-count" class="char-count-list" role="status" aria-live="polite" aria-atomic="true"><span class="char-count-line">{{t "create.char_count_initial"}}</span></div>
+                        <div class="thread-step-footer-actions">
+                          <button type="button" class="thread-step-icon-btn" id="create-root-upload-button" aria-label="{{t "create.add_media"}}" title="{{t "create.add_media"}}">
+                            <svg data-lucide="image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="m21 15-5-5L5 21"></path></svg>
+                          </button>
+                        </div>
+                      </div>
+                      <span class="upload-notice" id="create-upload-notice"></span>
+                    </div>
+                  </article>
                   <div class="thread-steps-list" id="create-thread-steps-list"></div>
+                  <div class="thread-step-add-row">
+                    <div class="thread-step-add-rail">
+                      <button type="button" class="thread-step-add" id="create-add-thread-step" aria-label="{{t "create.add_step"}}" title="{{t "create.add_step"}}">+</button>
+                    </div>
+                    <div class="thread-step-add-copy">// {{t "create.add_step"}}</div>
+                  </div>
                 </div>
               </div>
 
@@ -4459,20 +4601,13 @@
           </section>
         </section>
 
-	        <aside class="preview-panel" aria-label="{{t "aria.live_preview"}}">
-	          <div class="preview-body">
-	            <div class="preview-head">
-	              <div class="preview-title">// {{t "create.live_preview"}}</div>
-	            </div>
-	            <article class="preview-card">
-	              <div class="preview-author">
-                <div class="preview-avatar">pf</div>
-                <div>
-                  <div class="preview-name">PostFlow</div>
-                  <div class="preview-handle">@postflow_app</div>
-                </div>
-              </div>
-                <div class="preview-thread" id="preview-thread">
+		        <aside class="preview-panel" aria-label="{{t "aria.live_preview"}}">
+		          <div class="preview-body">
+		            <div class="preview-head">
+		              <div class="preview-title">// {{t "create.live_preview"}}</div>
+		            </div>
+		            <article class="preview-card">
+	                <div class="preview-thread" id="preview-thread">
                   {{range $index, $segment := .CreateInitialSegments}}
                   {{$text := trim $segment.Text}}
                   <article class="preview-step {{if eq $index 0}}preview-step-root{{else}}preview-step-followup{{end}}">
@@ -4481,6 +4616,10 @@
                       <span class="preview-step-line"></span>
                     </div>
                     <div class="preview-step-card">
+                      <div class="preview-step-head">
+                        <span class="preview-name">post_flow</span>
+                        <span class="preview-handle">@postflow_app</span>
+                      </div>
                       <div class="preview-step-text {{if eq $text ""}}is-empty{{end}}">
                         {{if ne $text ""}}{{previewMarkdown $text}}{{else if eq $index 0}}{{t "create.preview_default"}}{{else}}{{t "create.preview_empty_step"}}{{end}}
                       </div>
@@ -4497,14 +4636,77 @@
                         {{end}}
                       </div>
                       {{end}}
+                      {{if gt $index 0}}
+                      <div class="preview-step-actions" aria-hidden="true">
+                        <span class="preview-step-action"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="m20.8 4.6-.1-.1a5.5 5.5 0 0 0-7.8 0L12 5.4l-.9-.9a5.5 5.5 0 0 0-7.8 7.8l.9.9L12 21l7.8-7.8.1-.1a5.5 5.5 0 0 0 0-7.8z"></path></svg><span>0</span></span>
+                        <span class="preview-step-action"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M17 1l4 4-4 4"></path><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><path d="M7 23l-4-4 4-4"></path><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg><span>0</span></span>
+                        <span class="preview-step-action"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"></path></svg><span>0</span></span>
+                      </div>
+                      {{end}}
                     </div>
                   </article>
                   {{end}}
 	                </div>
-	              <div class="preview-footer">{{t "create.just_now"}}</div>
-	            </article>
-	          </div>
-	        </aside>
+		            </article>
+		          </div>
+		        </aside>
+      </div>
+
+      <div class="media-picker-modal" id="create-media-picker-modal" hidden>
+        <div class="media-picker-dialog" role="dialog" aria-modal="true" aria-labelledby="create-media-picker-title">
+          <div class="media-picker-head">
+            <div class="thread-step-heading">
+              <span class="thread-step-title" id="create-media-picker-title">// media library</span>
+            </div>
+            <button type="button" class="media-picker-close" id="create-media-picker-close" aria-label="{{t "create.media_picker_close"}}">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+          </div>
+          <div class="media-picker-body">
+            <div class="media-picker-search">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+              <input id="create-media-picker-search" type="search" placeholder="{{t "create.media_picker_search"}}" autocomplete="off" />
+            </div>
+            <div class="media-library-wrap">
+              <div class="composer-label">// {{t "create.recent_library"}}</div>
+              <div class="media-picker-grid" id="create-media-library">
+                {{range .CreateRecentMedia}}
+                <article class="create-media-card {{if .InUse}}in-use{{end}}" data-media-library-item data-media-id="{{.ID}}" data-media-name="{{.OriginalName}}" data-media-size="{{.SizeBytes}}" data-media-mime="{{.MimeType}}" data-media-preview="{{.PreviewURL}}" role="button" tabindex="0" aria-pressed="false" aria-label="{{.OriginalName}}">
+                  <div class="media-library-thumb">
+                    {{if .IsImage}}<img src="{{.PreviewURL}}" alt="{{.OriginalName}}" loading="lazy" />{{else if .IsVideo}}<video src="{{.PreviewURL}}" muted preload="metadata" playsinline></video><span class="settings-media-video-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="8 6 19 12 8 18"/></svg></span>{{else}}<span class="settings-media-file-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg></span>{{end}}
+                  </div>
+                  <div class="create-media-overlay-actions">
+	                    <button type="button" class="btn-secondary settings-account-icon-btn create-media-icon-btn" data-media-open="{{.ID}}" aria-label="{{t "settings.open_media"}}" title="{{t "settings.open_media"}}">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </button>
+                    {{if .InUse}}
+	                    <span class="pill media-pill-used">{{t "common.used_count" .UsageCount}}</span>
+                    {{end}}
+                  </div>
+                  <div class="create-media-card-footer">
+                    <span class="create-media-card-name">{{.OriginalName}}</span>
+                    <span class="create-media-card-meta">{{if .IsVideo}}video{{else if .IsImage}}image{{else}}file{{end}}</span>
+                  </div>
+                </article>
+                {{else}}
+	                <div class="media-picker-empty">{{t "create.no_media_uploaded"}}</div>
+                {{end}}
+              </div>
+            </div>
+          </div>
+          <div class="media-picker-footer">
+            <div class="media-picker-upload">
+              <div class="media-upload-dropzone" id="create-media-dropzone" role="button" tabindex="0" aria-label="{{t "create.add_media"}}">
+                <input id="create-media-input" type="file" accept="image/*,video/*" multiple hidden />
+                <span class="media-upload-title">{{t "create.drop_media_here"}}</span>
+              </div>
+            </div>
+            <div class="media-picker-meta">
+              <span class="media-picker-selection-count" id="create-media-picker-selection">// {{ti "create.media_picker_selected" 0}}</span>
+              <button type="button" class="btn-primary media-picker-attach" id="create-media-picker-attach">{{t "create.media_picker_attach"}}</button>
+            </div>
+          </div>
+        </div>
       </div>
       {{end}}
 
@@ -5531,14 +5733,15 @@
   const mediaDropzone = document.getElementById("create-media-dropzone");
   const mediaList = document.getElementById("create-media-list");
   const mediaLibrary = document.getElementById("create-media-library");
-  const rootMediaSummary = document.getElementById("create-root-media-summary");
-  const rootMediaEmpty = document.getElementById("create-root-media-empty");
-  const rootMediaBrowser = document.getElementById("create-root-media-browser");
   const rootUploadButton = document.getElementById("create-root-upload-button");
-  const rootLibraryToggle = document.getElementById("create-root-library-toggle");
+  const mediaPickerModal = document.getElementById("create-media-picker-modal");
+  const mediaPickerClose = document.getElementById("create-media-picker-close");
+  const mediaPickerAttach = document.getElementById("create-media-picker-attach");
+  const mediaPickerSelection = document.getElementById("create-media-picker-selection");
+  const mediaPickerSearch = document.getElementById("create-media-picker-search");
   const mediaHidden = document.getElementById("create-media-hidden");
   const uploadNotice = document.getElementById("create-upload-notice");
-  const createContentBox = form.querySelector(".create-field-content .composer-text-wrap");
+  const createContentBox = document.getElementById("create-root-step-card");
   const previewBodyWrap = document.querySelector(".preview-body");
   const createMobileQuery = window.matchMedia("(max-width: 980px)");
 
@@ -5547,11 +5750,12 @@
       !(mediaInput instanceof HTMLInputElement) ||
       !(mediaDropzone instanceof HTMLElement) ||
       !(mediaList instanceof HTMLElement) ||
-      !(rootMediaSummary instanceof HTMLElement) ||
-      !(rootMediaEmpty instanceof HTMLElement) ||
-      !(rootMediaBrowser instanceof HTMLElement) ||
       !(rootUploadButton instanceof HTMLButtonElement) ||
-      !(rootLibraryToggle instanceof HTMLButtonElement) ||
+      !(mediaPickerModal instanceof HTMLElement) ||
+      !(mediaPickerClose instanceof HTMLButtonElement) ||
+      !(mediaPickerAttach instanceof HTMLButtonElement) ||
+      !(mediaPickerSelection instanceof HTMLElement) ||
+      !(mediaPickerSearch instanceof HTMLInputElement) ||
       !(mediaHidden instanceof HTMLElement) ||
       !(uploadNotice instanceof HTMLElement) ||
       !(previewThread instanceof HTMLElement) ||
@@ -5635,8 +5839,7 @@
       followupSteps.push({
         id: nextFollowupStepID++,
         text: String(segment?.text || ""),
-        mediaIDs,
-        libraryOpen: false
+        mediaIDs
       });
     });
   }
@@ -5668,21 +5871,15 @@
     selectNetwork: {{toJSON (t "create.select_network")}},
     addMedia: {{toJSON (t "create.add_media")}},
     addStep: {{toJSON (t "create.add_step")}},
-    stepTitle: {{toJSON (t "create.step_title")}},
     removeStep: {{toJSON (t "create.remove_step")}},
     moveStepUp: {{toJSON (t "create.move_step_up")}},
     moveStepDown: {{toJSON (t "create.move_step_down")}},
     stepPlaceholder: {{toJSON (t "create.step_placeholder")}},
-    rootStep: {{toJSON (t "create.root_step")}},
-    mediaAttachmentMax: {{toJSON (t "create.media_attachment_max" 4)}},
     recentLibrary: {{toJSON (t "create.recent_library")}},
-    stepMediaEmpty: {{toJSON (t "create.step_media_empty")}},
     stepMediaCount: {{toJSON (t "create.step_media_count")}},
     mediaPreview: {{toJSON (t "create.media_preview")}},
-    stepLibraryOpen: {{toJSON (t "create.step_library_open")}},
-    stepLibraryClose: {{toJSON (t "create.step_library_close")}},
     noMediaUploaded: {{toJSON (t "create.no_media_uploaded")}},
-    noFollowupSteps: {{toJSON (t "create.no_followup_steps")}}
+    selectedCount: {{toJSON (t "create.media_picker_selected")}}
   };
   const networkSelectionStorageKey = "postflow.create.selected_account_ids";
   const isEditingPost = (form.dataset.editingPost || "").trim() === "1";
@@ -5998,10 +6195,12 @@
     return out;
   };
 
-  const updateCharCount = () => {
-    const count = textInput.value.length;
+  const renderCharCountLines = (container, count) => {
+    if (!(container instanceof HTMLElement)) {
+      return;
+    }
     const rules = selectedPlatformRules();
-    charCount.innerHTML = "";
+    container.innerHTML = "";
     if (rules.length > 0) {
       let hasOverLimit = false;
       rules.forEach((rule) => {
@@ -6014,17 +6213,38 @@
           hasOverLimit = true;
           line.classList.add("char-over");
         }
-        charCount.appendChild(line);
+        container.appendChild(line);
       });
-      charCount.classList.toggle("char-over", hasOverLimit);
+      container.classList.toggle("char-over", hasOverLimit);
       return;
     }
     const fallback = document.createElement("span");
     fallback.className = "char-count-line";
     fallback.setAttribute("aria-label", formatTemplate(i18n.charsAriaUnknown, count));
     fallback.textContent = formatTemplate(i18n.charsUnknown, count);
-    charCount.appendChild(fallback);
-    charCount.classList.remove("char-over");
+    container.appendChild(fallback);
+    container.classList.remove("char-over");
+  };
+
+  const updateCharCount = () => {
+    renderCharCountLines(charCount, textInput.value.length);
+  };
+
+  const autoResizeTextarea = (textarea) => {
+    if (!(textarea instanceof HTMLTextAreaElement)) {
+      return;
+    }
+    textarea.style.height = "0px";
+    const lineHeight = Number.parseFloat(window.getComputedStyle(textarea).lineHeight) || 0;
+    const minHeight = Math.max(18, Math.ceil(lineHeight));
+    textarea.style.height = Math.max(textarea.scrollHeight, minHeight) + "px";
+  };
+
+  const syncComposerTextareaHeights = () => {
+    autoResizeTextarea(textInput);
+    threadStepsList.querySelectorAll(".thread-step-text").forEach((node) => {
+      autoResizeTextarea(node);
+    });
   };
 
   const previewSegmentsData = () => {
@@ -6082,6 +6302,17 @@
     return wrapper;
   };
 
+  const buildPreviewActionsNode = (showCounts) => {
+    const actions = document.createElement("div");
+    actions.className = "preview-step-actions";
+    actions.setAttribute("aria-hidden", "true");
+    actions.innerHTML =
+      '<span class="preview-step-action"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="m20.8 4.6-.1-.1a5.5 5.5 0 0 0-7.8 0L12 5.4l-.9-.9a5.5 5.5 0 0 0-7.8 7.8l.9.9L12 21l7.8-7.8.1-.1a5.5 5.5 0 0 0 0-7.8z"></path></svg>' + (showCounts ? '<span>0</span>' : '') + '</span>' +
+      '<span class="preview-step-action"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M17 1l4 4-4 4"></path><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><path d="M7 23l-4-4 4-4"></path><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>' + (showCounts ? '<span>0</span>' : '') + '</span>' +
+      '<span class="preview-step-action"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"></path></svg>' + (showCounts ? '<span>0</span>' : '') + '</span>';
+    return actions;
+  };
+
   const renderPreviewThread = () => {
     const segments = previewSegmentsData();
     previewThread.innerHTML = "";
@@ -6089,6 +6320,9 @@
     segments.forEach((segment, index) => {
       const article = document.createElement("article");
       article.className = "preview-step " + (index === 0 ? "preview-step-root" : "preview-step-followup");
+      if (index === segments.length - 1) {
+        article.classList.add("preview-step-last");
+      }
 
       const rail = document.createElement("div");
       rail.className = "preview-step-rail";
@@ -6104,6 +6338,10 @@
       const card = document.createElement("div");
       card.className = "preview-step-card";
 
+      const head = document.createElement("div");
+      head.className = "preview-step-head";
+      head.innerHTML = '<span class="preview-name">post_flow</span><span class="preview-handle">@postflow_app</span>';
+
       const mediaItems = Array.isArray(segment.media) ? segment.media : [];
 
       const textNode = document.createElement("div");
@@ -6116,11 +6354,16 @@
         textNode.innerHTML = markdownToPreviewHTML(rawText);
       }
 
+      card.appendChild(head);
       card.appendChild(textNode);
 
       const mediaNode = buildPreviewMediaNode(mediaItems);
       if (mediaNode instanceof HTMLElement) {
         card.appendChild(mediaNode);
+      }
+
+      if (index > 0) {
+        card.appendChild(buildPreviewActionsNode(index !== segments.length - 1));
       }
 
       article.appendChild(rail);
@@ -6170,13 +6413,14 @@
     });
   };
 
-  let rootLibraryOpen = false;
   let activeUploadTarget = { kind: "root", stepID: 0 };
+  let mediaPickerOpen = false;
   const isAttachedMedia = (id) => attachments.some((item) => item.id === id);
   const openIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>';
   const closeIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
   const playIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="8 6 19 12 8 18"/></svg>';
   const fileIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>';
+  const checkIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>';
 
   const normalizeMediaIDList = (rawValues) => {
     const out = [];
@@ -6213,8 +6457,6 @@
   };
   const targetHasMedia = (target, mediaID) => selectedMediaIDsForTarget(target).includes(String(mediaID || "").trim());
   const targetSelectionCount = (target) => selectedMediaIDsForTarget(target).length;
-  const threadStepTitle = (stepIndex) => formatTemplate(i18n.stepTitle, stepIndex + 2);
-
   const formatFileSize = (sizeBytes) => {
     const size = Number(sizeBytes || 0);
     if (!Number.isFinite(size) || size <= 0) {
@@ -6411,6 +6653,15 @@
     const thumb = document.createElement("div");
     thumb.className = "media-library-thumb";
     renderLibraryThumb(thumb, item);
+    row.appendChild(thumb);
+
+    if (config.selected) {
+      const check = document.createElement("span");
+      check.className = "create-media-card-check";
+      check.setAttribute("aria-hidden", "true");
+      check.innerHTML = checkIcon;
+      row.appendChild(check);
+    }
 
     const actions = document.createElement("div");
     actions.className = "create-media-overlay-actions";
@@ -6430,7 +6681,6 @@
       actions.appendChild(used);
     }
 
-    row.appendChild(thumb);
     row.appendChild(actions);
     row.appendChild(buildMediaCardFooter(item));
     return row;
@@ -6448,10 +6698,21 @@
       if (!id) {
         return;
       }
-      const attached = isAttachedMedia(id);
-      node.classList.toggle("attached", attached);
-      node.classList.remove("selected");
-      node.setAttribute("aria-pressed", attached ? "true" : "false");
+      const selected = targetHasMedia(activeUploadTarget, id);
+      node.classList.toggle("selected", selected);
+      node.classList.toggle("attached", selected);
+      node.setAttribute("aria-pressed", selected ? "true" : "false");
+      const existingCheck = node.querySelector(".create-media-card-check");
+      if (selected && !(existingCheck instanceof HTMLElement)) {
+        const check = document.createElement("span");
+        check.className = "create-media-card-check";
+        check.setAttribute("aria-hidden", "true");
+        check.innerHTML = checkIcon;
+        node.appendChild(check);
+      }
+      if (!selected && existingCheck instanceof HTMLElement) {
+        existingCheck.remove();
+      }
     });
   };
 
@@ -6474,6 +6735,7 @@
   };
 
   const selectedMediaSummary = (count) => formatTemplate(i18n.stepMediaCount, count, maxMedia);
+  const selectedMediaLabel = (count) => formatTemplate(i18n.selectedCount, count);
 
   const openMediaPreview = (itemNode) => {
     if (!(itemNode instanceof HTMLElement)) {
@@ -6490,11 +6752,6 @@
   };
 
   const syncRootMediaPanel = () => {
-    rootMediaSummary.textContent = selectedMediaSummary(attachments.length);
-    rootMediaEmpty.hidden = attachments.length > 0;
-    rootMediaBrowser.hidden = !rootLibraryOpen;
-    rootLibraryToggle.textContent = rootLibraryOpen ? i18n.stepLibraryClose : i18n.stepLibraryOpen;
-    rootLibraryToggle.setAttribute("aria-expanded", rootLibraryOpen ? "true" : "false");
   };
 
   const renderAssignedMediaList = (container, mediaItems, removeConfig) => {
@@ -6605,147 +6862,92 @@
     syncSegmentsPayload();
   };
 
-  const renderStepLibrary = (step, selectedMediaIDs, browser) => {
-    const label = document.createElement("div");
-    label.className = "composer-label";
-    label.textContent = "// " + i18n.recentLibrary;
-    browser.appendChild(label);
-
-    const libraryItems = mediaItemsFromLibrary();
-    if (libraryItems.length === 0) {
-      const empty = document.createElement("div");
-      empty.className = "thread-step-media-empty";
-      empty.textContent = i18n.noMediaUploaded;
-      browser.appendChild(empty);
-      return;
-    }
-
-    const grid = document.createElement("div");
-    grid.className = "thread-step-media-grid";
-    grid.setAttribute("data-thread-step-library-grid", String(step.id));
-    libraryItems.forEach((item) => {
-      grid.appendChild(createMediaLibraryCard(item, {
-        stepID: step.id,
-        selected: selectedMediaIDs.includes(item.id),
-        pressed: selectedMediaIDs.includes(item.id)
-      }));
-    });
-    browser.appendChild(grid);
+  const updateMediaPickerSelection = () => {
+    mediaPickerSelection.textContent = "// " + selectedMediaLabel(targetSelectionCount(activeUploadTarget));
   };
+
+  const renderMediaPicker = () => {
+    syncLibraryAttachState();
+    updateMediaPickerSelection();
+    const query = mediaPickerSearch.value.trim().toLowerCase();
+    mediaLibrary.querySelectorAll("[data-media-library-item]").forEach((node) => {
+      if (!(node instanceof HTMLElement)) {
+        return;
+      }
+      const name = (node.dataset.mediaName || "").toLowerCase();
+      const mime = (node.dataset.mediaMime || "").toLowerCase();
+      const visible = query === "" || name.includes(query) || mime.includes(query);
+      node.hidden = !visible;
+    });
+    const emptyNode = mediaLibrary.querySelector(".media-picker-empty");
+    if (emptyNode instanceof HTMLElement) {
+      const items = Array.from(mediaLibrary.querySelectorAll("[data-media-library-item]")).filter((node) => node instanceof HTMLElement && !node.hidden);
+      emptyNode.hidden = items.length > 0;
+    }
+  };
+
+  const closeMediaPicker = () => {
+    mediaPickerOpen = false;
+    mediaPickerModal.hidden = true;
+    document.body.style.overflow = "";
+  };
+
+  const openMediaPicker = (target) => {
+    setActiveUploadTarget(target);
+    mediaPickerOpen = true;
+    mediaPickerModal.hidden = false;
+    document.body.style.overflow = "hidden";
+    mediaPickerSearch.value = "";
+    renderMediaPicker();
+    requestAnimationFrame(() => {
+      mediaPickerSearch.focus();
+      mediaPickerSearch.select();
+    });
+  };
+
+  const imageIcon = '<svg data-lucide="image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="m21 15-5-5L5 21"></path></svg>';
+  const folderIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h5l2 2h11v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"></path><path d="M3 7V5a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v2"></path></svg>';
+  const trashIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg>';
+  const chevronUpIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="18 15 12 9 6 15"></polyline></svg>';
+  const chevronDownIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>';
 
   const renderThreadSteps = () => {
     threadStepsList.innerHTML = "";
-    if (followupSteps.length === 0) {
-      const empty = document.createElement("div");
-      empty.className = "thread-step-empty";
-      empty.textContent = i18n.noFollowupSteps;
-      threadStepsList.appendChild(empty);
-      syncSegmentsPayload();
-      renderPreviewThread();
-      return;
-    }
 
     followupSteps.forEach((step, index) => {
       step.mediaIDs = normalizeMediaIDList(step.mediaIDs || []);
 
-      const card = document.createElement("article");
+      const shell = document.createElement("article");
+      shell.className = "thread-step-shell";
+      shell.dataset.stepId = String(step.id);
+
+      const rail = document.createElement("div");
+      rail.className = "thread-step-rail";
+      rail.setAttribute("aria-hidden", "true");
+
+      const marker = document.createElement("span");
+      marker.className = "thread-step-marker";
+      marker.textContent = String(index + 2);
+      rail.appendChild(marker);
+
+      const card = document.createElement("div");
       card.className = "thread-step-card";
       card.dataset.stepId = String(step.id);
 
-      const head = document.createElement("div");
-      head.className = "thread-step-card-head";
-
-      const heading = document.createElement("div");
-      heading.className = "thread-step-heading";
-      const title = document.createElement("span");
-      title.className = "thread-step-title";
-      title.textContent = threadStepTitle(index);
-      heading.appendChild(title);
-      head.appendChild(heading);
-
-      const actions = document.createElement("div");
-      actions.className = "thread-step-actions";
-
-      const up = document.createElement("button");
-      up.type = "button";
-      up.className = "btn-secondary";
-      up.setAttribute("data-thread-step-up", String(step.id));
-      up.setAttribute("aria-label", i18n.moveStepUp);
-      up.title = i18n.moveStepUp;
-      up.textContent = "↑";
-      if (index === 0) {
-        up.disabled = true;
-      }
-      actions.appendChild(up);
-
-      const down = document.createElement("button");
-      down.type = "button";
-      down.className = "btn-secondary";
-      down.setAttribute("data-thread-step-down", String(step.id));
-      down.setAttribute("aria-label", i18n.moveStepDown);
-      down.title = i18n.moveStepDown;
-      down.textContent = "↓";
-      if (index === followupSteps.length - 1) {
-        down.disabled = true;
-      }
-      actions.appendChild(down);
-
-      const remove = document.createElement("button");
-      remove.type = "button";
-      remove.className = "btn-danger";
-      remove.setAttribute("data-thread-step-remove", String(step.id));
-      remove.setAttribute("aria-label", i18n.removeStep);
-      remove.title = i18n.removeStep;
-      remove.textContent = "×";
-      actions.appendChild(remove);
-
-      head.appendChild(actions);
+      const textWrap = document.createElement("div");
+      textWrap.className = "thread-step-text-wrap";
 
       const textarea = document.createElement("textarea");
       textarea.className = "thread-step-text";
+      textarea.rows = 1;
       textarea.setAttribute("data-thread-step-text", String(step.id));
       textarea.dataset.stepId = String(step.id);
       textarea.placeholder = i18n.stepPlaceholder;
       textarea.value = String(step.text || "");
+      textWrap.appendChild(textarea);
 
       const mediaPanel = document.createElement("div");
       mediaPanel.className = "thread-step-media-panel";
-
-      const toolbar = document.createElement("div");
-      toolbar.className = "thread-step-media-toolbar";
-
-      const copy = document.createElement("div");
-      copy.className = "thread-step-media-copy";
-      const mediaTitle = document.createElement("span");
-      mediaTitle.className = "thread-step-media-title";
-      mediaTitle.textContent = "// " + i18n.mediaAttachmentMax;
-      const mediaSummary = document.createElement("span");
-      mediaSummary.className = "thread-step-media-summary";
-      mediaSummary.textContent = step.mediaIDs.length === 0 ? i18n.stepMediaEmpty : selectedMediaSummary(step.mediaIDs.length);
-      copy.appendChild(mediaTitle);
-      copy.appendChild(mediaSummary);
-
-      const mediaActions = document.createElement("div");
-      mediaActions.className = "thread-step-media-actions";
-
-      const uploadButton = document.createElement("button");
-      uploadButton.type = "button";
-      uploadButton.className = "btn-secondary";
-      uploadButton.setAttribute("data-thread-step-upload", String(step.id));
-      uploadButton.textContent = i18n.addMedia;
-      mediaActions.appendChild(uploadButton);
-
-      const toggleButton = document.createElement("button");
-      toggleButton.type = "button";
-      toggleButton.className = "btn-secondary";
-      toggleButton.setAttribute("data-thread-step-library-toggle", String(step.id));
-      toggleButton.setAttribute("aria-expanded", step.libraryOpen ? "true" : "false");
-      toggleButton.setAttribute("aria-controls", "thread-step-library-" + step.id);
-      toggleButton.textContent = step.libraryOpen ? i18n.stepLibraryClose : i18n.stepLibraryOpen;
-      mediaActions.appendChild(toggleButton);
-
-      toolbar.appendChild(copy);
-      toolbar.appendChild(mediaActions);
 
       const selectedItems = step.mediaIDs.map((mediaID) => mediaItemByID(mediaID)).filter(Boolean);
       const mediaListNode = document.createElement("div");
@@ -6755,26 +6957,73 @@
         stepID: step.id
       });
 
-      const emptyState = document.createElement("div");
-      emptyState.className = "thread-step-media-empty";
-      emptyState.textContent = i18n.stepMediaEmpty;
-      emptyState.hidden = selectedItems.length > 0;
-
-      const browser = document.createElement("div");
-      browser.className = "thread-step-media-browser";
-      browser.id = "thread-step-library-" + step.id;
-      browser.hidden = !step.libraryOpen;
-      renderStepLibrary(step, step.mediaIDs, browser);
-
-      mediaPanel.appendChild(toolbar);
       mediaPanel.appendChild(mediaListNode);
-      mediaPanel.appendChild(emptyState);
-      mediaPanel.appendChild(browser);
 
-      card.appendChild(head);
-      card.appendChild(textarea);
+      const footer = document.createElement("div");
+      footer.className = "thread-step-footer";
+
+      const stepCharCount = document.createElement("div");
+      stepCharCount.className = "char-count-list";
+      stepCharCount.setAttribute("role", "status");
+      stepCharCount.setAttribute("aria-live", "polite");
+      stepCharCount.setAttribute("aria-atomic", "true");
+      renderCharCountLines(stepCharCount, textarea.value.length);
+
+      const footerActions = document.createElement("div");
+      footerActions.className = "thread-step-footer-actions";
+
+      const uploadButton = document.createElement("button");
+      uploadButton.type = "button";
+      uploadButton.className = "thread-step-icon-btn";
+      uploadButton.setAttribute("data-thread-step-upload", String(step.id));
+      uploadButton.setAttribute("aria-label", i18n.addMedia);
+      uploadButton.title = i18n.addMedia;
+      uploadButton.innerHTML = imageIcon;
+      footerActions.appendChild(uploadButton);
+
+      const up = document.createElement("button");
+      up.type = "button";
+      up.className = "thread-step-icon-btn";
+      up.setAttribute("data-thread-step-up", String(step.id));
+      up.setAttribute("aria-label", i18n.moveStepUp);
+      up.title = i18n.moveStepUp;
+      up.innerHTML = chevronUpIcon;
+      if (index === 0) {
+        up.disabled = true;
+      }
+      footerActions.appendChild(up);
+
+      const down = document.createElement("button");
+      down.type = "button";
+      down.className = "thread-step-icon-btn";
+      down.setAttribute("data-thread-step-down", String(step.id));
+      down.setAttribute("aria-label", i18n.moveStepDown);
+      down.title = i18n.moveStepDown;
+      down.innerHTML = chevronDownIcon;
+      if (index === followupSteps.length - 1) {
+        down.disabled = true;
+      }
+      footerActions.appendChild(down);
+
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "thread-step-icon-btn";
+      remove.setAttribute("data-thread-step-remove", String(step.id));
+      remove.setAttribute("aria-label", i18n.removeStep);
+      remove.title = i18n.removeStep;
+      remove.innerHTML = trashIcon;
+      footerActions.appendChild(remove);
+
+      footer.appendChild(stepCharCount);
+      footer.appendChild(footerActions);
+
+      card.appendChild(textWrap);
       card.appendChild(mediaPanel);
-      threadStepsList.appendChild(card);
+      card.appendChild(footer);
+      shell.appendChild(rail);
+      shell.appendChild(card);
+      threadStepsList.appendChild(shell);
+      autoResizeTextarea(textarea);
     });
 
     syncSegmentsPayload();
@@ -6877,10 +7126,10 @@
         const step = findFollowupStep(Number(target.stepID || 0));
         if (step && !step.mediaIDs.includes(item.id)) {
           step.mediaIDs.push(item.id);
-          step.libraryOpen = true;
         }
         renderThreadSteps();
       }
+      renderMediaPicker();
       setNotice(selectedMediaSummary(targetSelectionCount(target)), "success");
     } catch (err) {
       const message = err instanceof Error ? err.message : i18n.uploadFailed;
@@ -6907,18 +7156,9 @@
   };
 
   const openUploaderForTarget = (target) => {
-    if (isRootTarget(target)) {
-      rootLibraryOpen = true;
-      syncRootMediaPanel();
-      setActiveUploadTarget({ kind: "root", stepID: 0 });
-    } else {
-      const step = findFollowupStep(Number(target.stepID || 0));
-      if (!step) {
-        return;
-      }
-      step.libraryOpen = true;
-      setActiveUploadTarget({ kind: "step", stepID: step.id });
-      renderThreadSteps();
+    setActiveUploadTarget(target);
+    if (!mediaPickerOpen) {
+      openMediaPicker(target);
     }
     mediaInput.click();
   };
@@ -6936,12 +7176,21 @@
   });
 
   rootUploadButton.addEventListener("click", () => {
-    openUploaderForTarget({ kind: "root", stepID: 0 });
+    openMediaPicker({ kind: "root", stepID: 0 });
   });
 
-  rootLibraryToggle.addEventListener("click", () => {
-    rootLibraryOpen = !rootLibraryOpen;
-    syncRootMediaPanel();
+  mediaPickerClose.addEventListener("click", closeMediaPicker);
+  mediaPickerAttach.addEventListener("click", closeMediaPicker);
+  mediaPickerSearch.addEventListener("input", renderMediaPicker);
+  mediaPickerModal.addEventListener("click", (event) => {
+    if (event.target === mediaPickerModal) {
+      closeMediaPicker();
+    }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && mediaPickerOpen) {
+      closeMediaPicker();
+    }
   });
 
   mediaDropzone.addEventListener("click", (event) => {
@@ -7059,7 +7308,8 @@
     if (!mediaID) {
       return;
     }
-    toggleMediaForTarget({ kind: "root", stepID: 0 }, mediaID);
+    toggleMediaForTarget(activeUploadTarget, mediaID);
+    renderMediaPicker();
   });
 
   mediaLibrary?.addEventListener("keydown", (event) => {
@@ -7082,15 +7332,15 @@
     if (!mediaID) {
       return;
     }
-    toggleMediaForTarget({ kind: "root", stepID: 0 }, mediaID);
+    toggleMediaForTarget(activeUploadTarget, mediaID);
+    renderMediaPicker();
   });
 
   addThreadStepButton.addEventListener("click", () => {
     followupSteps.push({
       id: nextFollowupStepID++,
       text: "",
-      mediaIDs: [],
-      libraryOpen: false
+      mediaIDs: []
     });
     renderThreadSteps();
     const lastStep = followupSteps[followupSteps.length - 1];
@@ -7109,6 +7359,7 @@
       return;
     }
     if (target instanceof HTMLTextAreaElement && target.hasAttribute("data-thread-step-text")) {
+      autoResizeTextarea(target);
       const stepID = Number(target.dataset.stepId || "0");
       const step = findFollowupStep(stepID);
       if (!step) {
@@ -7149,29 +7400,7 @@
     const uploadButton = target.closest("[data-thread-step-upload]");
     if (uploadButton instanceof HTMLButtonElement) {
       const stepID = Number(uploadButton.getAttribute("data-thread-step-upload") || "0");
-      openUploaderForTarget({ kind: "step", stepID });
-      return;
-    }
-
-    const toggleLibraryButton = target.closest("[data-thread-step-library-toggle]");
-    if (toggleLibraryButton instanceof HTMLButtonElement) {
-      const stepID = Number(toggleLibraryButton.getAttribute("data-thread-step-library-toggle") || "0");
-      const step = findFollowupStep(stepID);
-      if (!step) {
-        return;
-      }
-      step.libraryOpen = !step.libraryOpen;
-      renderThreadSteps();
-      return;
-    }
-
-    const libraryItem = target.closest("[data-thread-step-library-item]");
-    if (libraryItem instanceof HTMLElement) {
-      const stepID = Number(libraryItem.dataset.stepId || "0");
-      const mediaID = (libraryItem.dataset.mediaId || "").trim();
-      if (mediaID !== "") {
-        toggleMediaForTarget({ kind: "step", stepID }, mediaID);
-      }
+      openMediaPicker({ kind: "step", stepID });
       return;
     }
 
@@ -7225,16 +7454,6 @@
     }
     if (target.closest("[data-media-open]")) {
       return;
-    }
-    const itemNode = target.closest("[data-thread-step-library-item]");
-    if (!(itemNode instanceof HTMLElement)) {
-      return;
-    }
-    event.preventDefault();
-    const stepID = Number(itemNode.dataset.stepId || "0");
-    const mediaID = (itemNode.dataset.mediaId || "").trim();
-    if (mediaID !== "") {
-      toggleMediaForTarget({ kind: "step", stepID }, mediaID);
     }
   });
 
@@ -7290,6 +7509,7 @@
   });
 
   textInput.addEventListener("input", () => {
+    autoResizeTextarea(textInput);
     updateCharCount();
     renderPreviewThread();
     syncSegmentsPayload();
@@ -7315,22 +7535,36 @@
     }
   });
 
+  syncComposerTextareaHeights();
   updateCharCount();
   renderPreviewThread();
   renderThreadSteps();
   syncHiddenMediaInputs();
   renderMediaList();
   syncNetworkSelection();
+  syncComposerTextareaHeights();
   syncPreviewCardTop();
-  window.addEventListener("resize", syncPreviewCardTop);
+  window.addEventListener("resize", () => {
+    syncComposerTextareaHeights();
+    syncPreviewCardTop();
+  });
   if (typeof createMobileQuery.addEventListener === "function") {
-    createMobileQuery.addEventListener("change", syncPreviewCardTop);
+    createMobileQuery.addEventListener("change", () => {
+      syncComposerTextareaHeights();
+      syncPreviewCardTop();
+    });
   } else if (typeof createMobileQuery.addListener === "function") {
-    createMobileQuery.addListener(syncPreviewCardTop);
+    createMobileQuery.addListener(() => {
+      syncComposerTextareaHeights();
+      syncPreviewCardTop();
+    });
   }
   requestAnimationFrame(syncPreviewCardTop);
   if (document.fonts && document.fonts.ready && typeof document.fonts.ready.then === "function") {
-    document.fonts.ready.then(syncPreviewCardTop).catch(() => {});
+    document.fonts.ready.then(() => {
+      syncComposerTextareaHeights();
+      syncPreviewCardTop();
+    }).catch(() => {});
   }
 })();
 
