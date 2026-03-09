@@ -216,15 +216,15 @@ func TestCreateViewIncludesComposerPreviewUploadAndNetworks(t *testing.T) {
 	if !strings.Contains(body, "id=\"create-media-picker-modal\" hidden") || !strings.Contains(body, "id=\"create-media-picker-search\"") {
 		t.Fatalf("expected create view to render hidden media picker modal with search")
 	}
-		if !strings.Contains(body, "class=\"thread-composer\"") || !strings.Contains(body, "thread-step-add-row") {
-			t.Fatalf("expected create view to render the unified thread composer timeline")
-		}
-		if !strings.Contains(body, ".thread-step-card:focus-within") {
-			t.Fatalf("expected thread composer to highlight the focused step card")
-		}
-		if !strings.Contains(body, "// thread composer") {
-			t.Fatalf("expected thread composer label to match design copy")
-		}
+	if !strings.Contains(body, "class=\"thread-composer\"") || !strings.Contains(body, "thread-step-add-row") {
+		t.Fatalf("expected create view to render the unified thread composer timeline")
+	}
+	if !strings.Contains(body, ".thread-step-card:focus-within") {
+		t.Fatalf("expected thread composer to highlight the focused step card")
+	}
+	if !strings.Contains(body, "// thread composer") {
+		t.Fatalf("expected thread composer label to match design copy")
+	}
 	if strings.Contains(body, "// post content") || strings.Contains(body, "No media attached to this step yet.") {
 		t.Fatalf("did not expect redundant composer helper copy inside the thread steps")
 	}
