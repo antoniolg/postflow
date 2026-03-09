@@ -83,6 +83,17 @@ func uiMessage(lang, key string, args ...any) string {
 	return fmt.Sprintf(msg, args...)
 }
 
+func uiMessageIndexed(lang, key string, args ...any) string {
+	msg := uiMessage(lang, key)
+	if len(args) == 0 {
+		return msg
+	}
+	for index, arg := range args {
+		msg = strings.ReplaceAll(msg, "{"+strconv.Itoa(index)+"}", fmt.Sprint(arg))
+	}
+	return msg
+}
+
 func localizedCalendarMonthLabel(localDate time.Time, lang string) string {
 	monthNames := []string{
 		"January", "February", "March", "April", "May", "June",

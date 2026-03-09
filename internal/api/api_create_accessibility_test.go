@@ -225,11 +225,14 @@ func TestCreateViewIncludesComposerPreviewUploadAndNetworks(t *testing.T) {
 	if !strings.Contains(body, "id=\"create-scheduled-at\" type=\"datetime-local\" name=\"scheduled_at_local\" data-date-picker") {
 		t.Fatalf("expected create datetime input to use reusable date picker component")
 	}
-	if !strings.Contains(body, "class=\"preview-panel\"") || !strings.Contains(body, "id=\"preview-text\"") {
+	if !strings.Contains(body, "class=\"preview-panel\"") || !strings.Contains(body, "id=\"preview-thread\"") {
 		t.Fatalf("expected live preview panel in create view")
 	}
-	if !strings.Contains(body, "id=\"preview-media\" hidden") {
-		t.Fatalf("expected media preview block to be hidden by default when there is no media")
+	if strings.Contains(body, "preview-summary") || strings.Contains(body, "preview-step-count") {
+		t.Fatalf("did not expect preview sequence summary copy in create view")
+	}
+	if !strings.Contains(body, "class=\"preview-step preview-step-root\"") {
+		t.Fatalf("expected live preview to render the thread sequence structure")
 	}
 	if !strings.Contains(body, "id=\"create-char-count\"") || !strings.Contains(body, "char-count-line") {
 		t.Fatalf("expected multi-network char count lines in create view")
@@ -420,7 +423,7 @@ func TestCreateViewPreviewRendersMarkdownFormatting(t *testing.T) {
 	}
 
 	body := w.Body.String()
-	previewHTMLRe := regexp.MustCompile(`id="preview-text">[\s\n]*Hola <strong>mundo</strong> y <em>equipo</em>`)
+	previewHTMLRe := regexp.MustCompile(`(?s)id="preview-thread".*preview-step-text[^>]*>[\s\n]*Hola <strong>mundo</strong> y <em>equipo</em>`)
 	if !previewHTMLRe.MatchString(body) {
 		t.Fatalf("expected markdown formatting in preview html")
 	}

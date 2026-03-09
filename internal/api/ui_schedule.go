@@ -557,6 +557,14 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		"t": func(key string, args ...any) string {
 			return uiMessage(uiLang, key, args...)
 		},
+		"ti": func(key string, args ...any) string {
+			return uiMessageIndexed(uiLang, key, args...)
+		},
+		"inc": func(v int) int {
+			return v + 1
+		},
+		"trim":      strings.TrimSpace,
+		"hasPrefix": strings.HasPrefix,
 		"accountSelected": func(accountID string) bool {
 			_, ok := selectedCreateAccountIDs[strings.TrimSpace(accountID)]
 			return ok

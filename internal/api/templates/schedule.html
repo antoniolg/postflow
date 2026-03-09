@@ -2906,11 +2906,16 @@
     .preview-head {
       position: absolute;
       left: 0;
+      right: 0;
       bottom: 100%;
       margin-bottom: 10px;
       padding: 0;
       border-bottom: 0;
       background: transparent;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
     }
     .preview-title {
       font-size: 11px;
@@ -2918,7 +2923,7 @@
       text-transform: lowercase;
       color: var(--text-secondary);
       font-weight: 600;
-      margin-bottom: 6px;
+      margin: 0;
     }
     .preview-body {
       padding: 0;
@@ -2934,12 +2939,13 @@
       flex: 1;
       display: flex;
       flex-direction: column;
+      gap: 14px;
     }
     .preview-author {
       display: flex;
       align-items: center;
       gap: 8px;
-      margin-bottom: 10px;
+      margin-bottom: 0;
     }
     .preview-avatar {
       width: 30px;
@@ -2961,49 +2967,101 @@
       font-size: 11px;
       color: #a8a8a8;
     }
-    .preview-text {
+    .preview-thread {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-height: 0;
+    }
+    .preview-step {
+      display: grid;
+      grid-template-columns: 16px minmax(0, 1fr);
+      gap: 10px;
+      align-items: stretch;
+    }
+    .preview-step-rail {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100%;
+      padding-top: 6px;
+    }
+    .preview-step-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: #7b7b7b;
+      flex: 0 0 auto;
+    }
+    .preview-step-root .preview-step-dot {
+      background: var(--accent-orange);
+    }
+    .preview-step-line {
+      width: 2px;
+      flex: 1 1 auto;
+      margin-top: 6px;
+      background: #343434;
+      min-height: 34px;
+    }
+    .preview-step:last-child .preview-step-line {
+      visibility: hidden;
+    }
+    .preview-step-card {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-width: 0;
+    }
+    .preview-step-text {
       font-size: 13px;
       line-height: 1.45;
       color: #ffffff;
       white-space: pre-wrap;
       word-break: break-word;
-      min-height: 68px;
+      min-width: 0;
     }
-    .preview-media {
-      margin-top: 10px;
-      border: 0;
+    .preview-step-text.is-empty {
+      color: #8f8f8f;
+      font-style: italic;
+    }
+    .preview-step-text > :first-child {
+      margin-top: 0;
+    }
+    .preview-step-text > :last-child {
+      margin-bottom: 0;
+    }
+    .preview-step-media {
+      position: relative;
       border-radius: 8px;
+      overflow: hidden;
       background: #2d2d2d;
       min-height: 120px;
       display: grid;
       place-items: center;
-      overflow: hidden;
     }
-    .preview-media img {
+    .preview-step-followup .preview-step-media {
+      min-height: 96px;
+    }
+    .preview-step-media img {
       width: 100%;
       height: 100%;
       object-fit: cover;
       display: block;
     }
-    .preview-media video {
+    .preview-step-media video {
       width: 100%;
       height: 100%;
       object-fit: cover;
       display: block;
     }
-    .preview-media[hidden],
-    .preview-media img[hidden],
-    .preview-media video[hidden] {
-      display: none;
-    }
-    .preview-media-empty {
+    .preview-step-media-fallback {
       font-size: 12px;
       color: #a8a8a8;
-      padding: 10px;
+      padding: 14px;
       text-align: center;
     }
     .preview-footer {
-      margin-top: 10px;
+      margin-top: 2px;
       font-size: 11px;
       color: #a8a8a8;
     }
@@ -3415,6 +3473,22 @@
       .preview-panel {
         padding: 0;
       }
+      .preview-head {
+        position: static;
+        margin-bottom: 12px;
+      }
+      .preview-body {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .preview-step {
+        grid-template-columns: 18px minmax(0, 1fr);
+        gap: 10px;
+      }
+      .preview-step-card {
+        padding: 0;
+      }
       .composer-submit-actions {
         display: flex;
         justify-content: stretch;
@@ -3595,7 +3669,7 @@
         <div class="title-row">
           {{if and (eq .View "create") .BackURL}}<a class="title-back" href="{{.BackURL}}" aria-label="{{t "common.back"}}">←</a>{{end}}
           <div class="title-copy">
-            <h1>{{if eq .View "calendar"}}{{t "header.calendar"}}{{else if eq .View "drafts"}}{{t "header.drafts"}}{{else if eq .View "failed"}}{{t "header.failed"}}{{else if eq .View "create"}}{{t "header.new_post"}}{{else if eq .View "settings"}}{{t "header.settings"}}{{else}}{{t "header.scheduled"}}{{end}}</h1>
+            <h1>{{if eq .View "calendar"}}{{t "header.calendar"}}{{else if eq .View "drafts"}}{{t "header.drafts"}}{{else if eq .View "failed"}}{{t "header.failed"}}{{else if eq .View "create"}}{{if .EditingPost}}{{t "header.edit_post"}}{{else}}{{t "header.new_post"}}{{end}}{{else if eq .View "settings"}}{{t "header.settings"}}{{else}}{{t "header.scheduled"}}{{end}}</h1>
           </div>
           {{if eq .View "calendar"}}
           <div class="calendar-controls">
@@ -4398,12 +4472,35 @@
                   <div class="preview-handle">@postflow_app</div>
                 </div>
               </div>
-		              <div class="preview-text" id="preview-text">{{if .CreateText}}{{previewMarkdown .CreateText}}{{else}}{{t "create.preview_default"}}{{end}}</div>
-	              <div class="preview-media" id="preview-media" hidden>
-	                <img id="preview-media-image" alt="{{t "create.media_preview"}}" hidden />
-	                <video id="preview-media-video" muted loop autoplay playsinline preload="metadata" hidden></video>
-	                <div class="preview-media-empty" id="preview-media-empty">{{t "create.preview_no_media"}}</div>
-	              </div>
+                <div class="preview-thread" id="preview-thread">
+                  {{range $index, $segment := .CreateInitialSegments}}
+                  {{$text := trim $segment.Text}}
+                  <article class="preview-step {{if eq $index 0}}preview-step-root{{else}}preview-step-followup{{end}}">
+                    <div class="preview-step-rail" aria-hidden="true">
+                      <span class="preview-step-dot"></span>
+                      <span class="preview-step-line"></span>
+                    </div>
+                    <div class="preview-step-card">
+                      <div class="preview-step-text {{if eq $text ""}}is-empty{{end}}">
+                        {{if ne $text ""}}{{previewMarkdown $text}}{{else if eq $index 0}}{{t "create.preview_default"}}{{else}}{{t "create.preview_empty_step"}}{{end}}
+                      </div>
+                      {{if gt (len $segment.Media) 0}}
+                      <div class="preview-step-media">
+                        {{with index $segment.Media 0}}
+                          {{if and .PreviewURL (hasPrefix .Mime "video/")}}
+                          <video src="{{.PreviewURL}}" muted loop autoplay playsinline preload="metadata"></video>
+                          {{else if .PreviewURL}}
+                          <img src="{{.PreviewURL}}" alt="{{t "create.media_preview"}}" loading="lazy" />
+                          {{else}}
+                          <div class="preview-step-media-fallback">{{ti "create.step_media_count" (len $segment.Media) 4}}</div>
+                          {{end}}
+                        {{end}}
+                      </div>
+                      {{end}}
+                    </div>
+                  </article>
+                  {{end}}
+	                </div>
 	              <div class="preview-footer">{{t "create.just_now"}}</div>
 	            </article>
 	          </div>
@@ -5428,7 +5525,7 @@
   const threadStepsList = document.getElementById("create-thread-steps-list");
   const addThreadStepButton = document.getElementById("create-add-thread-step");
   const charCount = document.getElementById("create-char-count");
-  const previewText = document.getElementById("preview-text");
+  const previewThread = document.getElementById("preview-thread");
   const scheduleInput = document.getElementById("create-scheduled-at");
   const mediaInput = document.getElementById("create-media-input");
   const mediaDropzone = document.getElementById("create-media-dropzone");
@@ -5441,10 +5538,6 @@
   const rootLibraryToggle = document.getElementById("create-root-library-toggle");
   const mediaHidden = document.getElementById("create-media-hidden");
   const uploadNotice = document.getElementById("create-upload-notice");
-  const previewMedia = document.getElementById("preview-media");
-  const previewImage = document.getElementById("preview-media-image");
-  const previewVideo = document.getElementById("preview-media-video");
-  const previewEmpty = document.getElementById("preview-media-empty");
   const createContentBox = form.querySelector(".create-field-content .composer-text-wrap");
   const previewBodyWrap = document.querySelector(".preview-body");
   const createMobileQuery = window.matchMedia("(max-width: 980px)");
@@ -5461,10 +5554,7 @@
       !(rootLibraryToggle instanceof HTMLButtonElement) ||
       !(mediaHidden instanceof HTMLElement) ||
       !(uploadNotice instanceof HTMLElement) ||
-      !(previewMedia instanceof HTMLElement) ||
-      !(previewImage instanceof HTMLImageElement) ||
-      !(previewVideo instanceof HTMLVideoElement) ||
-      !(previewEmpty instanceof HTMLElement) ||
+      !(previewThread instanceof HTMLElement) ||
       !(accountSelect instanceof HTMLSelectElement) ||
       !(primaryAccountInput instanceof HTMLInputElement) ||
       !(segmentsInput instanceof HTMLInputElement) ||
@@ -5563,6 +5653,7 @@
     charsAriaWithLimit: {{toJSON (t "create.char_count_aria_with_limit")}},
     charsAriaUnknown: {{toJSON (t "create.char_count_aria_unknown")}},
     previewDefault: {{toJSON (t "create.preview_default")}},
+    previewEmptyStep: {{toJSON (t "create.preview_empty_step")}},
     openMedia: {{toJSON (t "settings.open_media")}},
     usedLabel: {{toJSON (t "common.used")}},
     mediaItemLabel: {{toJSON (t "create.media_item")}},
@@ -5587,6 +5678,7 @@
     recentLibrary: {{toJSON (t "create.recent_library")}},
     stepMediaEmpty: {{toJSON (t "create.step_media_empty")}},
     stepMediaCount: {{toJSON (t "create.step_media_count")}},
+    mediaPreview: {{toJSON (t "create.media_preview")}},
     stepLibraryOpen: {{toJSON (t "create.step_library_open")}},
     stepLibraryClose: {{toJSON (t "create.step_library_close")}},
     noMediaUploaded: {{toJSON (t "create.no_media_uploaded")}},
@@ -5935,44 +6027,108 @@
     charCount.classList.remove("char-over");
   };
 
-  const updatePreviewText = () => {
-    const raw = textInput.value;
-    if (raw.trim() === "") {
-      previewText.textContent = i18n.previewDefault;
-      return;
-    }
-    previewText.innerHTML = markdownToPreviewHTML(raw);
+  const previewSegmentsData = () => {
+    const segments = [{
+      text: String(textInput.value || ""),
+      media: attachments.slice()
+    }];
+    followupSteps.forEach((step) => {
+      const mediaItems = normalizeMediaIDList(step.mediaIDs || []).map((mediaID) => mediaItemByID(mediaID)).filter(Boolean);
+      segments.push({
+        text: String(step.text || ""),
+        media: mediaItems
+      });
+    });
+    return segments;
   };
 
-  const updatePreviewMedia = () => {
-    const firstMedia = attachments.find((item) => item.previewUrl);
-    if (firstMedia && firstMedia.previewUrl) {
-      const mime = String(firstMedia.mime || "").toLowerCase();
-      const isVideo = mime.startsWith("video/");
-      if (isVideo) {
-        previewVideo.src = firstMedia.previewUrl;
-        previewVideo.hidden = false;
-        previewVideo.play().catch(() => {});
-        previewImage.removeAttribute("src");
-        previewImage.hidden = true;
-      } else {
-        previewImage.src = firstMedia.previewUrl;
-        previewImage.hidden = false;
-        previewVideo.pause();
-        previewVideo.removeAttribute("src");
-        previewVideo.hidden = true;
-      }
-      previewEmpty.hidden = true;
-      previewMedia.hidden = false;
-      return;
+  const buildPreviewMediaNode = (mediaItems) => {
+    if (!Array.isArray(mediaItems) || mediaItems.length === 0) {
+      return null;
     }
-    previewImage.removeAttribute("src");
-    previewImage.hidden = true;
-    previewVideo.pause();
-    previewVideo.removeAttribute("src");
-    previewVideo.hidden = true;
-    previewEmpty.hidden = true;
-    previewMedia.hidden = true;
+    const wrapper = document.createElement("div");
+    wrapper.className = "preview-step-media";
+
+    const primary = mediaItems.find((item) => item && item.previewUrl) || mediaItems[0];
+    const previewURL = String(primary?.previewUrl || "").trim();
+    const mime = String(primary?.mime || "").toLowerCase();
+    if (previewURL && mime.startsWith("video/")) {
+      const video = document.createElement("video");
+      video.src = previewURL;
+      video.muted = true;
+      video.loop = true;
+      video.autoplay = true;
+      video.playsInline = true;
+      video.preload = "metadata";
+      wrapper.appendChild(video);
+      requestAnimationFrame(() => {
+        video.play().catch(() => {});
+      });
+      return wrapper;
+    }
+    if (previewURL) {
+      const img = document.createElement("img");
+      img.src = previewURL;
+      img.alt = i18n.mediaPreview;
+      img.loading = "lazy";
+      wrapper.appendChild(img);
+      return wrapper;
+    }
+
+    const fallback = document.createElement("div");
+    fallback.className = "preview-step-media-fallback";
+    fallback.textContent = formatTemplate(i18n.stepMediaCount, mediaItems.length, maxMedia);
+    wrapper.appendChild(fallback);
+    return wrapper;
+  };
+
+  const renderPreviewThread = () => {
+    const segments = previewSegmentsData();
+    previewThread.innerHTML = "";
+
+    segments.forEach((segment, index) => {
+      const article = document.createElement("article");
+      article.className = "preview-step " + (index === 0 ? "preview-step-root" : "preview-step-followup");
+
+      const rail = document.createElement("div");
+      rail.className = "preview-step-rail";
+      rail.setAttribute("aria-hidden", "true");
+
+      const dot = document.createElement("span");
+      dot.className = "preview-step-dot";
+      const line = document.createElement("span");
+      line.className = "preview-step-line";
+      rail.appendChild(dot);
+      rail.appendChild(line);
+
+      const card = document.createElement("div");
+      card.className = "preview-step-card";
+
+      const mediaItems = Array.isArray(segment.media) ? segment.media : [];
+
+      const textNode = document.createElement("div");
+      textNode.className = "preview-step-text";
+      const rawText = String(segment.text || "");
+      if (rawText.trim() === "") {
+        textNode.classList.add("is-empty");
+        textNode.textContent = index === 0 ? i18n.previewDefault : i18n.previewEmptyStep;
+      } else {
+        textNode.innerHTML = markdownToPreviewHTML(rawText);
+      }
+
+      card.appendChild(textNode);
+
+      const mediaNode = buildPreviewMediaNode(mediaItems);
+      if (mediaNode instanceof HTMLElement) {
+        card.appendChild(mediaNode);
+      }
+
+      article.appendChild(rail);
+      article.appendChild(card);
+      previewThread.appendChild(article);
+    });
+
+    syncPreviewCardTop();
   };
 
   const syncPreviewCardTop = () => {
@@ -6443,7 +6599,7 @@
     if (attachments.length === 0) {
       setNotice("");
     }
-    updatePreviewMedia();
+    renderPreviewThread();
     syncLibraryAttachState();
     syncRootMediaPanel();
     syncSegmentsPayload();
@@ -6485,6 +6641,7 @@
       empty.textContent = i18n.noFollowupSteps;
       threadStepsList.appendChild(empty);
       syncSegmentsPayload();
+      renderPreviewThread();
       return;
     }
 
@@ -6621,6 +6778,7 @@
     });
 
     syncSegmentsPayload();
+    renderPreviewThread();
   };
 
   const toggleMediaForTarget = (target, mediaID) => {
@@ -6958,6 +7116,7 @@
       }
       step.text = target.value;
       syncSegmentsPayload();
+      renderPreviewThread();
     }
   });
 
@@ -7132,7 +7291,7 @@
 
   textInput.addEventListener("input", () => {
     updateCharCount();
-    updatePreviewText();
+    renderPreviewThread();
     syncSegmentsPayload();
   });
 
@@ -7157,7 +7316,7 @@
   });
 
   updateCharCount();
-  updatePreviewText();
+  renderPreviewThread();
   renderThreadSteps();
   syncHiddenMediaInputs();
   renderMediaList();
