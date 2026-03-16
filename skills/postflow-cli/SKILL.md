@@ -27,6 +27,8 @@ Global defaults:
 
 ## Core Commands
 
+For inspection commands, use `--json` by default so states, ids, and timestamps are unambiguous. This applies especially to `schedule list`, `drafts list`, and any status lookup. Only fall back to human-readable output if the user explicitly wants it.
+
 List schedule:
 
 ```bash
@@ -115,6 +117,7 @@ go run ./cmd/postflow dlq requeue --id dlq_xxx
 
 ## Guidance
 
+- For operational inspection (`drafts list`, `schedule list`, status checks), use `--json` first, even for manual investigations. It avoids ambiguity around state, ids, timestamps, and per-platform entries.
 - Prefer `--json` when output is consumed by scripts or further tooling.
 - Use `--idempotency-key` for retries/replays of `posts create`.
 - Keep timestamps in RFC3339 for CLI/API consistency.
