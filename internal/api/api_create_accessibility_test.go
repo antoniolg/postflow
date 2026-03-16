@@ -237,6 +237,9 @@ func TestCreateViewIncludesComposerPreviewUploadAndNetworks(t *testing.T) {
 	if !strings.Contains(body, "data-upload-drop-target=\"root\"") || !strings.Contains(body, "bindComposerDropTarget(card, { kind: \"step\", stepID: step.id })") {
 		t.Fatalf("expected thread composer to expose drag-and-drop media targets for the root post and follow-up steps")
 	}
+	if !strings.Contains(body, "document.addEventListener(\"paste\", async (event) => {") || !strings.Contains(body, "const files = clipboardImageFiles(event);") || !strings.Contains(body, "const target = resolveClipboardUploadTarget(event);") {
+		t.Fatalf("expected create view to support pasting clipboard images into the active publication")
+	}
 	if strings.Contains(body, "thread-step-media-select") {
 		t.Fatalf("did not expect legacy thread media select dropdowns in create view")
 	}

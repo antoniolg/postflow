@@ -7252,6 +7252,98 @@
     }
   };
 
+  const clipboardImageExtension = (mimeType) => {
+    const normalized = String(mimeType || "").trim().toLowerCase();
+    switch (normalized) {
+      case "image/jpeg":
+      case "image/jpg":
+      case "image/pjpeg":
+        return "jpg";
+      case "image/gif":
+        return "gif";
+      case "image/webp":
+        return "webp";
+      case "image/heic":
+        return "heic";
+      case "image/heif":
+        return "heif";
+      default:
+        return "png";
+    }
+  };
+
+  const normalizeClipboardFile = (file, index) => {
+    if (!(file instanceof File)) {
+      return null;
+    }
+    const name = String(file.name || "").trim();
+    if (name !== "") {
+      return file;
+    }
+    const extension = clipboardImageExtension(file.type);
+    return new File([file], "pasted-image-" + String(index + 1) + "." + extension, {
+      type: file.type || "application/octet-stream",
+      lastModified: Date.now()
+    });
+  };
+
+  const clipboardImageFiles = (event) => {
+    const clipboard = event.clipboardData;
+    if (!clipboard) {
+      return [];
+    }
+    const files = [];
+    const items = Array.from(clipboard.items || []);
+    items.forEach((item, index) => {
+      if (!item || item.kind !== "file" || !String(item.type || "").toLowerCase().startsWith("image/")) {
+        return;
+      }
+      const file = item.getAsFile();
+      const normalized = normalizeClipboardFile(file, files.length + index);
+      if (normalized instanceof File) {
+        files.push(normalized);
+      }
+    });
+    if (files.length > 0) {
+      return files;
+    }
+    return Array.from(clipboard.files || [])
+      .filter((file) => file instanceof File && String(file.type || "").toLowerCase().startsWith("image/"))
+      .map((file, index) => normalizeClipboardFile(file, index))
+      .filter((file) => file instanceof File);
+  };
+
+  const uploadTargetFromNode = (node) => {
+    if (!(node instanceof Element)) {
+      return { kind: "root", stepID: 0 };
+    }
+    const stepCard = node.closest('[data-upload-drop-target="step"]');
+    if (stepCard instanceof HTMLElement) {
+      const stepID = Number(stepCard.dataset.stepId || "0");
+      if (stepID > 0 && findFollowupStep(stepID)) {
+        return { kind: "step", stepID };
+      }
+    }
+    return { kind: "root", stepID: 0 };
+  };
+
+  const resolveClipboardUploadTarget = (event) => {
+    if (mediaPickerOpen) {
+      return isRootTarget(activeUploadTarget)
+        ? { kind: "root", stepID: 0 }
+        : { kind: "step", stepID: Number(activeUploadTarget.stepID || 0) };
+    }
+    const eventTarget = event.target instanceof Element ? event.target : null;
+    if (eventTarget && form.contains(eventTarget)) {
+      return uploadTargetFromNode(eventTarget);
+    }
+    const activeNode = document.activeElement instanceof Element ? document.activeElement : null;
+    if (activeNode && form.contains(activeNode)) {
+      return uploadTargetFromNode(activeNode);
+    }
+    return { kind: "root", stepID: 0 };
+  };
+
   const openUploaderForTarget = (target) => {
     setActiveUploadTarget(target);
     if (!mediaPickerOpen) {
@@ -7439,6 +7531,16 @@
   window.addEventListener("dragend", resetComposerDropTargets);
   window.addEventListener("drop", () => {
     resetComposerDropTargets();
+  });
+  document.addEventListener("paste", async (event) => {
+    const files = clipboardImageFiles(event);
+    if (files.length === 0) {
+      return;
+    }
+    const target = resolveClipboardUploadTarget(event);
+    setActiveUploadTarget(target);
+    event.preventDefault();
+    await processSelectedFiles(files, target);
   });
 
   mediaList.addEventListener("click", (event) => {
