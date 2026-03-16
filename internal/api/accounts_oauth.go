@@ -46,6 +46,24 @@ func (s Server) handleOAuthStart(w http.ResponseWriter, r *http.Request) {
 	}
 	state := mustID("state")
 	codeVerifier := newOAuthCodeVerifier()
+	redirectURL := s.oauthCallbackURL(r, platform)
+	out, err := provider.StartOAuth(r.Context(), postflow.OAuthStartInput{
+		State:        state,
+		CodeVerifier: codeVerifier,
+		RedirectURL:  redirectURL,
+	})
+	if err != nil {
+		if isHTML {
+			http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", err.Error()), http.StatusSeeOther)
+			return
+		}
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	recordedCodeVerifier := strings.TrimSpace(out.CodeVerifier)
+	if recordedCodeVerifier == "" {
+		recordedCodeVerifier = codeVerifier
+	}
 	slog.Info("oauth start requested",
 		"platform", platform,
 		"state", oauthStateLabel(state),
@@ -55,7 +73,7 @@ func (s Server) handleOAuthStart(w http.ResponseWriter, r *http.Request) {
 	recorded, err := s.Store.CreateOAuthState(r.Context(), domain.OauthState{
 		Platform:     platform,
 		State:        state,
-		CodeVerifier: codeVerifier,
+		CodeVerifier: recordedCodeVerifier,
 		ExpiresAt:    time.Now().UTC().Add(10 * time.Minute),
 	})
 	if err != nil {
@@ -64,20 +82,6 @@ func (s Server) handleOAuthStart(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	redirectURL := s.oauthCallbackURL(r, platform)
-	out, err := provider.StartOAuth(r.Context(), postflow.OAuthStartInput{
-		State:        recorded.State,
-		CodeVerifier: recorded.CodeVerifier,
-		RedirectURL:  redirectURL,
-	})
-	if err != nil {
-		if isHTML {
-			http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", err.Error()), http.StatusSeeOther)
-			return
-		}
-		writeError(w, http.StatusBadRequest, err)
 		return
 	}
 	if isHTML {
@@ -117,6 +121,9 @@ func (s Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	stateRaw := strings.TrimSpace(r.URL.Query().Get("state"))
 	code := strings.TrimSpace(r.URL.Query().Get("code"))
+	if code == "" {
+		code = strings.TrimSpace(r.URL.Query().Get("oauth_verifier"))
+	}
 	slog.Info("oauth callback received",
 		"platform", platform,
 		"state", oauthStateLabel(stateRaw),
@@ -124,6 +131,14 @@ func (s Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		"is_html", isHTML,
 	)
 	if code == "" {
+		if denied := strings.TrimSpace(r.URL.Query().Get("denied")); denied != "" {
+			if isHTML {
+				http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", "access denied"), http.StatusSeeOther)
+				return
+			}
+			writeError(w, http.StatusBadRequest, errors.New("access denied"))
+			return
+		}
 		if errDesc := strings.TrimSpace(r.URL.Query().Get("error_description")); errDesc != "" {
 			if isHTML {
 				http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", errDesc), http.StatusSeeOther)

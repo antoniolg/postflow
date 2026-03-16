@@ -114,7 +114,51 @@ func TestXProviderStartOAuthIncludesPKCEAndScopes(t *testing.T) {
 	}
 }
 
-func TestXProviderHandleOAuthCallbackConnectsOAuthAccount(t *testing.T) {
+func TestXProviderStartOAuthUsesOAuth1WhenAPIKeyConfigured(t *testing.T) {
+	var gotAuthHeader string
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/oauth/request_token" {
+			http.NotFound(w, r)
+			return
+		}
+		gotAuthHeader = strings.TrimSpace(r.Header.Get("Authorization"))
+		_, _ = w.Write([]byte("oauth_token=req-token&oauth_token_secret=req-secret&oauth_callback_confirmed=true"))
+	}))
+	defer srv.Close()
+
+	provider := NewXProvider(XConfig{
+		APIBaseURL:   srv.URL,
+		APIKey:       "x-api-key",
+		APIKeySecret: "x-api-secret",
+	})
+
+	out, err := provider.StartOAuth(context.Background(), OAuthStartInput{
+		State:       "state-123",
+		RedirectURL: "https://postflow.example/oauth/x/callback",
+	})
+	if err != nil {
+		t.Fatalf("StartOAuth() error = %v", err)
+	}
+	if out.AuthURL != srv.URL+"/oauth/authenticate?oauth_token=req-token" {
+		t.Fatalf("auth url = %q, want %q", out.AuthURL, srv.URL+"/oauth/authenticate?oauth_token=req-token")
+	}
+	requestToken, requestSecret, ok := parseXOAuth1CodeVerifier(out.CodeVerifier)
+	if !ok {
+		t.Fatalf("expected oauth1 code verifier, got %q", out.CodeVerifier)
+	}
+	if requestToken != "req-token" || requestSecret != "req-secret" {
+		t.Fatalf("unexpected oauth1 code verifier contents: %q %q", requestToken, requestSecret)
+	}
+	if !strings.Contains(gotAuthHeader, "oauth_callback=") {
+		t.Fatalf("expected oauth_callback in auth header, got %q", gotAuthHeader)
+	}
+	if strings.Contains(gotAuthHeader, "oauth_token=") {
+		t.Fatalf("did not expect oauth_token in request token header, got %q", gotAuthHeader)
+	}
+}
+
+func TestXProviderHandleOAuthCallbackConnectsOAuth2Account(t *testing.T) {
 	var tokenForm url.Values
 	var tokenAuthHeader string
 	var profileAuthHeader string
@@ -185,6 +229,63 @@ func TestXProviderHandleOAuthCallbackConnectsOAuthAccount(t *testing.T) {
 	}
 	if profileAuthHeader != "Bearer x-access" {
 		t.Fatalf("profile authorization = %q, want %q", profileAuthHeader, "Bearer x-access")
+	}
+}
+
+func TestXProviderHandleOAuthCallbackConnectsOAuth1Account(t *testing.T) {
+	var accessAuthHeader string
+	var profileAuthHeader string
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/oauth/access_token":
+			accessAuthHeader = strings.TrimSpace(r.Header.Get("Authorization"))
+			_, _ = w.Write([]byte("oauth_token=user-token&oauth_token_secret=user-secret&user_id=2244994945&screen_name=postflowbot"))
+		case "/2/users/me":
+			profileAuthHeader = strings.TrimSpace(r.Header.Get("Authorization"))
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"data":{"id":"2244994945","name":"PostFlow Bot","username":"postflowbot"}}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	provider := NewXProvider(XConfig{
+		APIBaseURL:   srv.URL,
+		APIKey:       "x-api-key",
+		APIKeySecret: "x-api-secret",
+	})
+
+	accounts, err := provider.HandleOAuthCallback(context.Background(), OAuthCallbackInput{
+		Code:         "oauth-verifier",
+		CodeVerifier: formatXOAuth1CodeVerifier("req-token", "req-secret"),
+		RedirectURL:  "https://postflow.example/oauth/x/callback",
+	})
+	if err != nil {
+		t.Fatalf("HandleOAuthCallback() error = %v", err)
+	}
+	if len(accounts) != 1 {
+		t.Fatalf("expected 1 connected account, got %d", len(accounts))
+	}
+	account := accounts[0]
+	if account.Platform != domain.PlatformX || account.AccountKind != domain.AccountKindDefault {
+		t.Fatalf("unexpected account identity: %+v", account)
+	}
+	if account.DisplayName != "@postflowbot" {
+		t.Fatalf("display name = %q, want %q", account.DisplayName, "@postflowbot")
+	}
+	if account.Credentials.AccessToken != "user-token" || account.Credentials.AccessTokenSecret != "user-secret" {
+		t.Fatalf("unexpected oauth1 credentials: %+v", account.Credentials)
+	}
+	if account.Credentials.TokenType != "oauth1" {
+		t.Fatalf("token type = %q, want oauth1", account.Credentials.TokenType)
+	}
+	if !strings.Contains(accessAuthHeader, "oauth_verifier=") {
+		t.Fatalf("expected oauth_verifier in access token auth header, got %q", accessAuthHeader)
+	}
+	if !strings.Contains(profileAuthHeader, "oauth_token=") {
+		t.Fatalf("expected oauth signed profile request, got %q", profileAuthHeader)
 	}
 }
 

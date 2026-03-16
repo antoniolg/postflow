@@ -161,7 +161,7 @@ paths:
   /oauth/{platform}/start:
     post:
       summary: Start OAuth for a supported platform
-      description: Supported OAuth platforms are linkedin, facebook, and instagram. X uses static credentials via /accounts/static.
+      description: Supported OAuth platforms are x, linkedin, facebook, and instagram. X prefers OAuth1a account connection when `X_API_KEY` and `X_API_SECRET` are configured, and falls back to OAuth 2.0 when `X_CLIENT_ID` is configured.
       parameters:
         - $ref: '#/components/parameters/PlatformPath'
       responses:
@@ -187,7 +187,7 @@ paths:
   /oauth/{platform}/callback:
     get:
       summary: Complete OAuth and create/update account(s)
-      description: Supported OAuth platforms are linkedin, facebook, and instagram. X uses static credentials via /accounts/static.
+      description: Supported OAuth platforms are x, linkedin, facebook, and instagram. X OAuth callbacks may return either `code` (OAuth 2.0) or `oauth_verifier` (OAuth1a).
       parameters:
         - $ref: '#/components/parameters/PlatformPath'
         - in: query
@@ -197,7 +197,12 @@ paths:
             type: string
         - in: query
           name: code
-          required: true
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: oauth_verifier
+          required: false
           schema:
             type: string
       responses:

@@ -51,7 +51,8 @@ type OAuthStartInput struct {
 }
 
 type OAuthStartOutput struct {
-	AuthURL string
+	AuthURL      string
+	CodeVerifier string
 }
 
 type OAuthCallbackInput struct {

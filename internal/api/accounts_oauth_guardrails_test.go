@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -43,6 +44,50 @@ func (p *pkceCaptureProvider) StartOAuth(_ context.Context, in postflow.OAuthSta
 
 func (p *pkceCaptureProvider) HandleOAuthCallback(_ context.Context, _ postflow.OAuthCallbackInput) ([]postflow.ConnectedAccount, error) {
 	return nil, nil
+}
+
+type oauth1CaptureProvider struct {
+	lastStartInput    postflow.OAuthStartInput
+	lastCallbackInput postflow.OAuthCallbackInput
+}
+
+func (p *oauth1CaptureProvider) Platform() domain.Platform {
+	return domain.PlatformX
+}
+
+func (p *oauth1CaptureProvider) ValidateDraft(_ context.Context, _ domain.SocialAccount, _ postflow.Draft) ([]string, error) {
+	return nil, nil
+}
+
+func (p *oauth1CaptureProvider) Publish(_ context.Context, _ domain.SocialAccount, _ postflow.Credentials, _ domain.Post, _ postflow.PublishOptions) (string, error) {
+	return "ok", nil
+}
+
+func (p *oauth1CaptureProvider) RefreshIfNeeded(_ context.Context, _ domain.SocialAccount, credentials postflow.Credentials) (postflow.Credentials, bool, error) {
+	return credentials, false, nil
+}
+
+func (p *oauth1CaptureProvider) StartOAuth(_ context.Context, in postflow.OAuthStartInput) (postflow.OAuthStartOutput, error) {
+	p.lastStartInput = in
+	return postflow.OAuthStartOutput{
+		AuthURL:      "https://x.example/auth",
+		CodeVerifier: "oauth1:req-token:req-secret",
+	}, nil
+}
+
+func (p *oauth1CaptureProvider) HandleOAuthCallback(_ context.Context, in postflow.OAuthCallbackInput) ([]postflow.ConnectedAccount, error) {
+	p.lastCallbackInput = in
+	return []postflow.ConnectedAccount{{
+		Platform:          domain.PlatformX,
+		AccountKind:       domain.AccountKindDefault,
+		DisplayName:       "@postflowbot",
+		ExternalAccountID: "2244994945",
+		Credentials: postflow.Credentials{
+			AccessToken:       "user-token",
+			AccessTokenSecret: "user-secret",
+			TokenType:         "oauth1",
+		},
+	}}, nil
 }
 
 func TestAccountReturnToSanitizesUnsafeTargets(t *testing.T) {
@@ -209,6 +254,52 @@ func TestHandleOAuthStartGeneratesPKCECompatibleVerifier(t *testing.T) {
 	}
 	if ok, _ := regexp.MatchString(`^[A-Za-z0-9._~-]{43,128}$`, provider.lastVerifier); !ok {
 		t.Fatalf("code_verifier contains invalid characters: %q", provider.lastVerifier)
+	}
+}
+
+func TestOAuthCallbackAcceptsOAuth1VerifierParameter(t *testing.T) {
+	store, err := db.Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	provider := &oauth1CaptureProvider{}
+	srv := Server{
+		Store:             store,
+		DefaultMaxRetries: 3,
+		Registry:          postflow.NewProviderRegistry(provider),
+		PublicBaseURL:     "https://postflow.example",
+	}
+	handler := srv.Handler()
+
+	startRec := httptest.NewRecorder()
+	startReq := httptest.NewRequest(http.MethodPost, "/oauth/x/start", nil)
+	handler.ServeHTTP(startRec, startReq)
+	if startRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 oauth start, got %d body=%s", startRec.Code, startRec.Body.String())
+	}
+	var started struct {
+		State string `json:"state"`
+	}
+	if err := json.Unmarshal(startRec.Body.Bytes(), &started); err != nil {
+		t.Fatalf("decode start payload: %v", err)
+	}
+	if strings.TrimSpace(started.State) == "" {
+		t.Fatalf("expected state in oauth start payload")
+	}
+
+	callbackRec := httptest.NewRecorder()
+	callbackReq := httptest.NewRequest(http.MethodGet, "/oauth/x/callback?state="+url.QueryEscape(started.State)+"&oauth_verifier=verifier_1", nil)
+	handler.ServeHTTP(callbackRec, callbackReq)
+	if callbackRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 oauth callback, got %d body=%s", callbackRec.Code, callbackRec.Body.String())
+	}
+	if provider.lastCallbackInput.Code != "verifier_1" {
+		t.Fatalf("callback code = %q, want verifier_1", provider.lastCallbackInput.Code)
+	}
+	if provider.lastCallbackInput.CodeVerifier != "oauth1:req-token:req-secret" {
+		t.Fatalf("callback code verifier = %q, want oauth1 request token payload", provider.lastCallbackInput.CodeVerifier)
 	}
 }
 

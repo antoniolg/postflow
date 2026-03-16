@@ -46,8 +46,10 @@ func (s oauth1Signer) AuthorizationHeader(method, rawURL string, signatureParams
 		"oauth_nonce":            s.nonce(),
 		"oauth_signature_method": "HMAC-SHA1",
 		"oauth_timestamp":        fmt.Sprintf("%d", s.now().Unix()),
-		"oauth_token":            s.creds.Token,
 		"oauth_version":          "1.0",
+	}
+	if strings.TrimSpace(s.creds.Token) != "" {
+		oauthParams["oauth_token"] = s.creds.Token
 	}
 
 	all := map[string]string{}
@@ -59,6 +61,9 @@ func (s oauth1Signer) AuthorizationHeader(method, rawURL string, signatureParams
 	}
 	for k, v := range signatureParams {
 		all[k] = v
+		if strings.HasPrefix(strings.TrimSpace(k), "oauth_") && strings.TrimSpace(v) != "" {
+			oauthParams[k] = v
+		}
 	}
 	for k, v := range oauthParams {
 		all[k] = v

@@ -98,8 +98,8 @@ func TestSettingsViewRendersAccountsBlockWithActions(t *testing.T) {
 			t.Fatalf("expected oauth start action %s in settings", oauthStartPath)
 		}
 	}
-	if !strings.Contains(body, "x also supports static oauth1 credentials via env, API, or CLI") {
-		t.Fatalf("expected x static credentials hint in settings")
+	if !strings.Contains(body, "x connects via oauth1a when api key/secret are set") {
+		t.Fatalf("expected x oauth1a hint in settings")
 	}
 	if !strings.Contains(body, "@media (max-width: 520px)") {
 		t.Fatalf("expected mobile breakpoint css in settings view")

@@ -16,6 +16,7 @@ import (
 )
 
 const xOAuthScope = "tweet.read tweet.write users.read media.write offline.access"
+const xOAuth1CodeVerifierPrefix = "oauth1:"
 
 type xTokenResponse struct {
 	AccessToken  string `json:"access_token"`
@@ -57,7 +58,10 @@ func (p *XProvider) RefreshIfNeeded(ctx context.Context, _ domain.SocialAccount,
 	return updated, true, nil
 }
 
-func (p *XProvider) StartOAuth(_ context.Context, in OAuthStartInput) (OAuthStartOutput, error) {
+func (p *XProvider) StartOAuth(ctx context.Context, in OAuthStartInput) (OAuthStartOutput, error) {
+	if p.hasOAuth1ConnectConfig() {
+		return p.startOAuth1(ctx, in)
+	}
 	if strings.TrimSpace(p.cfg.ClientID) == "" {
 		return OAuthStartOutput{}, fmt.Errorf("x oauth not configured")
 	}
@@ -75,6 +79,9 @@ func (p *XProvider) StartOAuth(_ context.Context, in OAuthStartInput) (OAuthStar
 }
 
 func (p *XProvider) HandleOAuthCallback(ctx context.Context, in OAuthCallbackInput) ([]ConnectedAccount, error) {
+	if requestToken, requestTokenSecret, ok := parseXOAuth1CodeVerifier(in.CodeVerifier); ok {
+		return p.handleOAuth1Callback(ctx, in, requestToken, requestTokenSecret)
+	}
 	tokenResp, err := p.exchangeToken(ctx, url.Values{
 		"grant_type":    {"authorization_code"},
 		"code":          {strings.TrimSpace(in.Code)},
@@ -111,6 +118,7 @@ func (p *XProvider) HandleOAuthCallback(ctx context.Context, in OAuthCallbackInp
 	}
 	return []ConnectedAccount{{
 		Platform:          domain.PlatformX,
+		AccountKind:       domain.AccountKindDefault,
 		DisplayName:       displayName,
 		ExternalAccountID: strings.TrimSpace(user.ID),
 		Credentials:       creds,
@@ -201,6 +209,18 @@ func (p *XProvider) authBaseURL() string {
 	return "https://x.com"
 }
 
+func (p *XProvider) hasOAuth1ConnectConfig() bool {
+	return strings.TrimSpace(p.cfg.APIKey) != "" && strings.TrimSpace(p.cfg.APIKeySecret) != ""
+}
+
+func (p *XProvider) oauth1BaseURL() string {
+	base := strings.TrimSpace(p.cfg.APIBaseURL)
+	if base == "" || base == "https://api.x.com" {
+		return "https://api.twitter.com"
+	}
+	return strings.TrimRight(base, "/")
+}
+
 func (p *XProvider) tokenURL() string {
 	if strings.TrimSpace(p.cfg.TokenURL) != "" {
 		return strings.TrimSpace(p.cfg.TokenURL)
@@ -218,4 +238,170 @@ func (p *XProvider) apiBaseURL() string {
 func xCodeChallengeS256(codeVerifier string) string {
 	sum := sha256.Sum256([]byte(strings.TrimSpace(codeVerifier)))
 	return base64.RawURLEncoding.EncodeToString(sum[:])
+}
+
+func (p *XProvider) startOAuth1(ctx context.Context, in OAuthStartInput) (OAuthStartOutput, error) {
+	callbackURL, err := appendQueryValue(strings.TrimSpace(in.RedirectURL), "state", strings.TrimSpace(in.State))
+	if err != nil {
+		return OAuthStartOutput{}, err
+	}
+	responseValues, err := p.oauth1FormExchange(ctx, "/oauth/request_token", oauth1Credentials{
+		ConsumerKey:    strings.TrimSpace(p.cfg.APIKey),
+		ConsumerSecret: strings.TrimSpace(p.cfg.APIKeySecret),
+	}, map[string]string{
+		"oauth_callback": callbackURL,
+	})
+	if err != nil {
+		return OAuthStartOutput{}, err
+	}
+	requestToken := strings.TrimSpace(responseValues.Get("oauth_token"))
+	requestTokenSecret := strings.TrimSpace(responseValues.Get("oauth_token_secret"))
+	if requestToken == "" || requestTokenSecret == "" {
+		return OAuthStartOutput{}, fmt.Errorf("x oauth request token response missing oauth token")
+	}
+	return OAuthStartOutput{
+		AuthURL:      p.oauth1BaseURL() + "/oauth/authenticate?oauth_token=" + url.QueryEscape(requestToken),
+		CodeVerifier: formatXOAuth1CodeVerifier(requestToken, requestTokenSecret),
+	}, nil
+}
+
+func (p *XProvider) handleOAuth1Callback(ctx context.Context, in OAuthCallbackInput, requestToken, requestTokenSecret string) ([]ConnectedAccount, error) {
+	values, err := p.oauth1FormExchange(ctx, "/oauth/access_token", oauth1Credentials{
+		ConsumerKey:    strings.TrimSpace(p.cfg.APIKey),
+		ConsumerSecret: strings.TrimSpace(p.cfg.APIKeySecret),
+		Token:          requestToken,
+		TokenSecret:    requestTokenSecret,
+	}, map[string]string{
+		"oauth_verifier": strings.TrimSpace(in.Code),
+	})
+	if err != nil {
+		return nil, err
+	}
+	accessToken := strings.TrimSpace(values.Get("oauth_token"))
+	accessTokenSecret := strings.TrimSpace(values.Get("oauth_token_secret"))
+	if accessToken == "" || accessTokenSecret == "" {
+		return nil, fmt.Errorf("x oauth access token response missing oauth token")
+	}
+	user, err := p.fetchCurrentUserOAuth1(ctx, accessToken, accessTokenSecret)
+	if err != nil {
+		return nil, err
+	}
+	displayName := "X " + user.ID
+	if strings.TrimSpace(user.Username) != "" {
+		displayName = "@" + strings.TrimSpace(user.Username)
+	} else if strings.TrimSpace(user.Name) != "" {
+		displayName = strings.TrimSpace(user.Name)
+	}
+	return []ConnectedAccount{{
+		Platform:          domain.PlatformX,
+		AccountKind:       domain.AccountKindDefault,
+		DisplayName:       displayName,
+		ExternalAccountID: strings.TrimSpace(user.ID),
+		Credentials: Credentials{
+			AccessToken:       accessToken,
+			AccessTokenSecret: accessTokenSecret,
+			TokenType:         "oauth1",
+			Extra: map[string]string{
+				"username": strings.TrimSpace(user.Username),
+				"name":     strings.TrimSpace(user.Name),
+			},
+		},
+	}}, nil
+}
+
+func (p *XProvider) oauth1FormExchange(ctx context.Context, path string, creds oauth1Credentials, oauthParams map[string]string) (url.Values, error) {
+	endpoint := p.oauth1BaseURL() + path
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/x-www-form-urlencoded")
+	if err := signRequest(req, newOAuth1Signer(creds), oauthParams); err != nil {
+		return nil, err
+	}
+	resp, err := p.httpClient().Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+	if resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("x oauth request failed: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	values, err := url.ParseQuery(strings.TrimSpace(string(body)))
+	if err != nil {
+		return nil, err
+	}
+	return values, nil
+}
+
+func (p *XProvider) fetchCurrentUserOAuth1(ctx context.Context, accessToken, accessTokenSecret string) (xCurrentUser, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(p.apiBaseURL(), "/")+"/2/users/me", nil)
+	if err != nil {
+		return xCurrentUser{}, err
+	}
+	req.Header.Set("Accept", "application/json")
+	if err := signRequest(req, newOAuth1Signer(oauth1Credentials{
+		ConsumerKey:    strings.TrimSpace(p.cfg.APIKey),
+		ConsumerSecret: strings.TrimSpace(p.cfg.APIKeySecret),
+		Token:          strings.TrimSpace(accessToken),
+		TokenSecret:    strings.TrimSpace(accessTokenSecret),
+	}), nil); err != nil {
+		return xCurrentUser{}, err
+	}
+	resp, err := p.httpClient().Do(req)
+	if err != nil {
+		return xCurrentUser{}, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+	if resp.StatusCode >= 300 {
+		return xCurrentUser{}, fmt.Errorf("x profile fetch failed: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	var out struct {
+		Data struct {
+			ID       string `json:"id"`
+			Name     string `json:"name"`
+			Username string `json:"username"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return xCurrentUser{}, err
+	}
+	user := xCurrentUser{
+		ID:       strings.TrimSpace(out.Data.ID),
+		Name:     strings.TrimSpace(out.Data.Name),
+		Username: strings.TrimSpace(out.Data.Username),
+	}
+	if user.ID == "" {
+		return xCurrentUser{}, fmt.Errorf("x profile response missing user id")
+	}
+	return user, nil
+}
+
+func appendQueryValue(rawURL, key, value string) (string, error) {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return "", err
+	}
+	query := parsed.Query()
+	query.Set(strings.TrimSpace(key), strings.TrimSpace(value))
+	parsed.RawQuery = query.Encode()
+	return parsed.String(), nil
+}
+
+func formatXOAuth1CodeVerifier(requestToken, requestTokenSecret string) string {
+	return xOAuth1CodeVerifierPrefix + strings.TrimSpace(requestToken) + ":" + strings.TrimSpace(requestTokenSecret)
+}
+
+func parseXOAuth1CodeVerifier(raw string) (requestToken, requestTokenSecret string, ok bool) {
+	trimmed := strings.TrimSpace(raw)
+	if !strings.HasPrefix(trimmed, xOAuth1CodeVerifierPrefix) {
+		return "", "", false
+	}
+	parts := strings.SplitN(strings.TrimPrefix(trimmed, xOAuth1CodeVerifierPrefix), ":", 2)
+	if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
+		return "", "", false
+	}
+	return strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1]), true
 }

@@ -82,7 +82,7 @@ Use `.env.example` as template. These are the key ones:
 
 | Network | Variables | Where to get them |
 |---|---|---|
-| X | `X_CLIENT_ID`, `X_CLIENT_SECRET` | X Developer Portal OAuth 2.0 app credentials for account connection |
+| X | `X_API_KEY`, `X_API_SECRET` or `X_CLIENT_ID`, `X_CLIENT_SECRET` | X account connection supports OAuth1a with API key/secret and falls back to OAuth 2.0 client credentials when configured |
 | X (static optional) | `X_API_KEY`, `X_API_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_TOKEN_SECRET` | Static OAuth1 credentials for bootstrap/default X publishing |
 | LinkedIn | `LINKEDIN_CLIENT_ID`, `LINKEDIN_CLIENT_SECRET` | LinkedIn Developer app with member posting enabled. To connect company pages, the app must also have organization posting/admin scopes approved. |
 | Facebook/Instagram | `META_APP_ID`, `META_APP_SECRET` | Meta Developers app |
@@ -249,7 +249,8 @@ Full production runbook:
   - check `Authorization: Bearer ...` in MCP/API clients
 - OAuth callback errors:
   - verify `PUBLIC_BASE_URL` matches your real public domain
-  - for X, verify `X_CLIENT_ID` is set and the callback URL is registered in the X app settings
+  - for X OAuth1a, verify `X_API_KEY` and `X_API_SECRET` are set and the callback URL is registered in the X app settings
+  - for X OAuth 2.0, verify `X_CLIENT_ID` is set and the callback URL is registered in the X app settings
 - Instagram media create errors (`code=9004`, `error_subcode=2207052`):
   - verify `PUBLIC_BASE_URL` is public/reachable from the internet (not `localhost` in production)
   - for image posts, upload JPEG (`.jpg` / `.jpeg`)
