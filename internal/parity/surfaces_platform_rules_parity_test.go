@@ -81,6 +81,31 @@ func TestPlatformRulesParityInstagramRejectsEditRemovingMedia(t *testing.T) {
 	}
 }
 
+func TestPlatformRulesParityInstagramAllowsPNGMediaOnCreate(t *testing.T) {
+	env := newParityEnv(t)
+	instagramAccountID := env.apiCreateStaticAccount("instagram", "parity_instagram_png_create", map[string]any{
+		"access_token": "tok_ig_png_create",
+	})
+	mediaID := createParityImageMedia(t, env, "ig_create_media.png")
+
+	apiPostID := env.apiCreatePostForAccount(instagramAccountID, "instagram png api", time.Time{}, []string{mediaID})
+	cliPostID := env.cliCreatePostForAccount(instagramAccountID, "instagram png cli", []string{mediaID})
+	mcpPostID := env.mcpCreatePostForAccount(instagramAccountID, "instagram png mcp", []string{mediaID})
+
+	for _, id := range []string{apiPostID, cliPostID, mcpPostID} {
+		post, err := env.store.GetPost(t.Context(), strings.TrimSpace(id))
+		if err != nil {
+			t.Fatalf("get post %s: %v", id, err)
+		}
+		if len(post.Media) != 1 || strings.TrimSpace(post.Media[0].ID) != mediaID {
+			t.Fatalf("expected png media %s on %s, got %#v", mediaID, id, post.Media)
+		}
+		if strings.TrimSpace(post.Media[0].MimeType) != "image/png" {
+			t.Fatalf("expected image/png on %s, got %q", id, post.Media[0].MimeType)
+		}
+	}
+}
+
 func TestPlatformRulesParityLinkedInEditReplacesMediaAndKeepsSchedule(t *testing.T) {
 	env := newParityEnv(t)
 	linkedInAccountID := env.apiCreateStaticAccount("linkedin", "parity_linkedin_edit_media", map[string]any{
