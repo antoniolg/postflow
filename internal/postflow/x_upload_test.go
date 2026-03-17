@@ -345,8 +345,8 @@ func TestUploadChunkedOAuth2UsesV2Endpoints(t *testing.T) {
 		case r.URL.Path == "/2/media/upload/mid_v2/append":
 			commands = append(commands, "APPEND:"+r.Method)
 			appendAuth = strings.TrimSpace(r.Header.Get("Authorization"))
-			if got := r.URL.Query().Get("segment_index"); got != "0" {
-				t.Fatalf("segment_index = %q, want 0", got)
+			if raw := strings.TrimSpace(r.URL.RawQuery); raw != "" {
+				t.Fatalf("expected append request without query params, got %q", raw)
 			}
 			w.WriteHeader(http.StatusNoContent)
 		case r.URL.Path == "/2/media/upload/mid_v2/finalize":

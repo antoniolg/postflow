@@ -251,7 +251,7 @@ func (c *XClient) uploadAppendOAuth2(ctx context.Context, mediaID string, media 
 		return err
 	}
 
-	appendURL := fmt.Sprintf("%s/2/media/upload/%s/append?segment_index=0", c.apiBaseURL, url.PathEscape(mediaID))
+	appendURL := fmt.Sprintf("%s/2/media/upload/%s/append", c.apiBaseURL, url.PathEscape(mediaID))
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, appendURL, &body)
 	if err != nil {
 		return err
