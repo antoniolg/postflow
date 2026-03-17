@@ -127,11 +127,15 @@ func (e *parityEnv) mcpCallToolError(name string, args map[string]any) string {
 func (e *parityEnv) mcpScheduleListIDs(from, to string) []string {
 	e.t.Helper()
 	out := e.mcpCallTool("postflow_list_schedule", map[string]any{"from": from, "to": to, "limit": 200})
-	posts, _ := out["posts"].([]any)
-	ids := make([]string, 0, len(posts))
-	for _, item := range posts {
+	items, _ := out["items"].([]any)
+	ids := make([]string, 0, len(items))
+	for _, item := range items {
 		obj, _ := item.(map[string]any)
-		ids = append(ids, strings.TrimSpace(stringValue(obj, "id")))
+		id := strings.TrimSpace(stringValue(obj, "publication_id"))
+		if id == "" {
+			id = strings.TrimSpace(stringValue(obj, "root_post_id"))
+		}
+		ids = append(ids, id)
 	}
 	return ids
 }

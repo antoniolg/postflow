@@ -3,9 +3,13 @@ package parity_test
 import (
 	"database/sql"
 	"errors"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/antoniolg/postflow/internal/db"
+	"github.com/antoniolg/postflow/internal/domain"
 )
 
 func TestRequiredCapabilitiesBehaviorParity(t *testing.T) {
@@ -21,6 +25,64 @@ func TestRequiredCapabilitiesBehaviorParity(t *testing.T) {
 		assertContainsID(t, "api schedule list", env.apiScheduleListIDs(from, to), postID)
 		assertContainsID(t, "cli schedule list", env.cliScheduleListIDs(from, to), postID)
 		assertContainsID(t, "mcp schedule list", env.mcpScheduleListIDs(from, to), postID)
+	})
+
+	t.Run("schedule.list publications keeps one item per network thread", func(t *testing.T) {
+		scheduledAt := time.Now().UTC().Add(35 * time.Minute).Round(time.Second)
+		linkedIn := mustCreateParityAccount(t, env, domain.PlatformLinkedIn, "li-pubs")
+		instagram := mustCreateParityAccount(t, env, domain.PlatformInstagram, "ig-pubs")
+		facebook := mustCreateParityAccount(t, env, domain.PlatformFacebook, "fb-pubs")
+		media, err := env.store.CreateMedia(t.Context(), domain.Media{
+			Kind:         "image",
+			OriginalName: "parity-card.png",
+			StoragePath:  env.tempFile,
+			MimeType:     "image/png",
+			SizeBytes:    128,
+		})
+		if err != nil {
+			t.Fatalf("create parity media: %v", err)
+		}
+
+		for _, accountID := range []string{linkedIn, instagram, facebook} {
+			raw, status := env.apiJSON(http.MethodPost, "/posts", map[string]any{
+				"account_id":   accountID,
+				"scheduled_at": scheduledAt.UTC().Format(time.RFC3339),
+				"segments": []map[string]any{
+					{"text": "cross-network root", "media_ids": []string{media.ID}},
+					{"text": "cross-network reply"},
+				},
+			}, "application/json")
+			if status != http.StatusCreated && status != http.StatusOK {
+				t.Fatalf("create thread for account %s status=%d body=%s", accountID, status, string(raw))
+			}
+		}
+
+		from := time.Now().UTC().Add(-1 * time.Hour).Format(time.RFC3339)
+		to := time.Now().UTC().Add(24 * time.Hour).Format(time.RFC3339)
+
+		for label, items := range map[string][]parityScheduledPublication{
+			"api": env.apiScheduleListPublicationsDetailed(from, to),
+			"cli": env.cliScheduleListPublicationsDetailed(from, to),
+			"mcp": env.mcpScheduleListPublicationsDetailed(from, to),
+		} {
+			var matched []parityScheduledPublication
+			for _, item := range items {
+				if item.AccountID == linkedIn || item.AccountID == instagram || item.AccountID == facebook {
+					matched = append(matched, item)
+				}
+			}
+			if len(matched) != 3 {
+				t.Fatalf("%s expected 3 network-specific publications, got %d (%+v)", label, len(matched), matched)
+			}
+			for _, item := range matched {
+				if item.SegmentCount != 2 {
+					t.Fatalf("%s expected segment_count=2 for %+v", label, item)
+				}
+				if len(item.Segments) != 2 {
+					t.Fatalf("%s expected two reconstructed segments for %+v", label, item)
+				}
+			}
+		}
 	})
 
 	t.Run("posts.create", func(t *testing.T) {
@@ -251,6 +313,21 @@ func assertContainsID(t *testing.T, label string, ids []string, expected string)
 		}
 	}
 	t.Fatalf("%s does not contain %q; got=%v", label, expected, ids)
+}
+
+func mustCreateParityAccount(t *testing.T, env *parityEnv, platform domain.Platform, externalID string) string {
+	t.Helper()
+	account, err := env.store.UpsertAccount(t.Context(), db.UpsertAccountParams{
+		Platform:          platform,
+		DisplayName:       strings.ToUpper(string(platform)) + " parity",
+		ExternalAccountID: externalID,
+		AuthMethod:        domain.AuthMethodStatic,
+		Status:            domain.AccountStatusConnected,
+	})
+	if err != nil {
+		t.Fatalf("upsert parity account for %s: %v", platform, err)
+	}
+	return account.ID
 }
 
 func assertNotContainsID(t *testing.T, label string, ids []string, banned string) {

@@ -203,16 +203,32 @@ func (s Server) handleScheduleJSON(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	items, err := s.Store.ListSchedule(r.Context(), from, to)
+	view, err := postsapp.ParseScheduleListView(r.URL.Query().Get("view"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	svc := postsapp.ScheduleListService{Store: s.Store}
+	out, err := svc.List(r.Context(), from, to, view)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	payload := map[string]any{
 		"from":  from.Format(time.RFC3339),
 		"to":    to.Format(time.RFC3339),
-		"items": items,
-	})
+		"count": 0,
+	}
+	if view == postsapp.ScheduleListViewPosts {
+		payload["items"] = out.Posts
+		payload["count"] = len(out.Posts)
+		writeJSON(w, http.StatusOK, payload)
+		return
+	}
+	payload["items"] = out.Publications
+	payload["count"] = len(out.Publications)
+	writeJSON(w, http.StatusOK, payload)
 }
 
 func (s Server) handleListDraftsJSON(w http.ResponseWriter, r *http.Request) {

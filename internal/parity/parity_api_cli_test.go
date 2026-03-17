@@ -110,13 +110,18 @@ func (e *parityEnv) apiScheduleListIDs(from, to string) []string {
 	}
 	var out struct {
 		Items []struct {
-			ID string `json:"id"`
+			PublicationID string `json:"publication_id"`
+			RootPostID    string `json:"root_post_id"`
 		} `json:"items"`
 	}
 	mustJSON(e.t, raw, &out)
 	ids := make([]string, 0, len(out.Items))
 	for _, item := range out.Items {
-		ids = append(ids, strings.TrimSpace(item.ID))
+		id := strings.TrimSpace(item.PublicationID)
+		if id == "" {
+			id = strings.TrimSpace(item.RootPostID)
+		}
+		ids = append(ids, id)
 	}
 	return ids
 }
@@ -370,13 +375,18 @@ func (e *parityEnv) cliScheduleListIDs(from, to string) []string {
 	raw := e.runCLI("schedule", "list", "--from", from, "--to", to)
 	var out struct {
 		Items []struct {
-			ID string `json:"id"`
+			PublicationID string `json:"publication_id"`
+			RootPostID    string `json:"root_post_id"`
 		} `json:"items"`
 	}
 	mustJSON(e.t, raw, &out)
 	ids := make([]string, 0, len(out.Items))
 	for _, item := range out.Items {
-		ids = append(ids, strings.TrimSpace(item.ID))
+		id := strings.TrimSpace(item.PublicationID)
+		if id == "" {
+			id = strings.TrimSpace(item.RootPostID)
+		}
+		ids = append(ids, id)
 	}
 	return ids
 }

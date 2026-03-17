@@ -17,6 +17,26 @@ type parityThreadPost struct {
 	RootPostID     string `json:"root_post_id,omitempty"`
 }
 
+type parityPublicationSegment struct {
+	PostID     string `json:"post_id"`
+	Position   int    `json:"position"`
+	Text       string `json:"text"`
+	MediaCount int    `json:"media_count"`
+}
+
+type parityScheduledPublication struct {
+	PublicationID string                     `json:"publication_id"`
+	RootPostID    string                     `json:"root_post_id"`
+	AccountID     string                     `json:"account_id"`
+	Platform      string                     `json:"platform"`
+	Status        string                     `json:"status"`
+	ThreadGroupID string                     `json:"thread_group_id,omitempty"`
+	SegmentCount  int                        `json:"segment_count"`
+	MediaCount    int                        `json:"media_count"`
+	HasMedia      bool                       `json:"has_media"`
+	Segments      []parityPublicationSegment `json:"segments"`
+}
+
 type parityThreadCreateOutput struct {
 	RootID     string             `json:"root_id,omitempty"`
 	TotalSteps int                `json:"total_steps,omitempty"`
@@ -67,13 +87,27 @@ func (e *parityEnv) apiEditThread(id string, segments []map[string]any) {
 
 func (e *parityEnv) apiScheduleListPostsDetailed(from, to string) []parityThreadPost {
 	e.t.Helper()
-	path := "/schedule?from=" + encodeQueryValue(from) + "&to=" + encodeQueryValue(to)
+	path := "/schedule?view=posts&from=" + encodeQueryValue(from) + "&to=" + encodeQueryValue(to)
 	raw, status := e.apiJSON(http.MethodGet, path, nil, "")
 	if status != http.StatusOK {
 		e.t.Fatalf("schedule list status=%d body=%s", status, string(raw))
 	}
 	var out struct {
 		Items []parityThreadPost `json:"items"`
+	}
+	mustJSON(e.t, raw, &out)
+	return out.Items
+}
+
+func (e *parityEnv) apiScheduleListPublicationsDetailed(from, to string) []parityScheduledPublication {
+	e.t.Helper()
+	path := "/schedule?from=" + encodeQueryValue(from) + "&to=" + encodeQueryValue(to)
+	raw, status := e.apiJSON(http.MethodGet, path, nil, "")
+	if status != http.StatusOK {
+		e.t.Fatalf("schedule list publications status=%d body=%s", status, string(raw))
+	}
+	var out struct {
+		Items []parityScheduledPublication `json:"items"`
 	}
 	mustJSON(e.t, raw, &out)
 	return out.Items
@@ -94,9 +128,19 @@ func (e *parityEnv) cliEditThread(id, segmentsJSON string) {
 
 func (e *parityEnv) cliScheduleListPostsDetailed(from, to string) []parityThreadPost {
 	e.t.Helper()
-	raw := e.runCLI("schedule", "list", "--from", from, "--to", to)
+	raw := e.runCLI("schedule", "list", "--view", "posts", "--from", from, "--to", to)
 	var out struct {
 		Items []parityThreadPost `json:"items"`
+	}
+	mustJSON(e.t, raw, &out)
+	return out.Items
+}
+
+func (e *parityEnv) cliScheduleListPublicationsDetailed(from, to string) []parityScheduledPublication {
+	e.t.Helper()
+	raw := e.runCLI("schedule", "list", "--from", from, "--to", to)
+	var out struct {
+		Items []parityScheduledPublication `json:"items"`
 	}
 	mustJSON(e.t, raw, &out)
 	return out.Items
@@ -130,8 +174,14 @@ func (e *parityEnv) mcpEditThread(id string, segments []map[string]any) {
 
 func (e *parityEnv) mcpScheduleListPostsDetailed(from, to string) []parityThreadPost {
 	e.t.Helper()
-	out := e.mcpCallTool("postflow_list_schedule", map[string]any{"from": from, "to": to, "limit": 200})
+	out := e.mcpCallTool("postflow_list_schedule", map[string]any{"from": from, "to": to, "limit": 200, "view": "posts"})
 	return decodeMCPThreadPosts(out["posts"])
+}
+
+func (e *parityEnv) mcpScheduleListPublicationsDetailed(from, to string) []parityScheduledPublication {
+	e.t.Helper()
+	out := e.mcpCallTool("postflow_list_schedule", map[string]any{"from": from, "to": to, "limit": 200})
+	return decodeMCPPublications(out["items"])
 }
 
 func decodeMCPThreadCreateOutput(e *parityEnv, out map[string]any) parityThreadCreateOutput {
@@ -165,6 +215,50 @@ func decodeMCPThreadPosts(raw any) []parityThreadPost {
 			continue
 		}
 		out = append(out, decodeMCPThreadPost(obj))
+	}
+	return out
+}
+
+func decodeMCPPublications(raw any) []parityScheduledPublication {
+	items, _ := raw.([]any)
+	out := make([]parityScheduledPublication, 0, len(items))
+	for _, entry := range items {
+		obj, _ := entry.(map[string]any)
+		if obj == nil {
+			continue
+		}
+		out = append(out, decodeMCPPublication(obj))
+	}
+	return out
+}
+
+func decodeMCPPublication(obj map[string]any) parityScheduledPublication {
+	segments, _ := obj["segments"].([]any)
+	out := parityScheduledPublication{
+		PublicationID: strings.TrimSpace(stringValue(obj, "publication_id")),
+		RootPostID:    strings.TrimSpace(stringValue(obj, "root_post_id")),
+		AccountID:     strings.TrimSpace(stringValue(obj, "account_id")),
+		Platform:      strings.TrimSpace(stringValue(obj, "platform")),
+		Status:        strings.TrimSpace(stringValue(obj, "status")),
+		ThreadGroupID: strings.TrimSpace(stringValue(obj, "thread_group_id")),
+		SegmentCount:  intValue(obj, "segment_count"),
+		MediaCount:    intValue(obj, "media_count"),
+	}
+	if raw, ok := obj["has_media"].(bool); ok {
+		out.HasMedia = raw
+	}
+	out.Segments = make([]parityPublicationSegment, 0, len(segments))
+	for _, rawSegment := range segments {
+		segmentObj, _ := rawSegment.(map[string]any)
+		if segmentObj == nil {
+			continue
+		}
+		out.Segments = append(out.Segments, parityPublicationSegment{
+			PostID:     strings.TrimSpace(stringValue(segmentObj, "post_id")),
+			Position:   intValue(segmentObj, "position"),
+			Text:       strings.TrimSpace(stringValue(segmentObj, "text")),
+			MediaCount: intValue(segmentObj, "media_count"),
+		})
 	}
 	return out
 }

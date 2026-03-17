@@ -11,6 +11,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	postsapp "github.com/antoniolg/postflow/internal/application/posts"
 )
 
 const Version = "dev"
@@ -22,10 +24,18 @@ type config struct {
 	asJSON  bool
 }
 
-type scheduleResponse struct {
+type schedulePostsResponse struct {
+	Count int       `json:"count"`
 	From  string    `json:"from"`
 	To    string    `json:"to"`
 	Items []postDTO `json:"items"`
+}
+
+type schedulePublicationsResponse struct {
+	Count int              `json:"count"`
+	From  string           `json:"from"`
+	To    string           `json:"to"`
+	Items []publicationDTO `json:"items"`
 }
 
 type postDTO struct {
@@ -39,6 +49,28 @@ type postDTO struct {
 	ThreadPosition int    `json:"thread_position,omitempty"`
 	ParentPostID   string `json:"parent_post_id,omitempty"`
 	RootPostID     string `json:"root_post_id,omitempty"`
+}
+
+type publicationDTO struct {
+	PublicationID string                  `json:"publication_id"`
+	RootPostID    string                  `json:"root_post_id"`
+	ThreadGroupID string                  `json:"thread_group_id,omitempty"`
+	AccountID     string                  `json:"account_id"`
+	Platform      string                  `json:"platform"`
+	Status        string                  `json:"status"`
+	ScheduledAt   string                  `json:"scheduled_at"`
+	SegmentCount  int                     `json:"segment_count"`
+	MediaCount    int                     `json:"media_count"`
+	HasMedia      bool                    `json:"has_media"`
+	Segments      []publicationSegmentDTO `json:"segments"`
+}
+
+type publicationSegmentDTO struct {
+	PostID     string   `json:"post_id"`
+	Position   int      `json:"position"`
+	Text       string   `json:"text"`
+	MediaCount int      `json:"media_count"`
+	MediaIDs   []string `json:"media_ids,omitempty"`
 }
 
 type dlqListResponse struct {
@@ -153,16 +185,23 @@ func parseGlobalArgs(args []string, stdout, stderr io.Writer) (config, []string,
 
 func runSchedule(ctx context.Context, client *APIClient, cfg config, args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 || args[0] != "list" {
-		fmt.Fprintln(stderr, "usage: postflow schedule list [--from RFC3339] [--to RFC3339]")
+		fmt.Fprintln(stderr, "usage: postflow schedule list [--from RFC3339] [--to RFC3339] [--view publications|posts]")
 		return 2
 	}
 	fs := flag.NewFlagSet("schedule list", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	var from string
 	var to string
+	var view string
 	fs.StringVar(&from, "from", "", "From date (RFC3339)")
 	fs.StringVar(&to, "to", "", "To date (RFC3339)")
+	fs.StringVar(&view, "view", string(postsapp.ScheduleListViewPublications), "View: publications|posts")
 	if err := fs.Parse(args[1:]); err != nil {
+		return 2
+	}
+	parsedView, err := postsapp.ParseScheduleListView(view)
+	if err != nil {
+		fmt.Fprintln(stderr, err.Error())
 		return 2
 	}
 
@@ -173,7 +212,25 @@ func runSchedule(ctx context.Context, client *APIClient, cfg config, args []stri
 	if strings.TrimSpace(to) != "" {
 		query.Set("to", strings.TrimSpace(to))
 	}
-	var out scheduleResponse
+	query.Set("view", string(parsedView))
+	if parsedView == postsapp.ScheduleListViewPosts {
+		var out schedulePostsResponse
+		if err := client.Get(ctx, "/schedule", query, &out); err != nil {
+			fmt.Fprintln(stderr, err.Error())
+			return 1
+		}
+		printOutput(stdout, cfg.asJSON, out, func() {
+			fmt.Fprintf(stdout, "from: %s\n", out.From)
+			fmt.Fprintf(stdout, "to:   %s\n", out.To)
+			fmt.Fprintf(stdout, "items: %d\n", len(out.Items))
+			for _, item := range out.Items {
+				fmt.Fprintf(stdout, "- [%s] %s %s · %s\n", item.Status, item.ScheduledAt, item.ID, oneLine(item.Text, 90))
+			}
+		})
+		return 0
+	}
+
+	var out schedulePublicationsResponse
 	if err := client.Get(ctx, "/schedule", query, &out); err != nil {
 		fmt.Fprintln(stderr, err.Error())
 		return 1
@@ -183,7 +240,7 @@ func runSchedule(ctx context.Context, client *APIClient, cfg config, args []stri
 		fmt.Fprintf(stdout, "to:   %s\n", out.To)
 		fmt.Fprintf(stdout, "items: %d\n", len(out.Items))
 		for _, item := range out.Items {
-			fmt.Fprintf(stdout, "- [%s] %s %s · %s\n", item.Status, item.ScheduledAt, item.ID, oneLine(item.Text, 90))
+			fmt.Fprintf(stdout, "- [%s] %s %s %s · %d segments · media=%d\n", item.Status, item.ScheduledAt, item.Platform, item.PublicationID, item.SegmentCount, item.MediaCount)
 		}
 	})
 	return 0
@@ -549,7 +606,7 @@ Global flags:
 
 Commands:
   health                 Check service health via /healthz
-  schedule list          List scheduled posts from /schedule
+  schedule list          List scheduled publications from /schedule
   drafts list            List drafts via /drafts
   posts create           Create post via /posts
   posts validate         Validate payload via /posts/validate
@@ -573,6 +630,7 @@ Commands:
 
 Examples:
   postflow schedule list --from 2026-03-01T00:00:00Z --to 2026-03-31T23:59:59Z
+  postflow schedule list --view posts --from 2026-03-01T00:00:00Z --to 2026-03-31T23:59:59Z
   postflow posts create --account-id acc_abc123 --text "hello world" --scheduled-at 2026-03-01T10:00:00Z
   postflow posts validate --account-id acc_abc123 --text "draft check" --scheduled-at 2026-03-01T10:00:00Z
   postflow posts schedule --id pst_abc123 --scheduled-at 2026-03-01T10:00:00Z

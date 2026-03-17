@@ -203,6 +203,7 @@ Common commands:
 ```bash
 postflow health
 postflow schedule list --from 2026-03-01T00:00:00Z --to 2026-03-31T23:59:59Z
+postflow schedule list --view posts --from 2026-03-01T00:00:00Z --to 2026-03-31T23:59:59Z
 postflow drafts list --limit 20
 postflow posts validate --account-id acc_xxx --text "hello"
 postflow posts validate --account-id acc_xxx --segments-json '[{"text":"root"},{"text":"reply 1"}]'
@@ -220,6 +221,8 @@ postflow media list --limit 20
 ```
 
 `--text` and `--segments-json` are mutually exclusive on `posts create`, `posts validate`, and `posts edit`.
+
+`schedule list` returns grouped publications by default. Use `--view posts` to inspect the raw per-post/thread rows.
 
 ---
 

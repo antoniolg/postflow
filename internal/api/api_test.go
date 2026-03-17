@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/antoniolg/postflow/internal/db"
 )
@@ -35,6 +36,82 @@ func TestCreatePostValidation(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestScheduleJSONDefaultsToPublicationsAndSupportsPostsView(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+	accountID := testAccountID(t, store)
+	scheduledAt := time.Now().UTC().Add(2 * time.Hour).Truncate(time.Second)
+
+	payload, _ := json.Marshal(map[string]any{
+		"account_id":   accountID,
+		"scheduled_at": scheduledAt.Format(time.RFC3339),
+		"segments": []map[string]any{
+			{"text": "root post"},
+			{"text": "reply post"},
+		},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(payload))
+	req.Header.Set("content-type", "application/json")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201 creating thread, got %d body=%s", w.Code, w.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/schedule", nil)
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 default schedule list, got %d", w.Code)
+	}
+	var grouped struct {
+		Count int `json:"count"`
+		Items []struct {
+			PublicationID string `json:"publication_id"`
+			SegmentCount  int    `json:"segment_count"`
+			Segments      []struct {
+				PostID string `json:"post_id"`
+			} `json:"segments"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &grouped); err != nil {
+		t.Fatalf("decode grouped schedule response: %v", err)
+	}
+	if grouped.Count != 1 || len(grouped.Items) != 1 {
+		t.Fatalf("expected one grouped publication, got count=%d items=%d", grouped.Count, len(grouped.Items))
+	}
+	if grouped.Items[0].PublicationID == "" || grouped.Items[0].SegmentCount != 2 || len(grouped.Items[0].Segments) != 2 {
+		t.Fatalf("unexpected grouped publication payload: %+v", grouped.Items[0])
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/schedule?view=posts", nil)
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 posts view schedule list, got %d", w.Code)
+	}
+	var raw struct {
+		Count int `json:"count"`
+		Items []struct {
+			ID             string `json:"id"`
+			ThreadPosition int    `json:"thread_position"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("decode raw schedule response: %v", err)
+	}
+	if raw.Count != 2 || len(raw.Items) != 2 || raw.Items[1].ThreadPosition != 2 {
+		t.Fatalf("unexpected raw schedule payload: %+v", raw)
 	}
 }
 

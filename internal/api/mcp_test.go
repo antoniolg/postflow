@@ -134,6 +134,30 @@ func TestMCPStreamableHTTPExposesToolsAndCreatesPost(t *testing.T) {
 		t.Fatalf("expected scheduled status after scheduling tool, got %s", afterSchedule.Status)
 	}
 
+	listScheduleBody := `{"jsonrpc":"2.0","id":4.65,"method":"tools/call","params":{"name":"postflow_list_schedule","arguments":{"limit":50}}}`
+	listScheduleResp, listScheduleRaw := postMCPRequest(t, mcpURL, sessionID, listScheduleBody)
+	if listScheduleResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected list schedule tools/call status 200, got %d: %s", listScheduleResp.StatusCode, string(listScheduleRaw))
+	}
+	if strings.Contains(string(listScheduleRaw), `"isError":true`) {
+		t.Fatalf("expected list schedule tool call without isError=true, got: %s", string(listScheduleRaw))
+	}
+	if !strings.Contains(string(listScheduleRaw), `"items"`) || !strings.Contains(string(listScheduleRaw), `"publication_id"`) {
+		t.Fatalf("expected grouped schedule list payload, got: %s", string(listScheduleRaw))
+	}
+
+	listSchedulePostsBody := `{"jsonrpc":"2.0","id":4.66,"method":"tools/call","params":{"name":"postflow_list_schedule","arguments":{"limit":50,"view":"posts"}}}`
+	listSchedulePostsResp, listSchedulePostsRaw := postMCPRequest(t, mcpURL, sessionID, listSchedulePostsBody)
+	if listSchedulePostsResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected raw list schedule tools/call status 200, got %d: %s", listSchedulePostsResp.StatusCode, string(listSchedulePostsRaw))
+	}
+	if strings.Contains(string(listSchedulePostsRaw), `"isError":true`) {
+		t.Fatalf("expected raw list schedule tool call without isError=true, got: %s", string(listSchedulePostsRaw))
+	}
+	if !strings.Contains(string(listSchedulePostsRaw), `"posts"`) || !strings.Contains(string(listSchedulePostsRaw), `"thread_position"`) {
+		t.Fatalf("expected raw posts schedule payload, got: %s", string(listSchedulePostsRaw))
+	}
+
 	rescheduledAt := time.Now().UTC().Add(15 * time.Minute).Format(time.RFC3339)
 	editPostBody := `{"jsonrpc":"2.0","id":4.7,"method":"tools/call","params":{"name":"postflow_edit_post","arguments":{"post_id":"` + draftID + `","text":"edited from mcp tool","intent":"schedule","scheduled_at":"` + rescheduledAt + `"}}}`
 	editPostResp, editPostRaw := postMCPRequest(t, mcpURL, sessionID, editPostBody)

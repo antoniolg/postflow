@@ -35,6 +35,11 @@ List schedule:
 go run ./cmd/postflow --json schedule list \
   --from 2026-03-01T00:00:00Z \
   --to 2026-03-31T23:59:59Z
+
+go run ./cmd/postflow --json schedule list \
+  --view posts \
+  --from 2026-03-01T00:00:00Z \
+  --to 2026-03-31T23:59:59Z
 ```
 
 Create a scheduled post:
@@ -118,6 +123,7 @@ go run ./cmd/postflow dlq requeue --id dlq_xxx
 ## Guidance
 
 - For operational inspection (`drafts list`, `schedule list`, status checks), use `--json` first, even for manual investigations. It avoids ambiguity around state, ids, timestamps, and per-platform entries.
+- `schedule list` returns grouped publications by default. Use `--view posts` when you need raw per-post thread metadata (`thread_group_id`, `thread_position`, `parent_post_id`, `root_post_id`).
 - Prefer `--json` when output is consumed by scripts or further tooling.
 - Use `--idempotency-key` for retries/replays of `posts create`.
 - Keep timestamps in RFC3339 for CLI/API consistency.

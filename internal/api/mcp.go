@@ -37,7 +37,7 @@ func (s Server) newMCPHandler() http.Handler {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "postflow_list_schedule",
-		Description: "List posts in the schedule window. Supports RFC3339 from/to filters.",
+		Description: "List scheduled publications by default, or raw posts with view=posts. Supports RFC3339 from/to filters.",
 		Annotations: &mcp.ToolAnnotations{
 			ReadOnlyHint:   true,
 			IdempotentHint: true,
@@ -260,6 +260,7 @@ type mcpListScheduleInput struct {
 	From  string `json:"from,omitempty" jsonschema:"RFC3339 start date filter (optional)."`
 	To    string `json:"to,omitempty" jsonschema:"RFC3339 end date filter (optional)."`
 	Limit int    `json:"limit,omitempty" jsonschema:"Max items to return (1-500). Default: 200."`
+	View  string `json:"view,omitempty" jsonschema:"Optional view: publications (default) or posts."`
 }
 
 type mcpListDraftsInput struct {
@@ -313,10 +314,34 @@ type mcpPostSummary struct {
 }
 
 type mcpListScheduleOutput struct {
-	Count int              `json:"count"`
-	From  string           `json:"from"`
-	To    string           `json:"to"`
-	Posts []mcpPostSummary `json:"posts"`
+	Count int                       `json:"count"`
+	From  string                    `json:"from"`
+	To    string                    `json:"to"`
+	View  string                    `json:"view"`
+	Items []mcpScheduledPublication `json:"items,omitempty"`
+	Posts []mcpPostSummary          `json:"posts,omitempty"`
+}
+
+type mcpScheduledPublication struct {
+	PublicationID string                        `json:"publication_id"`
+	RootPostID    string                        `json:"root_post_id"`
+	ThreadGroupID string                        `json:"thread_group_id,omitempty"`
+	AccountID     string                        `json:"account_id"`
+	Platform      string                        `json:"platform"`
+	Status        string                        `json:"status"`
+	ScheduledAt   string                        `json:"scheduled_at,omitempty"`
+	SegmentCount  int                           `json:"segment_count"`
+	MediaCount    int                           `json:"media_count"`
+	HasMedia      bool                          `json:"has_media"`
+	Segments      []mcpScheduledPublicationStep `json:"segments"`
+}
+
+type mcpScheduledPublicationStep struct {
+	PostID     string   `json:"post_id"`
+	Position   int      `json:"position"`
+	Text       string   `json:"text"`
+	MediaCount int      `json:"media_count"`
+	MediaIDs   []string `json:"media_ids,omitempty"`
 }
 
 type mcpListDraftsOutput struct {
@@ -375,24 +400,44 @@ func (s Server) mcpListScheduleTool(ctx context.Context, _ *mcp.CallToolRequest,
 	if err != nil {
 		return nil, mcpListScheduleOutput{}, err
 	}
-	items, err := s.Store.ListSchedule(ctx, from, to)
+	view, err := postsapp.ParseScheduleListView(in.View)
+	if err != nil {
+		return nil, mcpListScheduleOutput{}, err
+	}
+	svc := postsapp.ScheduleListService{Store: s.Store}
+	listOut, err := svc.List(ctx, from, to, view)
 	if err != nil {
 		return nil, mcpListScheduleOutput{}, err
 	}
 
 	limit := clampMCPListLimit(in.Limit)
+
+	out := mcpListScheduleOutput{
+		View: string(view),
+		From: from.UTC().Format(time.RFC3339),
+		To:   to.UTC().Format(time.RFC3339),
+	}
+	if view == postsapp.ScheduleListViewPosts {
+		items := listOut.Posts
+		if len(items) > limit {
+			items = items[:limit]
+		}
+		out.Count = len(items)
+		out.Posts = make([]mcpPostSummary, 0, len(items))
+		for _, item := range items {
+			out.Posts = append(out.Posts, toMCPPostSummary(item))
+		}
+		return nil, out, nil
+	}
+
+	items := listOut.Publications
 	if len(items) > limit {
 		items = items[:limit]
 	}
-
-	out := mcpListScheduleOutput{
-		Count: len(items),
-		From:  from.UTC().Format(time.RFC3339),
-		To:    to.UTC().Format(time.RFC3339),
-		Posts: make([]mcpPostSummary, 0, len(items)),
-	}
+	out.Count = len(items)
+	out.Items = make([]mcpScheduledPublication, 0, len(items))
 	for _, item := range items {
-		out.Posts = append(out.Posts, toMCPPostSummary(item))
+		out.Items = append(out.Items, toMCPScheduledPublication(item))
 	}
 	return nil, out, nil
 }
@@ -613,6 +658,32 @@ func toMCPPostSummary(post domain.Post) mcpPostSummary {
 		ParentPostID:   parentPostID,
 		RootPostID:     rootPostID,
 	}
+}
+
+func toMCPScheduledPublication(item postsapp.ScheduledPublication) mcpScheduledPublication {
+	out := mcpScheduledPublication{
+		PublicationID: strings.TrimSpace(item.PublicationID),
+		RootPostID:    strings.TrimSpace(item.RootPostID),
+		ThreadGroupID: strings.TrimSpace(item.ThreadGroupID),
+		AccountID:     strings.TrimSpace(item.AccountID),
+		Platform:      string(item.Platform),
+		Status:        string(item.Status),
+		ScheduledAt:   formatMCPTime(item.ScheduledAt),
+		SegmentCount:  item.SegmentCount,
+		MediaCount:    item.MediaCount,
+		HasMedia:      item.HasMedia,
+		Segments:      make([]mcpScheduledPublicationStep, 0, len(item.Segments)),
+	}
+	for _, segment := range item.Segments {
+		out.Segments = append(out.Segments, mcpScheduledPublicationStep{
+			PostID:     strings.TrimSpace(segment.PostID),
+			Position:   segment.Position,
+			Text:       strings.TrimSpace(segment.Text),
+			MediaCount: segment.MediaCount,
+			MediaIDs:   append([]string(nil), segment.MediaIDs...),
+		})
+	}
+	return out
 }
 
 func formatMCPTime(t time.Time) string {

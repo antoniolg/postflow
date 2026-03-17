@@ -21,9 +21,56 @@ func TestRunScheduleListJSON(t *testing.T) {
 		if r.URL.Path != "/schedule" {
 			t.Fatalf("unexpected path %s", r.URL.Path)
 		}
+		if got := r.URL.Query().Get("view"); got != "publications" {
+			t.Fatalf("expected publications view query, got %q", got)
+		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"from": "2026-03-01T00:00:00Z",
-			"to":   "2026-03-31T23:59:59Z",
+			"count": 1,
+			"from":  "2026-03-01T00:00:00Z",
+			"to":    "2026-03-31T23:59:59Z",
+			"items": []map[string]any{{
+				"publication_id":  "pst_thread_root",
+				"root_post_id":    "pst_thread_root",
+				"platform":        "linkedin",
+				"status":          "scheduled",
+				"scheduled_at":    "2026-03-10T09:00:00Z",
+				"segment_count":   2,
+				"media_count":     1,
+				"has_media":       true,
+				"thread_group_id": "thg_123",
+				"segments": []map[string]any{
+					{"post_id": "pst_thread_root", "position": 1, "text": "thread root", "media_count": 1, "media_ids": []string{"med_1"}},
+					{"post_id": "pst_thread_reply", "position": 2, "text": "reply", "media_count": 0},
+				},
+			}},
+		})
+	}))
+	defer server.Close()
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := Run(context.Background(), []string{
+		"--base-url", server.URL,
+		"--json",
+		"schedule", "list",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d, stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `"publication_id": "pst_thread_root"`) || !strings.Contains(stdout.String(), `"segment_count": 2`) {
+		t.Fatalf("expected json output, got %s", stdout.String())
+	}
+}
+
+func TestRunScheduleListPostsViewJSON(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Query().Get("view"); got != "posts" {
+			t.Fatalf("expected posts view query, got %q", got)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"count": 1,
+			"from":  "2026-03-01T00:00:00Z",
+			"to":    "2026-03-31T23:59:59Z",
 			"items": []map[string]any{{
 				"id":              "pst_thread_root",
 				"text":            "thread root",
@@ -41,12 +88,13 @@ func TestRunScheduleListJSON(t *testing.T) {
 		"--base-url", server.URL,
 		"--json",
 		"schedule", "list",
+		"--view", "posts",
 	}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d, stderr=%s", code, stderr.String())
 	}
 	if !strings.Contains(stdout.String(), `"thread_group_id": "thg_123"`) || !strings.Contains(stdout.String(), `"thread_position": 1`) {
-		t.Fatalf("expected json output, got %s", stdout.String())
+		t.Fatalf("expected raw posts json output, got %s", stdout.String())
 	}
 }
 
