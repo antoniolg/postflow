@@ -371,7 +371,7 @@ func TestInstagramPublishRejectsNonPublicMediaURLFromBuilder(t *testing.T) {
 	}
 }
 
-func TestInstagramPublishRejectsPNGImage(t *testing.T) {
+func TestInstagramPublishAllowsPNGImage(t *testing.T) {
 	provider := NewInstagramProvider(MetaProviderConfig{})
 	_, err := provider.Publish(context.Background(), domain.SocialAccount{
 		Platform:          domain.PlatformInstagram,
@@ -386,7 +386,7 @@ func TestInstagramPublishRejectsPNGImage(t *testing.T) {
 			MimeType:    "image/png",
 		}},
 	}, PublishOptions{})
-	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "jpeg") {
-		t.Fatalf("expected jpeg validation error, got %v", err)
+	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "public image url") {
+		t.Fatalf("expected publish flow to proceed past format validation, got %v", err)
 	}
 }

@@ -15,7 +15,7 @@ func validateInstagramMediaConstraints(media domain.Media) error {
 		return fmt.Errorf("instagram requires image or video media")
 	}
 	if isImageMedia(media) && !isInstagramSupportedImage(media) {
-		return fmt.Errorf("instagram image media must be JPEG (.jpg or .jpeg)")
+		return fmt.Errorf("instagram image media must be JPEG or PNG (.jpg, .jpeg, or .png)")
 	}
 	if isVideoMedia(media) && !isInstagramSupportedVideo(media) {
 		return fmt.Errorf("instagram video media must be MP4 or MOV")
@@ -26,11 +26,11 @@ func validateInstagramMediaConstraints(media domain.Media) error {
 func isInstagramSupportedImage(media domain.Media) bool {
 	mimeType := normalizedMediaMIME(media.MimeType)
 	switch mimeType {
-	case "image/jpeg", "image/jpg", "image/pjpeg":
+	case "image/jpeg", "image/jpg", "image/pjpeg", "image/png":
 		return true
 	}
 	switch mediaExtension(media) {
-	case ".jpg", ".jpeg":
+	case ".jpg", ".jpeg", ".png":
 		return true
 	default:
 		return false

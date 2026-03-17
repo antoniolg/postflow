@@ -107,11 +107,10 @@ func TestMetaValidateDraftRules(t *testing.T) {
 				wantErrSub: "requires image or video",
 			},
 			{
-				name: "png image rejected",
+				name: "png image accepted",
 				draft: Draft{Text: "ig", Media: []domain.Media{
 					{OriginalName: "a.png", MimeType: "image/png"},
 				}},
-				wantErrSub: "jpeg",
 			},
 			{
 				name: "one image accepted",

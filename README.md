@@ -252,7 +252,7 @@ Full production runbook:
   - for X, verify `X_CLIENT_ID` is set and the callback URL is registered in the X app settings
 - Instagram media create errors (`code=9004`, `error_subcode=2207052`):
   - verify `PUBLIC_BASE_URL` is public/reachable from the internet (not `localhost` in production)
-  - for image posts, upload JPEG (`.jpg` / `.jpeg`)
+  - for image posts, upload JPEG or PNG (`.jpg` / `.jpeg` / `.png`)
   - for video posts, use MP4 or MOV
 - CLI auth errors:
   - verify `POSTFLOW_API_TOKEN` matches server `API_TOKEN`
