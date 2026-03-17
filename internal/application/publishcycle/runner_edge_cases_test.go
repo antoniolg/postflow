@@ -145,9 +145,9 @@ func (p *alwaysAuthFailureProvider) ValidateDraft(context.Context, domain.Social
 	return nil, nil
 }
 
-func (p *alwaysAuthFailureProvider) Publish(context.Context, domain.SocialAccount, postflow.Credentials, domain.Post, postflow.PublishOptions) (string, error) {
+func (p *alwaysAuthFailureProvider) Publish(context.Context, domain.SocialAccount, postflow.Credentials, domain.Post, postflow.PublishOptions) (postflow.PublishResult, error) {
 	p.publishCalls++
-	return "", errors.New("401 unauthorized")
+	return postflow.PublishResult{}, errors.New("401 unauthorized")
 }
 
 func (p *alwaysAuthFailureProvider) RefreshIfNeeded(context.Context, domain.SocialAccount, postflow.Credentials) (postflow.Credentials, bool, error) {

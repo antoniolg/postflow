@@ -41,7 +41,7 @@ func (p *XProvider) ValidateDraft(_ context.Context, account domain.SocialAccoun
 	return warnings, nil
 }
 
-func (p *XProvider) Publish(ctx context.Context, _ domain.SocialAccount, credentials Credentials, post domain.Post, opts PublishOptions) (string, error) {
+func (p *XProvider) Publish(ctx context.Context, _ domain.SocialAccount, credentials Credentials, post domain.Post, opts PublishOptions) (PublishResult, error) {
 	token := strings.TrimSpace(credentials.AccessToken)
 	tokenSecret := strings.TrimSpace(credentials.AccessTokenSecret)
 	if token == "" {
@@ -57,9 +57,25 @@ func (p *XProvider) Publish(ctx context.Context, _ domain.SocialAccount, credent
 		AccessTokenSecret: tokenSecret,
 	})
 	if err != nil {
-		return "", fmt.Errorf("build x client: %w", err)
+		return PublishResult{}, fmt.Errorf("build x client: %w", err)
 	}
-	return client.Publish(ctx, post, opts)
+	externalID, err := client.Publish(ctx, post, opts)
+	if err != nil {
+		return PublishResult{}, err
+	}
+	result := PublishResult{ExternalID: strings.TrimSpace(externalID)}
+	if opts.Mode == PublishModeRoot {
+		username := strings.TrimSpace(credentials.Extra["username"])
+		if username == "" && strings.TrimSpace(token) != "" {
+			if user, fetchErr := p.fetchCurrentUser(ctx, token); fetchErr == nil {
+				username = strings.TrimSpace(user.Username)
+			}
+		}
+		if username != "" && result.ExternalID != "" {
+			result.PublishedURL = fmt.Sprintf("https://x.com/%s/status/%s", username, result.ExternalID)
+		}
+	}
+	return result, nil
 }
 
 func (p *XProvider) httpClient() *http.Client {

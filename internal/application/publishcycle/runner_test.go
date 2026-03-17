@@ -19,6 +19,7 @@ type fakeStore struct {
 	markPublishedCalls  int
 	markPublishedPostID string
 	markPublishedExtID  string
+	markPublishedURL    string
 	updateStatusCalls   int
 	lastStatus          domain.AccountStatus
 }
@@ -59,10 +60,11 @@ func (f *fakeStore) ReschedulePublishWithoutAttempt(context.Context, string, err
 	return nil
 }
 
-func (f *fakeStore) MarkPublished(_ context.Context, id, externalID string) error {
+func (f *fakeStore) MarkPublished(_ context.Context, id, externalID, publishedURL string) error {
 	f.markPublishedCalls++
 	f.markPublishedPostID = id
 	f.markPublishedExtID = externalID
+	f.markPublishedURL = publishedURL
 	return nil
 }
 
@@ -99,6 +101,7 @@ type fakeProvider struct {
 	platform          domain.Platform
 	publishErr        error
 	publishExternalID string
+	publishURL        string
 	publishCalls      int
 	refreshUpdated    postflow.Credentials
 	refreshChanged    bool
@@ -113,12 +116,12 @@ func (f *fakeProvider) ValidateDraft(context.Context, domain.SocialAccount, post
 	return nil, nil
 }
 
-func (f *fakeProvider) Publish(context.Context, domain.SocialAccount, postflow.Credentials, domain.Post, postflow.PublishOptions) (string, error) {
+func (f *fakeProvider) Publish(context.Context, domain.SocialAccount, postflow.Credentials, domain.Post, postflow.PublishOptions) (postflow.PublishResult, error) {
 	f.publishCalls++
 	if f.publishErr != nil {
-		return "", f.publishErr
+		return postflow.PublishResult{}, f.publishErr
 	}
-	return f.publishExternalID, nil
+	return postflow.PublishResult{ExternalID: f.publishExternalID, PublishedURL: f.publishURL}, nil
 }
 
 func (f *fakeProvider) RefreshIfNeeded(context.Context, domain.SocialAccount, postflow.Credentials) (postflow.Credentials, bool, error) {
@@ -140,6 +143,7 @@ func TestRunnerPublishesAndMarksAccountConnected(t *testing.T) {
 	provider := &fakeProvider{
 		platform:          domain.PlatformX,
 		publishExternalID: "ext_1",
+		publishURL:        "https://x.com/postflow/status/ext_1",
 	}
 	runner := Runner{
 		Store:        store,
@@ -154,8 +158,8 @@ func TestRunnerPublishesAndMarksAccountConnected(t *testing.T) {
 	if store.markPublishedCalls != 1 {
 		t.Fatalf("expected one mark published call, got %d", store.markPublishedCalls)
 	}
-	if store.markPublishedPostID != "pst_1" || store.markPublishedExtID != "ext_1" {
-		t.Fatalf("unexpected mark published payload: id=%q external=%q", store.markPublishedPostID, store.markPublishedExtID)
+	if store.markPublishedPostID != "pst_1" || store.markPublishedExtID != "ext_1" || store.markPublishedURL != "https://x.com/postflow/status/ext_1" {
+		t.Fatalf("unexpected mark published payload: id=%q external=%q url=%q", store.markPublishedPostID, store.markPublishedExtID, store.markPublishedURL)
 	}
 	if store.updateStatusCalls == 0 || store.lastStatus != domain.AccountStatusConnected {
 		t.Fatalf("expected account status update to connected")
@@ -266,10 +270,10 @@ type authRetryProvider struct {
 	fakeProvider
 }
 
-func (p *authRetryProvider) Publish(context.Context, domain.SocialAccount, postflow.Credentials, domain.Post, postflow.PublishOptions) (string, error) {
+func (p *authRetryProvider) Publish(context.Context, domain.SocialAccount, postflow.Credentials, domain.Post, postflow.PublishOptions) (postflow.PublishResult, error) {
 	p.publishCalls++
 	if p.publishCalls == 1 {
-		return "", errors.New("401 unauthorized")
+		return postflow.PublishResult{}, errors.New("401 unauthorized")
 	}
-	return "ext_after_retry", nil
+	return postflow.PublishResult{ExternalID: "ext_after_retry"}, nil
 }

@@ -254,6 +254,76 @@ func TestXProviderRefreshIfNeededDoesNotRefreshHealthyOAuth2Token(t *testing.T) 
 	}
 }
 
+func TestXProviderPublishBuildsPublishedURLFromCredentialsUsername(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/2/tweets" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"id":"x_post_1"}}`))
+	}))
+	defer srv.Close()
+
+	provider := NewXProvider(XConfig{
+		APIBaseURL:        srv.URL,
+		UploadBaseURL:     srv.URL,
+		APIKey:            "key",
+		APIKeySecret:      "secret",
+		AccessToken:       "token",
+		AccessTokenSecret: "token_secret",
+	})
+
+	result, err := provider.Publish(context.Background(), domain.SocialAccount{Platform: domain.PlatformX}, Credentials{
+		AccessToken:       "token",
+		AccessTokenSecret: "token_secret",
+		Extra:             map[string]string{"username": "postflowbot"},
+	}, domain.Post{
+		Platform: domain.PlatformX,
+		Text:     "hello",
+	}, PublishOptions{Mode: PublishModeRoot})
+	if err != nil {
+		t.Fatalf("publish: %v", err)
+	}
+	if result.PublishedURL != "https://x.com/postflowbot/status/x_post_1" {
+		t.Fatalf("unexpected published url %q", result.PublishedURL)
+	}
+}
+
+func TestXProviderPublishLeavesPublishedURLEmptyWhenUsernameUnavailable(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/2/tweets":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"data":{"id":"x_post_2"}}`))
+		case "/2/users/me":
+			http.Error(w, "boom", http.StatusBadGateway)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	provider := NewXProvider(XConfig{
+		APIBaseURL:    srv.URL,
+		UploadBaseURL: srv.URL,
+		ClientID:      "x-client-id",
+	})
+	result, err := provider.Publish(context.Background(), domain.SocialAccount{Platform: domain.PlatformX}, Credentials{
+		AccessToken: "bearer-token",
+		TokenType:   "bearer",
+	}, domain.Post{
+		Platform: domain.PlatformX,
+		Text:     "hello",
+	}, PublishOptions{Mode: PublishModeRoot})
+	if err != nil {
+		t.Fatalf("publish: %v", err)
+	}
+	if result.PublishedURL != "" {
+		t.Fatalf("expected empty published url, got %q", result.PublishedURL)
+	}
+}
+
 func TestXCodeChallengeS256UsesBase64URLEncoding(t *testing.T) {
 	challenge := xCodeChallengeS256("abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN")
 	if strings.TrimSpace(challenge) == "" {

@@ -30,8 +30,8 @@ func (p *oauthReplayTestProvider) ValidateDraft(_ context.Context, _ domain.Soci
 	return nil, nil
 }
 
-func (p *oauthReplayTestProvider) Publish(_ context.Context, _ domain.SocialAccount, _ postflow.Credentials, _ domain.Post, _ postflow.PublishOptions) (string, error) {
-	return "ok", nil
+func (p *oauthReplayTestProvider) Publish(_ context.Context, _ domain.SocialAccount, _ postflow.Credentials, _ domain.Post, _ postflow.PublishOptions) (postflow.PublishResult, error) {
+	return postflow.PublishResult{ExternalID: "ok"}, nil
 }
 
 func (p *oauthReplayTestProvider) RefreshIfNeeded(_ context.Context, _ domain.SocialAccount, credentials postflow.Credentials) (postflow.Credentials, bool, error) {
@@ -98,8 +98,8 @@ func (p *oauthContextResilientProvider) ValidateDraft(_ context.Context, _ domai
 	return nil, nil
 }
 
-func (p *oauthContextResilientProvider) Publish(_ context.Context, _ domain.SocialAccount, _ postflow.Credentials, _ domain.Post, _ postflow.PublishOptions) (string, error) {
-	return "ok", nil
+func (p *oauthContextResilientProvider) Publish(_ context.Context, _ domain.SocialAccount, _ postflow.Credentials, _ domain.Post, _ postflow.PublishOptions) (postflow.PublishResult, error) {
+	return postflow.PublishResult{ExternalID: "ok"}, nil
 }
 
 func (p *oauthContextResilientProvider) RefreshIfNeeded(_ context.Context, _ domain.SocialAccount, credentials postflow.Credentials) (postflow.Credentials, bool, error) {

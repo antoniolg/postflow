@@ -31,7 +31,7 @@ func TestFacebookPublishCommentMode(t *testing.T) {
 		defer server.Close()
 
 		provider := NewFacebookProvider(MetaProviderConfig{GraphURL: server.URL, APIVersion: "v1.0"})
-		externalID, err := provider.Publish(context.Background(), domain.SocialAccount{
+		publishResult, err := provider.Publish(context.Background(), domain.SocialAccount{
 			Platform:          domain.PlatformFacebook,
 			ExternalAccountID: "page_1",
 		}, Credentials{
@@ -48,8 +48,8 @@ func TestFacebookPublishCommentMode(t *testing.T) {
 		if !sawComment {
 			t.Fatalf("expected facebook comment endpoint call")
 		}
-		if externalID != "fb_comment_1" {
-			t.Fatalf("unexpected external id %q", externalID)
+		if publishResult.ExternalID != "fb_comment_1" {
+			t.Fatalf("unexpected external id %q", publishResult.ExternalID)
 		}
 	})
 

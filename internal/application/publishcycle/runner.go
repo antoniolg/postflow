@@ -18,7 +18,7 @@ type Store interface {
 	GetPost(ctx context.Context, id string) (domain.Post, error)
 	RecordPublishFailure(ctx context.Context, id string, postErr error, retryBackoff time.Duration) error
 	ReschedulePublishWithoutAttempt(ctx context.Context, id string, postErr error, retryDelay time.Duration) error
-	MarkPublished(ctx context.Context, id, externalID string) error
+	MarkPublished(ctx context.Context, id, externalID, publishedURL string) error
 	UpdateAccountStatus(ctx context.Context, id string, status domain.AccountStatus, lastErr *string) error
 }
 
@@ -115,11 +115,11 @@ func (r Runner) RunOnce(ctx context.Context) {
 			}
 		}
 
-		externalID, err := provider.Publish(ctx, account, credentials, post, publishOpts)
+		publishResult, err := provider.Publish(ctx, account, credentials, post, publishOpts)
 		if err != nil && isAuthFailure(err) {
 			credentials, err = r.refreshIfNeeded(ctx, provider, account, credentials, true)
 			if err == nil {
-				externalID, err = provider.Publish(ctx, account, credentials, post, publishOpts)
+				publishResult, err = provider.Publish(ctx, account, credentials, post, publishOpts)
 			}
 		}
 		if err != nil {
@@ -136,12 +136,14 @@ func (r Runner) RunOnce(ctx context.Context) {
 			continue
 		}
 
-		if err := r.Store.MarkPublished(ctx, post.ID, externalID); err != nil {
-			logger.Error("worker mark published failed", "post_id", post.ID, "root_post_id", rootPostID, "thread_group_id", threadGroupID, "thread_position", threadPosition, "external_id", externalID, "error", err)
+		externalID := strings.TrimSpace(publishResult.ExternalID)
+		publishedURL := strings.TrimSpace(publishResult.PublishedURL)
+		if err := r.Store.MarkPublished(ctx, post.ID, externalID, publishedURL); err != nil {
+			logger.Error("worker mark published failed", "post_id", post.ID, "root_post_id", rootPostID, "thread_group_id", threadGroupID, "thread_position", threadPosition, "external_id", externalID, "published_url", publishedURL, "error", err)
 			continue
 		}
 		_ = r.Store.UpdateAccountStatus(ctx, account.ID, domain.AccountStatusConnected, nil)
-		logger.Info("worker published post", "post_id", post.ID, "root_post_id", rootPostID, "thread_group_id", threadGroupID, "thread_position", threadPosition, "platform", post.Platform, "external_id", externalID)
+		logger.Info("worker published post", "post_id", post.ID, "root_post_id", rootPostID, "thread_group_id", threadGroupID, "thread_position", threadPosition, "platform", post.Platform, "external_id", externalID, "published_url", publishedURL)
 	}
 }
 

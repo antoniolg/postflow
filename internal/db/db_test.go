@@ -170,7 +170,7 @@ func TestRecordPublishFailureFailsBlockedThreadDescendants(t *testing.T) {
 		t.Fatalf("create root: %v", err)
 	}
 	rootID := root.Post.ID
-	if err := store.MarkPublished(ctx, rootID, "tweet_root"); err != nil {
+	if err := store.MarkPublished(ctx, rootID, "tweet_root", ""); err != nil {
 		t.Fatalf("mark root published: %v", err)
 	}
 

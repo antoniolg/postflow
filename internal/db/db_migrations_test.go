@@ -40,6 +40,14 @@ func TestOpenMigratesLegacySchemaWithoutDataLoss(t *testing.T) {
 	if post.ID != postID || post.AccountID != accountID || post.Text != "legacy scheduled post" {
 		t.Fatalf("unexpected post after migration: %+v", post)
 	}
+	if post.PublishedURL != nil {
+		t.Fatalf("expected migrated legacy post to have nil published url, got %+v", post.PublishedURL)
+	}
+
+	var publishedURL sql.NullString
+	if err := store.db.QueryRowContext(t.Context(), `SELECT published_url FROM posts WHERE id = ?`, postID).Scan(&publishedURL); err != nil {
+		t.Fatalf("query published_url: %v", err)
+	}
 
 	var xPremium int
 	if err := store.db.QueryRowContext(t.Context(), `SELECT x_premium FROM accounts WHERE id = ?`, accountID).Scan(&xPremium); err != nil {

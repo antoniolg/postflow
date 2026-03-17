@@ -53,7 +53,7 @@ func TestXProviderPublishSendsPlainText(t *testing.T) {
 		AccessTokenSecret: "token_secret",
 	})
 
-	externalID, err := provider.Publish(context.Background(), domain.SocialAccount{
+	publishResult, err := provider.Publish(context.Background(), domain.SocialAccount{
 		Platform: domain.PlatformX,
 	}, Credentials{
 		AccessToken:       "token",
@@ -65,8 +65,8 @@ func TestXProviderPublishSendsPlainText(t *testing.T) {
 	if err != nil {
 		t.Fatalf("publish: %v", err)
 	}
-	if externalID != "x_post_1" {
-		t.Fatalf("unexpected external id %q", externalID)
+	if publishResult.ExternalID != "x_post_1" {
+		t.Fatalf("unexpected external id %q", publishResult.ExternalID)
 	}
 	if gotText != "Hola 𝗺𝘂𝗻𝗱𝗼 𝑒𝑞𝑢𝑖𝑝𝑜" {
 		t.Fatalf("expected plain payload text, got %q", gotText)

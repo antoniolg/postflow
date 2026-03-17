@@ -105,18 +105,18 @@ func (s *Store) GetPost(ctx context.Context, id string) (domain.Post, error) {
 	var p domain.Post
 	var scheduled, created, updated string
 	var published, nextRetry sql.NullString
-	var external, failed, idempotencyKey sql.NullString
+	var external, publishedURL, failed, idempotencyKey sql.NullString
 	var threadGroupID sql.NullString
 	var threadPosition sql.NullInt64
 	var parentPostID sql.NullString
 	var rootPostID sql.NullString
 	var platform string
 	err := s.db.QueryRowContext(ctx, `
-		SELECT p.id, p.account_id, a.platform, p.text, p.status, p.scheduled_at, p.thread_group_id, p.thread_position, p.parent_post_id, p.root_post_id, p.next_retry_at, p.attempts, p.max_attempts, p.idempotency_key, p.published_at, p.external_id, p.error, p.created_at, p.updated_at
+		SELECT p.id, p.account_id, a.platform, p.text, p.status, p.scheduled_at, p.thread_group_id, p.thread_position, p.parent_post_id, p.root_post_id, p.next_retry_at, p.attempts, p.max_attempts, p.idempotency_key, p.published_at, p.external_id, p.published_url, p.error, p.created_at, p.updated_at
 		FROM posts p
 		JOIN accounts a ON a.id = p.account_id
 		WHERE p.id = ?
-	`, strings.TrimSpace(id)).Scan(&p.ID, &p.AccountID, &platform, &p.Text, &p.Status, &scheduled, &threadGroupID, &threadPosition, &parentPostID, &rootPostID, &nextRetry, &p.Attempts, &p.MaxAttempts, &idempotencyKey, &published, &external, &failed, &created, &updated)
+	`, strings.TrimSpace(id)).Scan(&p.ID, &p.AccountID, &platform, &p.Text, &p.Status, &scheduled, &threadGroupID, &threadPosition, &parentPostID, &rootPostID, &nextRetry, &p.Attempts, &p.MaxAttempts, &idempotencyKey, &published, &external, &publishedURL, &failed, &created, &updated)
 	if err != nil {
 		return domain.Post{}, err
 	}
@@ -162,6 +162,12 @@ func (s *Store) GetPost(ctx context.Context, id string) (domain.Post, error) {
 		value := strings.TrimSpace(external.String)
 		if value != "" {
 			p.ExternalID = &value
+		}
+	}
+	if publishedURL.Valid {
+		value := strings.TrimSpace(publishedURL.String)
+		if value != "" {
+			p.PublishedURL = &value
 		}
 	}
 	if failed.Valid {
@@ -801,13 +807,13 @@ func (s *Store) RecoverStalePublishingPosts(ctx context.Context, staleAfter time
 	return recovered, nil
 }
 
-func (s *Store) MarkPublished(ctx context.Context, id, externalID string) error {
+func (s *Store) MarkPublished(ctx context.Context, id, externalID, publishedURL string) error {
 	now := time.Now().UTC()
 	_, err := s.db.ExecContext(ctx, `
 		UPDATE posts
-		SET status = ?, published_at = ?, external_id = ?, error = NULL, next_retry_at = NULL, updated_at = ?
+		SET status = ?, published_at = ?, external_id = ?, published_url = ?, error = NULL, next_retry_at = NULL, updated_at = ?
 		WHERE id = ?
-	`, domain.PostStatusPublished, now.Format(time.RFC3339Nano), strings.TrimSpace(externalID), now.Format(time.RFC3339Nano), strings.TrimSpace(id))
+	`, domain.PostStatusPublished, now.Format(time.RFC3339Nano), strings.TrimSpace(externalID), sqlNullString(ptrTrimmedString(publishedURL)), now.Format(time.RFC3339Nano), strings.TrimSpace(id))
 	return err
 }
 

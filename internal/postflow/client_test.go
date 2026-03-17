@@ -20,8 +20,8 @@ func (f fakeOAuthProvider) ValidateDraft(context.Context, domain.SocialAccount, 
 	return nil, nil
 }
 
-func (f fakeOAuthProvider) Publish(context.Context, domain.SocialAccount, Credentials, domain.Post, PublishOptions) (string, error) {
-	return "external-id", nil
+func (f fakeOAuthProvider) Publish(context.Context, domain.SocialAccount, Credentials, domain.Post, PublishOptions) (PublishResult, error) {
+	return PublishResult{ExternalID: "external-id"}, nil
 }
 
 func (f fakeOAuthProvider) RefreshIfNeeded(context.Context, domain.SocialAccount, Credentials) (Credentials, bool, error) {
@@ -84,12 +84,12 @@ func TestMockProviderDefaultsAndOperations(t *testing.T) {
 		t.Fatalf("expected no warnings, got %#v", warnings)
 	}
 
-	publishedID, err := mockLinkedIn.Publish(context.Background(), domain.SocialAccount{}, Credentials{}, domain.Post{Platform: domain.PlatformLinkedIn}, PublishOptions{})
+	published, err := mockLinkedIn.Publish(context.Background(), domain.SocialAccount{}, Credentials{}, domain.Post{Platform: domain.PlatformLinkedIn}, PublishOptions{})
 	if err != nil {
 		t.Fatalf("publish: %v", err)
 	}
-	if !strings.HasPrefix(publishedID, "mock_linkedin_") {
-		t.Fatalf("expected mock published id prefix, got %q", publishedID)
+	if !strings.HasPrefix(published.ExternalID, "mock_linkedin_") {
+		t.Fatalf("expected mock published id prefix, got %q", published.ExternalID)
 	}
 
 	original := Credentials{AccessToken: "tok_1", RefreshToken: "ref_1"}

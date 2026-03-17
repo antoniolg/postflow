@@ -26,6 +26,11 @@ type PublishOptions struct {
 	ParentExternalID string
 }
 
+type PublishResult struct {
+	ExternalID   string
+	PublishedURL string
+}
+
 type Credentials struct {
 	AccessToken       string            `json:"access_token,omitempty"`
 	AccessTokenSecret string            `json:"access_token_secret,omitempty"`
@@ -64,7 +69,7 @@ type OAuthCallbackInput struct {
 type Provider interface {
 	Platform() domain.Platform
 	ValidateDraft(ctx context.Context, account domain.SocialAccount, draft Draft) ([]string, error)
-	Publish(ctx context.Context, account domain.SocialAccount, credentials Credentials, post domain.Post, opts PublishOptions) (string, error)
+	Publish(ctx context.Context, account domain.SocialAccount, credentials Credentials, post domain.Post, opts PublishOptions) (PublishResult, error)
 	RefreshIfNeeded(ctx context.Context, account domain.SocialAccount, credentials Credentials) (Credentials, bool, error)
 }
 
@@ -125,8 +130,8 @@ func (m MockProvider) ValidateDraft(_ context.Context, _ domain.SocialAccount, _
 	return nil, nil
 }
 
-func (m MockProvider) Publish(_ context.Context, _ domain.SocialAccount, _ Credentials, post domain.Post, _ PublishOptions) (string, error) {
-	return fmt.Sprintf("mock_%s_%d", post.Platform, time.Now().Unix()), nil
+func (m MockProvider) Publish(_ context.Context, _ domain.SocialAccount, _ Credentials, post domain.Post, _ PublishOptions) (PublishResult, error) {
+	return PublishResult{ExternalID: fmt.Sprintf("mock_%s_%d", post.Platform, time.Now().Unix())}, nil
 }
 
 func (m MockProvider) RefreshIfNeeded(_ context.Context, _ domain.SocialAccount, credentials Credentials) (Credentials, bool, error) {

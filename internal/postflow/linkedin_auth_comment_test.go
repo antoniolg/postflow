@@ -121,7 +121,7 @@ func TestLinkedInPublishCommentMode(t *testing.T) {
 	defer server.Close()
 
 	provider := NewLinkedInProvider(LinkedInProviderConfig{APIBaseURL: server.URL})
-	externalID, err := provider.Publish(context.Background(), domain.SocialAccount{
+	publishResult, err := provider.Publish(context.Background(), domain.SocialAccount{
 		Platform:          domain.PlatformLinkedIn,
 		ExternalAccountID: "member_1",
 	}, Credentials{AccessToken: "token-1"}, domain.Post{
@@ -136,8 +136,8 @@ func TestLinkedInPublishCommentMode(t *testing.T) {
 	if !sawCommentEndpoint {
 		t.Fatalf("expected linkedin comment endpoint call")
 	}
-	if externalID != "urn:li:comment:(urn:li:ugcPost:7096760097833439232,li_comment_1)" {
-		t.Fatalf("unexpected external id %q", externalID)
+	if publishResult.ExternalID != "urn:li:comment:(urn:li:ugcPost:7096760097833439232,li_comment_1)" {
+		t.Fatalf("unexpected external id %q", publishResult.ExternalID)
 	}
 }
 
@@ -154,7 +154,7 @@ func TestLinkedInPublishCommentModeUsesRestliHeaderID(t *testing.T) {
 	defer server.Close()
 
 	provider := NewLinkedInProvider(LinkedInProviderConfig{APIBaseURL: server.URL})
-	externalID, err := provider.Publish(context.Background(), domain.SocialAccount{
+	publishResult, err := provider.Publish(context.Background(), domain.SocialAccount{
 		Platform:          domain.PlatformLinkedIn,
 		ExternalAccountID: "member_1",
 	}, Credentials{AccessToken: "token-1"}, domain.Post{
@@ -166,8 +166,8 @@ func TestLinkedInPublishCommentModeUsesRestliHeaderID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("publish comment with restli header: %v", err)
 	}
-	if externalID != "urn:li:comment:(urn:li:ugcPost:7096760097833439232,7100646796353826816)" {
-		t.Fatalf("unexpected external id %q", externalID)
+	if publishResult.ExternalID != "urn:li:comment:(urn:li:ugcPost:7096760097833439232,7100646796353826816)" {
+		t.Fatalf("unexpected external id %q", publishResult.ExternalID)
 	}
 }
 
@@ -193,7 +193,7 @@ func TestLinkedInPublishNestedCommentModeUsesParentComment(t *testing.T) {
 	defer server.Close()
 
 	provider := NewLinkedInProvider(LinkedInProviderConfig{APIBaseURL: server.URL})
-	externalID, err := provider.Publish(context.Background(), domain.SocialAccount{
+	publishResult, err := provider.Publish(context.Background(), domain.SocialAccount{
 		Platform:          domain.PlatformLinkedIn,
 		ExternalAccountID: "member_1",
 	}, Credentials{AccessToken: "token-1"}, domain.Post{
@@ -205,8 +205,8 @@ func TestLinkedInPublishNestedCommentModeUsesParentComment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("publish nested comment: %v", err)
 	}
-	if externalID != "urn:li:comment:(urn:li:ugcPost:7096760097833439232,7100646796353826817)" {
-		t.Fatalf("unexpected nested comment external id %q", externalID)
+	if publishResult.ExternalID != "urn:li:comment:(urn:li:ugcPost:7096760097833439232,7100646796353826817)" {
+		t.Fatalf("unexpected nested comment external id %q", publishResult.ExternalID)
 	}
 }
 
@@ -236,7 +236,7 @@ func TestLinkedInPublishCommentModeAcceptsShareURNTargets(t *testing.T) {
 	defer server.Close()
 
 	provider := NewLinkedInProvider(LinkedInProviderConfig{APIBaseURL: server.URL})
-	externalID, err := provider.Publish(context.Background(), domain.SocialAccount{
+	publishResult, err := provider.Publish(context.Background(), domain.SocialAccount{
 		Platform:          domain.PlatformLinkedIn,
 		ExternalAccountID: "member_1",
 	}, Credentials{AccessToken: "token-1"}, domain.Post{
@@ -248,8 +248,8 @@ func TestLinkedInPublishCommentModeAcceptsShareURNTargets(t *testing.T) {
 	if err != nil {
 		t.Fatalf("publish comment on share urn: %v", err)
 	}
-	if externalID != "urn:li:comment:(urn:li:share:7435691467278331904,7435691469999999999)" {
-		t.Fatalf("unexpected external id %q", externalID)
+	if publishResult.ExternalID != "urn:li:comment:(urn:li:share:7435691467278331904,7435691469999999999)" {
+		t.Fatalf("unexpected external id %q", publishResult.ExternalID)
 	}
 }
 
@@ -272,7 +272,7 @@ func TestLinkedInPublishCommentModeUsesOrganizationActor(t *testing.T) {
 	defer server.Close()
 
 	provider := NewLinkedInProvider(LinkedInProviderConfig{APIBaseURL: server.URL})
-	externalID, err := provider.Publish(context.Background(), domain.SocialAccount{
+	publishResult, err := provider.Publish(context.Background(), domain.SocialAccount{
 		Platform:          domain.PlatformLinkedIn,
 		AccountKind:       domain.AccountKindOrganization,
 		ExternalAccountID: "org_1",
@@ -285,8 +285,8 @@ func TestLinkedInPublishCommentModeUsesOrganizationActor(t *testing.T) {
 	if err != nil {
 		t.Fatalf("publish organization comment: %v", err)
 	}
-	if externalID != "urn:li:comment:(urn:li:ugcPost:7096760097833439232,li_comment_org_1)" {
-		t.Fatalf("unexpected external id %q", externalID)
+	if publishResult.ExternalID != "urn:li:comment:(urn:li:ugcPost:7096760097833439232,li_comment_org_1)" {
+		t.Fatalf("unexpected external id %q", publishResult.ExternalID)
 	}
 }
 

@@ -300,7 +300,7 @@ func TestMarkPublishedSetsPublishedFieldsAndClearsRetryState(t *testing.T) {
 		t.Fatalf("prepare publish state: %v", err)
 	}
 
-	if err := store.MarkPublished(ctx, created.Post.ID, "ext_123"); err != nil {
+	if err := store.MarkPublished(ctx, created.Post.ID, "ext_123", "https://example.com/published/ext_123"); err != nil {
 		t.Fatalf("mark published: %v", err)
 	}
 	post, err := store.GetPost(ctx, created.Post.ID)
@@ -315,6 +315,9 @@ func TestMarkPublishedSetsPublishedFieldsAndClearsRetryState(t *testing.T) {
 	}
 	if post.ExternalID == nil || strings.TrimSpace(*post.ExternalID) != "ext_123" {
 		t.Fatalf("expected external id ext_123, got %+v", post.ExternalID)
+	}
+	if post.PublishedURL == nil || strings.TrimSpace(*post.PublishedURL) != "https://example.com/published/ext_123" {
+		t.Fatalf("expected published url to be stored, got %+v", post.PublishedURL)
 	}
 	if post.Error != nil {
 		t.Fatalf("expected error cleared, got %q", *post.Error)

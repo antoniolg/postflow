@@ -45,6 +45,11 @@ var dbMigrations = []migration{
 		Name:    "oauth_pending_account_selections",
 		Up:      migrationAddOAuthPendingAccountSelections,
 	},
+	{
+		Version: 6,
+		Name:    "posts_published_url",
+		Up:      migrationAddPostsPublishedURL,
+	},
 }
 
 func (s *Store) hasPendingMigrations(ctx context.Context) (bool, error) {
@@ -425,6 +430,17 @@ func migrationAddOAuthPendingAccountSelections(ctx context.Context, tx *sql.Tx) 
 		}
 	}
 	return nil
+}
+
+func migrationAddPostsPublishedURL(ctx context.Context, tx *sql.Tx) error {
+	_, err := tx.ExecContext(ctx, `ALTER TABLE posts ADD COLUMN published_url TEXT;`)
+	if err == nil {
+		return nil
+	}
+	if strings.Contains(strings.ToLower(err.Error()), "duplicate column name") {
+		return nil
+	}
+	return err
 }
 
 func backupSQLiteDatabase(path string) error {

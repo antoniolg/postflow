@@ -54,6 +54,7 @@ func TestFacebookRefreshIfNeededRefreshesExpiringToken(t *testing.T) {
 func TestFacebookPublishWithImageAttachment(t *testing.T) {
 	var gotPhotoUpload bool
 	var gotFeedPost bool
+	var gotPermalinkLookup bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/v1.0/page_1/photos":
@@ -74,6 +75,9 @@ func TestFacebookPublishWithImageAttachment(t *testing.T) {
 				t.Fatalf("expected attachment to reference photo_1, got %q", got)
 			}
 			_, _ = w.Write([]byte(`{"id":"fb_post_1"}`))
+		case "/v1.0/fb_post_1":
+			gotPermalinkLookup = true
+			_, _ = w.Write([]byte(`{"permalink_url":"https://facebook.example/posts/fb_post_1"}`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -88,7 +92,7 @@ func TestFacebookPublishWithImageAttachment(t *testing.T) {
 		GraphURL:   server.URL,
 		APIVersion: "v1.0",
 	})
-	externalID, err := provider.Publish(context.Background(), domain.SocialAccount{
+	publishResult, err := provider.Publish(context.Background(), domain.SocialAccount{
 		Platform:          domain.PlatformFacebook,
 		ExternalAccountID: "page_1",
 	}, Credentials{
@@ -106,11 +110,17 @@ func TestFacebookPublishWithImageAttachment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("publish: %v", err)
 	}
-	if externalID != "fb_post_1" {
-		t.Fatalf("unexpected external id %q", externalID)
+	if publishResult.ExternalID != "fb_post_1" {
+		t.Fatalf("unexpected external id %q", publishResult.ExternalID)
+	}
+	if publishResult.PublishedURL != "https://facebook.example/posts/fb_post_1" {
+		t.Fatalf("unexpected published url %q", publishResult.PublishedURL)
 	}
 	if !gotPhotoUpload || !gotFeedPost {
 		t.Fatalf("expected both photo upload and feed publish calls")
+	}
+	if !gotPermalinkLookup {
+		t.Fatalf("expected permalink lookup after publish")
 	}
 }
 
@@ -145,7 +155,7 @@ func TestFacebookPublishWithVideoAttachment(t *testing.T) {
 		GraphURL:   server.URL,
 		APIVersion: "v1.0",
 	})
-	externalID, err := provider.Publish(context.Background(), domain.SocialAccount{
+	publishResult, err := provider.Publish(context.Background(), domain.SocialAccount{
 		Platform:          domain.PlatformFacebook,
 		ExternalAccountID: "page_1",
 	}, Credentials{
@@ -163,8 +173,8 @@ func TestFacebookPublishWithVideoAttachment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("publish: %v", err)
 	}
-	if externalID != "video_1" {
-		t.Fatalf("unexpected external id %q", externalID)
+	if publishResult.ExternalID != "video_1" {
+		t.Fatalf("unexpected external id %q", publishResult.ExternalID)
 	}
 	if !gotVideoUpload {
 		t.Fatalf("expected video upload call")
@@ -176,6 +186,7 @@ func TestFacebookPublishWithVideoAttachment(t *testing.T) {
 
 func TestInstagramPublishUsesMediaURLBuilder(t *testing.T) {
 	var createdWithURL string
+	var gotPermalinkLookup bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/v1.0/ig_1/media":
@@ -185,6 +196,9 @@ func TestInstagramPublishUsesMediaURLBuilder(t *testing.T) {
 			_, _ = w.Write([]byte(`{"id":"ig_container_1"}`))
 		case "/v1.0/ig_1/media_publish":
 			_, _ = w.Write([]byte(`{"id":"ig_post_1"}`))
+		case "/v1.0/ig_post_1":
+			gotPermalinkLookup = true
+			_, _ = w.Write([]byte(`{"permalink":"https://instagram.example/p/ig_post_1/"}`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -199,7 +213,7 @@ func TestInstagramPublishUsesMediaURLBuilder(t *testing.T) {
 			return fmt.Sprintf("https://cdn.example.com/%s.jpg", strings.TrimSpace(media.ID)), nil
 		},
 	})
-	externalID, err := provider.Publish(context.Background(), domain.SocialAccount{
+	publishResult, err := provider.Publish(context.Background(), domain.SocialAccount{
 		Platform:          domain.PlatformInstagram,
 		ExternalAccountID: "ig_1",
 	}, Credentials{
@@ -215,11 +229,17 @@ func TestInstagramPublishUsesMediaURLBuilder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("publish: %v", err)
 	}
-	if externalID != "ig_post_1" {
-		t.Fatalf("unexpected external id %q", externalID)
+	if publishResult.ExternalID != "ig_post_1" {
+		t.Fatalf("unexpected external id %q", publishResult.ExternalID)
+	}
+	if publishResult.PublishedURL != "https://instagram.example/p/ig_post_1/" {
+		t.Fatalf("unexpected published url %q", publishResult.PublishedURL)
 	}
 	if createdWithURL != expectedURL {
 		t.Fatalf("expected image_url %q, got %q", expectedURL, createdWithURL)
+	}
+	if !gotPermalinkLookup {
+		t.Fatalf("expected permalink lookup after instagram publish")
 	}
 }
 
@@ -254,7 +274,7 @@ func TestInstagramPublishVideoUsesMediaURLBuilder(t *testing.T) {
 			return fmt.Sprintf("https://cdn.example.com/%s.mp4", strings.TrimSpace(media.ID)), nil
 		},
 	})
-	externalID, err := provider.Publish(context.Background(), domain.SocialAccount{
+	publishResult, err := provider.Publish(context.Background(), domain.SocialAccount{
 		Platform:          domain.PlatformInstagram,
 		ExternalAccountID: "ig_1",
 	}, Credentials{
@@ -270,8 +290,8 @@ func TestInstagramPublishVideoUsesMediaURLBuilder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("publish: %v", err)
 	}
-	if externalID != "ig_post_1" {
-		t.Fatalf("unexpected external id %q", externalID)
+	if publishResult.ExternalID != "ig_post_1" {
+		t.Fatalf("unexpected external id %q", publishResult.ExternalID)
 	}
 	if createdWithURL != expectedURL {
 		t.Fatalf("expected video_url %q, got %q", expectedURL, createdWithURL)

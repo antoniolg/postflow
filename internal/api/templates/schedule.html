@@ -1083,6 +1083,58 @@
       height: 16px;
       display: block;
     }
+    .publication-platform-link {
+      color: #8d8d8d;
+      text-decoration: none;
+    }
+    .publication-platform-link:hover {
+      color: #d8d8d8;
+    }
+    .publication-platform-chip-disabled {
+      opacity: 0.45;
+    }
+    .publication-platform-menu {
+      position: relative;
+      display: inline-flex;
+    }
+    .publication-platform-menu summary {
+      list-style: none;
+      cursor: pointer;
+    }
+    .publication-platform-menu summary::-webkit-details-marker {
+      display: none;
+    }
+    .publication-platform-menu[open] summary {
+      color: #d8d8d8;
+    }
+    .publication-platform-menu-list {
+      position: absolute;
+      top: calc(100% + 6px);
+      right: 0;
+      z-index: 20;
+      min-width: 180px;
+      padding: 6px;
+      border-radius: 10px;
+      border: 1px solid #3a3a3a;
+      background: #1c1c1c;
+      box-shadow: 0 12px 24px rgba(0, 0, 0, 0.28);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .publication-platform-menu-item {
+      color: #d6d6d6;
+      text-decoration: none;
+      border-radius: 8px;
+      padding: 7px 9px;
+      font-size: 12px;
+      line-height: 1.2;
+      background: transparent;
+    }
+    .publication-platform-menu-item:hover {
+      background: #2a2a2a;
+      color: #ffffff;
+    }
     .publication-thread-chip {
       border-color: #3a3a3a;
       background: #2a2a2a;
@@ -4185,23 +4237,66 @@
                 {{end}}
               </div>
               <div class="publication-meta-row">
-                {{range .Platforms}}
-                <span class="publication-platform-chip" title="{{.}}">
-                  <span class="sr-only">{{.}}</span>
+                {{range .PublishedLinks}}
+                {{if and (eq .TargetCount 1) (eq (len .LinkTargets) 1)}}
+                <a class="publication-platform-chip publication-platform-link" href="{{(index .LinkTargets 0).PublishedURL}}" title="{{.Platform}}" target="_blank" rel="noopener noreferrer">
+                  <span class="sr-only">{{.Platform}}</span>
                   <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                    {{if eq . "x"}}
+                    {{if eq .Platform "x"}}
                     <use href="#pf-brand-x"></use>
-                    {{else if eq . "linkedin"}}
+                    {{else if eq .Platform "linkedin"}}
                     <use href="#pf-brand-linkedin"></use>
-                    {{else if eq . "facebook"}}
+                    {{else if eq .Platform "facebook"}}
                     <use href="#pf-brand-facebook"></use>
-                    {{else if eq . "instagram"}}
+                    {{else if eq .Platform "instagram"}}
+                    <use href="#pf-brand-instagram"></use>
+                    {{else}}
+                    <use href="#pf-brand-default"></use>
+                    {{end}}
+                  </svg>
+                </a>
+                {{else if and (gt .TargetCount 1) (gt (len .LinkTargets) 0)}}
+                <details class="publication-platform-menu">
+                  <summary class="publication-platform-chip" title="{{.Platform}}">
+                    <span class="sr-only">{{.Platform}}</span>
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      {{if eq .Platform "x"}}
+                      <use href="#pf-brand-x"></use>
+                      {{else if eq .Platform "linkedin"}}
+                      <use href="#pf-brand-linkedin"></use>
+                      {{else if eq .Platform "facebook"}}
+                      <use href="#pf-brand-facebook"></use>
+                      {{else if eq .Platform "instagram"}}
+                      <use href="#pf-brand-instagram"></use>
+                      {{else}}
+                      <use href="#pf-brand-default"></use>
+                      {{end}}
+                    </svg>
+                  </summary>
+                  <div class="publication-platform-menu-list">
+                    {{range .LinkTargets}}
+                    <a class="publication-platform-menu-item" href="{{.PublishedURL}}" target="_blank" rel="noopener noreferrer">{{.AccountLabel}}</a>
+                    {{end}}
+                  </div>
+                </details>
+                {{else}}
+                <span class="publication-platform-chip publication-platform-chip-disabled" title="{{.Platform}}">
+                  <span class="sr-only">{{.Platform}}</span>
+                  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    {{if eq .Platform "x"}}
+                    <use href="#pf-brand-x"></use>
+                    {{else if eq .Platform "linkedin"}}
+                    <use href="#pf-brand-linkedin"></use>
+                    {{else if eq .Platform "facebook"}}
+                    <use href="#pf-brand-facebook"></use>
+                    {{else if eq .Platform "instagram"}}
                     <use href="#pf-brand-instagram"></use>
                     {{else}}
                     <use href="#pf-brand-default"></use>
                     {{end}}
                   </svg>
                 </span>
+                {{end}}
                 {{end}}
                 {{if .ThreadLabel}}<span class="thread-step-badge publication-thread-chip">{{.ThreadLabel}}</span>{{end}}
                 {{if .ProgressLabel}}<span class="publication-progress-chip">{{.ProgressLabel}}</span>{{end}}

@@ -90,7 +90,7 @@ func TestPublicationsViewShowsOnlyScheduledInNext14Days(t *testing.T) {
 	if toPublishID == "" {
 		t.Fatalf("expected post-to-publish id")
 	}
-	if err := store.MarkPublished(t.Context(), toPublishID, "x-post-123"); err != nil {
+	if err := store.MarkPublished(t.Context(), toPublishID, "x-post-123", ""); err != nil {
 		t.Fatalf("mark published: %v", err)
 	}
 
@@ -461,7 +461,7 @@ func TestPartiallyPublishedThreadStaysGroupedInPublishingSection(t *testing.T) {
 	if rootID == "" {
 		t.Fatalf("expected root post id in thread create response")
 	}
-	if err := store.MarkPublished(t.Context(), rootID, "x-root-123"); err != nil {
+	if err := store.MarkPublished(t.Context(), rootID, "x-root-123", ""); err != nil {
 		t.Fatalf("mark root published: %v", err)
 	}
 

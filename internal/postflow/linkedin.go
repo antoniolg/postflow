@@ -74,23 +74,23 @@ func (p *LinkedInProvider) ValidateDraft(_ context.Context, _ domain.SocialAccou
 	return nil, nil
 }
 
-func (p *LinkedInProvider) Publish(ctx context.Context, account domain.SocialAccount, credentials Credentials, post domain.Post, opts PublishOptions) (string, error) {
+func (p *LinkedInProvider) Publish(ctx context.Context, account domain.SocialAccount, credentials Credentials, post domain.Post, opts PublishOptions) (PublishResult, error) {
 	postText := formatPostTextForPublish(post.Text)
 	token := strings.TrimSpace(credentials.AccessToken)
 	if token == "" {
-		return "", fmt.Errorf("linkedin access token missing")
+		return PublishResult{}, fmt.Errorf("linkedin access token missing")
 	}
 	actorURN := linkedinActorURN(account)
 	if actorURN == "" {
-		return "", fmt.Errorf("linkedin external account id is required")
+		return PublishResult{}, fmt.Errorf("linkedin external account id is required")
 	}
 	if opts.Mode == PublishModeComment {
 		if len(post.Media) > 0 {
-			return "", fmt.Errorf("linkedin thread comments do not support media in this release")
+			return PublishResult{}, fmt.Errorf("linkedin thread comments do not support media in this release")
 		}
 		parentExternalID := strings.TrimSpace(opts.ParentExternalID)
 		if parentExternalID == "" {
-			return "", fmt.Errorf("linkedin parent external id is required for comment mode")
+			return PublishResult{}, fmt.Errorf("linkedin parent external id is required for comment mode")
 		}
 		return p.publishComment(ctx, token, actorURN, parentExternalID, postText)
 	}
@@ -102,10 +102,10 @@ func (p *LinkedInProvider) Publish(ctx context.Context, account domain.SocialAcc
 		}
 	}
 	if videoCount > 1 {
-		return "", fmt.Errorf("linkedin supports a single video per post in this release")
+		return PublishResult{}, fmt.Errorf("linkedin supports a single video per post in this release")
 	}
 	if videoCount > 0 && len(post.Media) > 1 {
-		return "", fmt.Errorf("linkedin does not support mixing images and video in this release")
+		return PublishResult{}, fmt.Errorf("linkedin does not support mixing images and video in this release")
 	}
 	for _, media := range post.Media {
 		var (
@@ -118,10 +118,10 @@ func (p *LinkedInProvider) Publish(ctx context.Context, account domain.SocialAcc
 		case isVideoMedia(media):
 			assetURN, err = p.uploadAsset(ctx, actorURN, token, media, "urn:li:digitalmediaRecipe:feedshare-video")
 		default:
-			return "", fmt.Errorf("linkedin requires image or video media")
+			return PublishResult{}, fmt.Errorf("linkedin requires image or video media")
 		}
 		if err != nil {
-			return "", err
+			return PublishResult{}, err
 		}
 		assetURNs = append(assetURNs, assetURN)
 	}
@@ -155,7 +155,7 @@ func (p *LinkedInProvider) Publish(ctx context.Context, account domain.SocialAcc
 	raw, _ := json.Marshal(payload)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(p.cfg.APIBaseURL, "/")+"/v2/ugcPosts", bytes.NewReader(raw))
 	if err != nil {
-		return "", err
+		return PublishResult{}, err
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
@@ -163,16 +163,19 @@ func (p *LinkedInProvider) Publish(ctx context.Context, account domain.SocialAcc
 
 	resp, err := p.client.Do(req)
 	if err != nil {
-		return "", err
+		return PublishResult{}, err
 	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 	if resp.StatusCode >= 300 {
-		return "", fmt.Errorf("linkedin publish failed: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return PublishResult{}, fmt.Errorf("linkedin publish failed: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 	externalID := strings.TrimSpace(resp.Header.Get("x-restli-id"))
 	if externalID != "" {
-		return externalID, nil
+		return PublishResult{
+			ExternalID:   externalID,
+			PublishedURL: p.bestEffortLinkedInPermalink(ctx, token, externalID),
+		}, nil
 	}
 	var out struct {
 		ID string `json:"id"`
@@ -181,15 +184,20 @@ func (p *LinkedInProvider) Publish(ctx context.Context, account domain.SocialAcc
 		_ = json.Unmarshal(body, &out)
 	}
 	if strings.TrimSpace(out.ID) == "" {
-		return fmt.Sprintf("linkedin_%d", time.Now().Unix()), nil
+		externalID = fmt.Sprintf("linkedin_%d", time.Now().Unix())
+		return PublishResult{ExternalID: externalID}, nil
 	}
-	return strings.TrimSpace(out.ID), nil
+	externalID = strings.TrimSpace(out.ID)
+	return PublishResult{
+		ExternalID:   externalID,
+		PublishedURL: p.bestEffortLinkedInPermalink(ctx, token, externalID),
+	}, nil
 }
 
-func (p *LinkedInProvider) publishComment(ctx context.Context, accessToken, actorURN, parentExternalID, text string) (string, error) {
+func (p *LinkedInProvider) publishComment(ctx context.Context, accessToken, actorURN, parentExternalID, text string) (PublishResult, error) {
 	target := normalizeLinkedInTargetURN(parentExternalID)
 	if target == "" {
-		return "", fmt.Errorf("linkedin comment target is required")
+		return PublishResult{}, fmt.Errorf("linkedin comment target is required")
 	}
 	objectURN := target
 	payload := map[string]any{
@@ -208,18 +216,18 @@ func (p *LinkedInProvider) publishComment(ctx context.Context, accessToken, acto
 	endpoint := strings.TrimRight(p.cfg.APIBaseURL, "/") + "/v2/socialActions/" + url.PathEscape(target) + "/comments"
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(raw))
 	if err != nil {
-		return "", err
+		return PublishResult{}, err
 	}
 	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(accessToken))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := p.client.Do(req)
 	if err != nil {
-		return "", err
+		return PublishResult{}, err
 	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 	if resp.StatusCode >= 300 {
-		return "", fmt.Errorf("linkedin comment failed: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return PublishResult{}, fmt.Errorf("linkedin comment failed: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 	var out struct {
 		ID         string `json:"id"`
@@ -230,7 +238,7 @@ func (p *LinkedInProvider) publishComment(ctx context.Context, accessToken, acto
 		_ = json.Unmarshal(body, &out)
 	}
 	if commentURN := strings.TrimSpace(out.CommentURN); commentURN != "" {
-		return commentURN, nil
+		return PublishResult{ExternalID: commentURN}, nil
 	}
 	responseObjectURN := strings.TrimSpace(out.Object)
 	if responseObjectURN == "" {
@@ -239,17 +247,82 @@ func (p *LinkedInProvider) publishComment(ctx context.Context, accessToken, acto
 	externalID := strings.TrimSpace(resp.Header.Get("x-restli-id"))
 	if externalID != "" {
 		if synthesized := buildLinkedInCommentURN(responseObjectURN, externalID); synthesized != "" {
-			return synthesized, nil
+			return PublishResult{ExternalID: synthesized}, nil
 		}
-		return externalID, nil
+		return PublishResult{ExternalID: externalID}, nil
 	}
 	if synthesized := buildLinkedInCommentURN(responseObjectURN, strings.TrimSpace(out.ID)); synthesized != "" {
-		return synthesized, nil
+		return PublishResult{ExternalID: synthesized}, nil
 	}
 	if strings.TrimSpace(out.ID) == "" {
-		return "", fmt.Errorf("linkedin comment response missing id")
+		return PublishResult{}, fmt.Errorf("linkedin comment response missing id")
 	}
-	return strings.TrimSpace(out.ID), nil
+	return PublishResult{ExternalID: strings.TrimSpace(out.ID)}, nil
+}
+
+func (p *LinkedInProvider) bestEffortLinkedInPermalink(ctx context.Context, accessToken, externalID string) string {
+	targetURN := normalizeLinkedInTargetURN(externalID)
+	if targetURN == "" {
+		return ""
+	}
+	if !strings.HasPrefix(targetURN, "urn:li:") {
+		targetURN = "urn:li:ugcPost:" + targetURN
+	}
+
+	values := url.Values{}
+	values.Set("viewContext", "AUTHOR")
+	values.Set("projection", "(permalink,permalinkUrl,permalink_url,permalinkSuffix,activity,activityUrn)")
+	endpoint := strings.TrimRight(p.cfg.APIBaseURL, "/") + "/v2/ugcPosts/" + url.PathEscape(targetURN) + "?" + values.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return ""
+	}
+	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(accessToken))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Restli-Protocol-Version", "2.0.0")
+	resp, err := p.client.Do(req)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return ""
+	}
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+	var out map[string]any
+	if err := json.Unmarshal(body, &out); err != nil {
+		return ""
+	}
+	for _, key := range []string{"permalink", "permalinkUrl", "permalink_url"} {
+		if raw, ok := out[key].(string); ok && strings.TrimSpace(raw) != "" {
+			return strings.TrimSpace(raw)
+		}
+	}
+	activity := stringValue(out, "activityUrn")
+	if activity == "" {
+		activity = stringValue(out, "activity")
+	}
+	activity = strings.TrimSpace(activity)
+	if activity == "" {
+		return ""
+	}
+	return "https://www.linkedin.com/feed/update/" + activity + "/"
+}
+
+func stringValue(obj map[string]any, key string) string {
+	if obj == nil {
+		return ""
+	}
+	raw, ok := obj[key]
+	if !ok || raw == nil {
+		return ""
+	}
+	switch value := raw.(type) {
+	case string:
+		return strings.TrimSpace(value)
+	default:
+		return strings.TrimSpace(fmt.Sprintf("%v", value))
+	}
 }
 
 func normalizeLinkedInTargetURN(raw string) string {

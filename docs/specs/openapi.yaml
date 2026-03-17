@@ -1034,6 +1034,9 @@ components:
         external_id:
           type: string
           nullable: true
+        published_url:
+          type: string
+          nullable: true
         error:
           type: string
     PublicationSegment:

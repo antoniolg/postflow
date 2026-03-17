@@ -139,8 +139,8 @@ func (f fakeProvider) ValidateDraft(context.Context, domain.SocialAccount, postf
 	return nil, nil
 }
 
-func (f fakeProvider) Publish(context.Context, domain.SocialAccount, postflow.Credentials, domain.Post, postflow.PublishOptions) (string, error) {
-	return "", nil
+func (f fakeProvider) Publish(context.Context, domain.SocialAccount, postflow.Credentials, domain.Post, postflow.PublishOptions) (postflow.PublishResult, error) {
+	return postflow.PublishResult{}, nil
 }
 
 func (f fakeProvider) RefreshIfNeeded(context.Context, domain.SocialAccount, postflow.Credentials) (postflow.Credentials, bool, error) {

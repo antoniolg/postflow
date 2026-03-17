@@ -62,7 +62,7 @@ func TestCalendarDayDetailShowsPendingBeforePublished(t *testing.T) {
 	if publishedID == "" {
 		t.Fatalf("expected published post id")
 	}
-	if err := store.MarkPublished(t.Context(), publishedID, "x-published-seed"); err != nil {
+	if err := store.MarkPublished(t.Context(), publishedID, "x-published-seed", ""); err != nil {
 		t.Fatalf("mark published: %v", err)
 	}
 
@@ -288,7 +288,7 @@ func TestCalendarDayDetailDeleteButtonVisibilityByStatus(t *testing.T) {
 	if publishedID == "" {
 		t.Fatalf("expected published post id")
 	}
-	if err := store.MarkPublished(t.Context(), publishedID, "x-published-seed"); err != nil {
+	if err := store.MarkPublished(t.Context(), publishedID, "x-published-seed", ""); err != nil {
 		t.Fatalf("mark published: %v", err)
 	}
 

@@ -211,8 +211,8 @@ func TestWorkerFailurePathTransientMediaDeferralReschedules(t *testing.T) {
 
 	provider := &workerScenarioProvider{
 		platform: domain.PlatformInstagram,
-		publishFn: func(context.Context, domain.SocialAccount, postflow.Credentials, domain.Post, postflow.PublishOptions) (string, error) {
-			return "", errors.New("instagram error 2207027: media id is not available")
+		publishFn: func(context.Context, domain.SocialAccount, postflow.Credentials, domain.Post, postflow.PublishOptions) (postflow.PublishResult, error) {
+			return postflow.PublishResult{}, errors.New("instagram error 2207027: media id is not available")
 		},
 	}
 	creds := workerCredentialsStore{worker: Worker{Store: store, Cipher: newWorkerTestCipher(t)}}
@@ -269,8 +269,8 @@ func (s getAccountErrorStore) ReschedulePublishWithoutAttempt(ctx context.Contex
 	return s.base.ReschedulePublishWithoutAttempt(ctx, id, postErr, retryDelay)
 }
 
-func (s getAccountErrorStore) MarkPublished(ctx context.Context, id, externalID string) error {
-	return s.base.MarkPublished(ctx, id, externalID)
+func (s getAccountErrorStore) MarkPublished(ctx context.Context, id, externalID, publishedURL string) error {
+	return s.base.MarkPublished(ctx, id, externalID, publishedURL)
 }
 
 func (s getAccountErrorStore) UpdateAccountStatus(ctx context.Context, id string, status domain.AccountStatus, lastErr *string) error {
@@ -305,7 +305,7 @@ func (s forcedCredentialsStore) SaveCredentials(ctx context.Context, accountID s
 
 type workerScenarioProvider struct {
 	platform  domain.Platform
-	publishFn func(context.Context, domain.SocialAccount, postflow.Credentials, domain.Post, postflow.PublishOptions) (string, error)
+	publishFn func(context.Context, domain.SocialAccount, postflow.Credentials, domain.Post, postflow.PublishOptions) (postflow.PublishResult, error)
 	refreshFn func(context.Context, domain.SocialAccount, postflow.Credentials) (postflow.Credentials, bool, error)
 }
 
@@ -317,11 +317,11 @@ func (p *workerScenarioProvider) ValidateDraft(context.Context, domain.SocialAcc
 	return nil, nil
 }
 
-func (p *workerScenarioProvider) Publish(ctx context.Context, account domain.SocialAccount, credentials postflow.Credentials, post domain.Post, opts postflow.PublishOptions) (string, error) {
+func (p *workerScenarioProvider) Publish(ctx context.Context, account domain.SocialAccount, credentials postflow.Credentials, post domain.Post, opts postflow.PublishOptions) (postflow.PublishResult, error) {
 	if p.publishFn != nil {
 		return p.publishFn(ctx, account, credentials, post, opts)
 	}
-	return "ext_" + post.ID, nil
+	return postflow.PublishResult{ExternalID: "ext_" + post.ID}, nil
 }
 
 func (p *workerScenarioProvider) RefreshIfNeeded(ctx context.Context, account domain.SocialAccount, credentials postflow.Credentials) (postflow.Credentials, bool, error) {

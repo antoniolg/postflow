@@ -10,18 +10,20 @@ import (
 )
 
 type logicalThreadState struct {
-	group           publicationGroupItem
-	platformSet     map[domain.Platform]struct{}
-	accountSet      map[string]struct{}
-	postSet         map[string]struct{}
-	deadLetterSet   map[string]struct{}
-	totalPosts      int
-	publishedPosts  int
-	publishingPosts int
-	failedPosts     int
-	scheduledPosts  int
-	draftPosts      int
-	stepStatus      map[int]*logicalThreadStepStatus
+	group              publicationGroupItem
+	platformSet        map[domain.Platform]struct{}
+	accountSet         map[string]struct{}
+	postSet            map[string]struct{}
+	deadLetterSet      map[string]struct{}
+	publishedTargetSet map[string]struct{}
+	publishedTargets   []publicationNetworkTarget
+	totalPosts         int
+	publishedPosts     int
+	publishingPosts    int
+	failedPosts        int
+	scheduledPosts     int
+	draftPosts         int
+	stepStatus         map[int]*logicalThreadStepStatus
 }
 
 type logicalThreadStepStatus struct {
@@ -32,6 +34,7 @@ type logicalThreadStepStatus struct {
 func groupPublicationThreads(
 	threads [][]domain.Post,
 	failedByPostID map[string]failedPostEnvelope,
+	accountLabelFor func(string) string,
 	uiLoc *time.Location,
 	stepCountLabel func(int) string,
 	stepProgressLabel func(int, int) string,
@@ -87,16 +90,41 @@ func groupPublicationThreads(
 					FollowUpSteps:    followUps,
 					MediaCount:       mediaCount,
 				},
-				platformSet:   make(map[domain.Platform]struct{}, 4),
-				accountSet:    make(map[string]struct{}, 4),
-				postSet:       make(map[string]struct{}, len(thread)),
-				deadLetterSet: make(map[string]struct{}, len(thread)),
-				stepStatus:    make(map[int]*logicalThreadStepStatus, len(thread)),
+				platformSet:        make(map[domain.Platform]struct{}, 4),
+				accountSet:         make(map[string]struct{}, 4),
+				postSet:            make(map[string]struct{}, len(thread)),
+				deadLetterSet:      make(map[string]struct{}, len(thread)),
+				publishedTargetSet: make(map[string]struct{}, len(thread)),
+				publishedTargets:   make([]publicationNetworkTarget, 0, len(thread)),
+				stepStatus:         make(map[int]*logicalThreadStepStatus, len(thread)),
 			})
 		}
 
 		state := &states[idx]
 		state.group.PostCount++
+		root := thread[0]
+		if root.Status == domain.PostStatusPublished {
+			targetKey := strings.TrimSpace(root.ID)
+			if targetKey != "" {
+				if _, exists := state.publishedTargetSet[targetKey]; !exists {
+					state.publishedTargetSet[targetKey] = struct{}{}
+					accountID := strings.TrimSpace(root.AccountID)
+					accountLabel := accountID
+					if accountLabelFor != nil {
+						if label := strings.TrimSpace(accountLabelFor(accountID)); label != "" {
+							accountLabel = label
+						}
+					}
+					state.publishedTargets = append(state.publishedTargets, publicationNetworkTarget{
+						Platform:     root.Platform,
+						AccountID:    accountID,
+						AccountLabel: accountLabel,
+						RootPostID:   targetKey,
+						PublishedURL: strings.TrimSpace(ptrStringValue(root.PublishedURL)),
+					})
+				}
+			}
+		}
 		for _, post := range thread {
 			postID := strings.TrimSpace(post.ID)
 			if postID != "" {
@@ -179,6 +207,7 @@ func groupPublicationThreads(
 		group.MultiPlatform = len(group.Platforms) > 1
 		group.DeadLetterIDsCSV = strings.Join(group.DeadLetterIDs, ",")
 		group.StatusKey = aggregatePublicationGroupStatus(state)
+		group.PublishedLinks = buildPublicationPlatformLinks(group.Platforms, state.publishedTargets)
 		if group.StatusKey == "publishing" && group.StepCount > 1 {
 			completedSteps := 0
 			for _, step := range state.stepStatus {
@@ -193,6 +222,48 @@ func groupPublicationThreads(
 		out = append(out, group)
 	}
 	return out
+}
+
+func buildPublicationPlatformLinks(platforms []domain.Platform, targets []publicationNetworkTarget) []publicationPlatformLink {
+	if len(platforms) == 0 {
+		return nil
+	}
+	indexByPlatform := make(map[domain.Platform]int, len(platforms))
+	out := make([]publicationPlatformLink, 0, len(platforms))
+	for _, platform := range platforms {
+		if _, exists := indexByPlatform[platform]; exists {
+			continue
+		}
+		indexByPlatform[platform] = len(out)
+		out = append(out, publicationPlatformLink{
+			Platform:    platform,
+			LinkTargets: make([]publicationNetworkTarget, 0, 2),
+		})
+	}
+	for _, target := range targets {
+		idx, exists := indexByPlatform[target.Platform]
+		if !exists {
+			continue
+		}
+		out[idx].TargetCount++
+		if strings.TrimSpace(target.PublishedURL) == "" {
+			continue
+		}
+		out[idx].LinkTargets = append(out[idx].LinkTargets, target)
+	}
+	for i := range out {
+		sort.SliceStable(out[i].LinkTargets, func(left, right int) bool {
+			return strings.ToLower(strings.TrimSpace(out[i].LinkTargets[left].AccountLabel)) < strings.ToLower(strings.TrimSpace(out[i].LinkTargets[right].AccountLabel))
+		})
+	}
+	return out
+}
+
+func ptrStringValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return strings.TrimSpace(*value)
 }
 
 func aggregatePublicationGroupStatus(state logicalThreadState) string {

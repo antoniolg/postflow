@@ -116,6 +116,7 @@ type Post struct {
 	IdempotencyKey *string    `json:"idempotency_key,omitempty"`
 	PublishedAt    *time.Time `json:"published_at,omitempty"`
 	ExternalID     *string    `json:"external_id,omitempty"`
+	PublishedURL   *string    `json:"published_url,omitempty"`
 	Error          *string    `json:"error,omitempty"`
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`

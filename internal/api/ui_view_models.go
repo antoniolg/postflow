@@ -80,6 +80,20 @@ type publicationStepPreview struct {
 	MediaCount int
 }
 
+type publicationNetworkTarget struct {
+	Platform     domain.Platform
+	AccountID    string
+	AccountLabel string
+	RootPostID   string
+	PublishedURL string
+}
+
+type publicationPlatformLink struct {
+	Platform    domain.Platform
+	TargetCount int
+	LinkTargets []publicationNetworkTarget
+}
+
 type publicationGroupItem struct {
 	PrimaryPostID    string
 	PostIDs          []string
@@ -104,6 +118,7 @@ type publicationGroupItem struct {
 	FailedAtLabel    string
 	LastError        string
 	EditURL          string
+	PublishedLinks   []publicationPlatformLink
 }
 
 type calendarDay struct {

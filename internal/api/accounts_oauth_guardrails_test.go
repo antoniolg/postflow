@@ -28,8 +28,8 @@ func (p *pkceCaptureProvider) ValidateDraft(_ context.Context, _ domain.SocialAc
 	return nil, nil
 }
 
-func (p *pkceCaptureProvider) Publish(_ context.Context, _ domain.SocialAccount, _ postflow.Credentials, _ domain.Post, _ postflow.PublishOptions) (string, error) {
-	return "ok", nil
+func (p *pkceCaptureProvider) Publish(_ context.Context, _ domain.SocialAccount, _ postflow.Credentials, _ domain.Post, _ postflow.PublishOptions) (postflow.PublishResult, error) {
+	return postflow.PublishResult{ExternalID: "ok"}, nil
 }
 
 func (p *pkceCaptureProvider) RefreshIfNeeded(_ context.Context, _ domain.SocialAccount, credentials postflow.Credentials) (postflow.Credentials, bool, error) {

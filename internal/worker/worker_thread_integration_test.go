@@ -156,13 +156,13 @@ func (p *recordingWorkerProvider) ValidateDraft(context.Context, domain.SocialAc
 	return nil, nil
 }
 
-func (p *recordingWorkerProvider) Publish(_ context.Context, _ domain.SocialAccount, _ postflow.Credentials, post domain.Post, opts postflow.PublishOptions) (string, error) {
+func (p *recordingWorkerProvider) Publish(_ context.Context, _ domain.SocialAccount, _ postflow.Credentials, post domain.Post, opts postflow.PublishOptions) (postflow.PublishResult, error) {
 	p.calls = append(p.calls, workerPublishCall{
 		postID:           post.ID,
 		mode:             opts.Mode,
 		parentExternalID: strings.TrimSpace(opts.ParentExternalID),
 	})
-	return "ext_" + strings.TrimSpace(post.ID), nil
+	return postflow.PublishResult{ExternalID: "ext_" + strings.TrimSpace(post.ID)}, nil
 }
 
 func (p *recordingWorkerProvider) RefreshIfNeeded(_ context.Context, _ domain.SocialAccount, credentials postflow.Credentials) (postflow.Credentials, bool, error) {

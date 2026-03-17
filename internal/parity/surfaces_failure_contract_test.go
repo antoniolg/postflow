@@ -75,13 +75,13 @@ func TestRequiredCapabilitiesFailureParity(t *testing.T) {
 		cliID := env.apiCreatePost("published delete cli", time.Now().UTC().Add(16*time.Minute), nil)
 		mcpID := env.apiCreatePost("published delete mcp", time.Now().UTC().Add(17*time.Minute), nil)
 
-		if err := env.store.MarkPublished(t.Context(), apiID, "x-api"); err != nil {
+		if err := env.store.MarkPublished(t.Context(), apiID, "x-api", ""); err != nil {
 			t.Fatalf("mark published api: %v", err)
 		}
-		if err := env.store.MarkPublished(t.Context(), cliID, "x-cli"); err != nil {
+		if err := env.store.MarkPublished(t.Context(), cliID, "x-cli", ""); err != nil {
 			t.Fatalf("mark published cli: %v", err)
 		}
-		if err := env.store.MarkPublished(t.Context(), mcpID, "x-mcp"); err != nil {
+		if err := env.store.MarkPublished(t.Context(), mcpID, "x-mcp", ""); err != nil {
 			t.Fatalf("mark published mcp: %v", err)
 		}
 

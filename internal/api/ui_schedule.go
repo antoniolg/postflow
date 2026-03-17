@@ -92,6 +92,13 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+	accountDisplayNames := make(map[string]string, len(accounts))
+	for _, account := range accounts {
+		accountDisplayNames[strings.TrimSpace(account.ID)] = strings.TrimSpace(account.DisplayName)
+	}
+	accountLabelFor := func(accountID string) string {
+		return accountDisplayNames[strings.TrimSpace(accountID)]
+	}
 	connectedAccounts := make([]domain.SocialAccount, 0, len(accounts))
 	for _, account := range accounts {
 		if account.Status == domain.AccountStatusConnected {
@@ -184,6 +191,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	publicationAllGroups := groupPublicationThreads(
 		threadBundlesFromRoots(orderedThreadRootsFromPosts(publicationsRaw), threadPostsByRoot),
 		failedByPostID,
+		accountLabelFor,
 		uiLoc,
 		stepCountLabel,
 		stepProgressLabel,
@@ -197,6 +205,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		groupPublicationThreads(
 			threadBundlesFromRoots(orderedThreadRootsFromPosts(drafts), threadPostsByRoot),
 			nil,
+			accountLabelFor,
 			uiLoc,
 			stepCountLabel,
 			stepProgressLabel,
@@ -208,6 +217,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		groupPublicationThreads(
 			threadBundlesFromRoots(orderedThreadRootsFromFailedEnvelopes(failedEnvelopes), threadPostsByRoot),
 			failedByPostID,
+			accountLabelFor,
 			uiLoc,
 			stepCountLabel,
 			stepProgressLabel,
@@ -290,6 +300,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	calendarGroups := groupPublicationThreads(
 		threadBundlesFromRoots(orderedThreadRootsFromPosts(items), threadPostsByRoot),
 		failedByPostID,
+		accountLabelFor,
 		uiLoc,
 		stepCountLabel,
 		stepProgressLabel,
