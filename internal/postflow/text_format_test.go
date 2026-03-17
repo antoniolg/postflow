@@ -45,19 +45,14 @@ func TestXProviderPublishSendsPlainText(t *testing.T) {
 	defer srv.Close()
 
 	provider := NewXProvider(XConfig{
-		APIBaseURL:        srv.URL,
-		UploadBaseURL:     srv.URL,
-		APIKey:            "key",
-		APIKeySecret:      "secret",
-		AccessToken:       "token",
-		AccessTokenSecret: "token_secret",
+		APIBaseURL:    srv.URL,
+		UploadBaseURL: srv.URL,
 	})
 
 	publishResult, err := provider.Publish(context.Background(), domain.SocialAccount{
 		Platform: domain.PlatformX,
 	}, Credentials{
-		AccessToken:       "token",
-		AccessTokenSecret: "token_secret",
+		AccessToken: "bearer-token",
 	}, domain.Post{
 		Platform: domain.PlatformX,
 		Text:     "Hola **mundo** _equipo_",

@@ -57,13 +57,13 @@ func TestXProviderValidateDraftUsesPremiumLimit(t *testing.T) {
 	}
 }
 
-func TestXProviderPlatformAndRefreshNoopForOAuth1(t *testing.T) {
+func TestXProviderPlatformAndRefreshNoopWithoutExpiry(t *testing.T) {
 	provider := NewXProvider(XConfig{})
 	if provider.Platform() != domain.PlatformX {
 		t.Fatalf("expected platform x, got %s", provider.Platform())
 	}
 
-	original := Credentials{AccessToken: "token-1", AccessTokenSecret: "secret-1", TokenType: "oauth1"}
+	original := Credentials{AccessToken: "token-1", TokenType: "bearer"}
 	updated, changed, err := provider.RefreshIfNeeded(context.Background(), domain.SocialAccount{}, original)
 	if err != nil {
 		t.Fatalf("refresh if needed: %v", err)
@@ -266,18 +266,13 @@ func TestXProviderPublishBuildsPublishedURLFromCredentialsUsername(t *testing.T)
 	defer srv.Close()
 
 	provider := NewXProvider(XConfig{
-		APIBaseURL:        srv.URL,
-		UploadBaseURL:     srv.URL,
-		APIKey:            "key",
-		APIKeySecret:      "secret",
-		AccessToken:       "token",
-		AccessTokenSecret: "token_secret",
+		APIBaseURL:    srv.URL,
+		UploadBaseURL: srv.URL,
 	})
 
 	result, err := provider.Publish(context.Background(), domain.SocialAccount{Platform: domain.PlatformX}, Credentials{
-		AccessToken:       "token",
-		AccessTokenSecret: "token_secret",
-		Extra:             map[string]string{"username": "postflowbot"},
+		AccessToken: "token",
+		Extra:       map[string]string{"username": "postflowbot"},
 	}, domain.Post{
 		Platform: domain.PlatformX,
 		Text:     "hello",
@@ -287,6 +282,25 @@ func TestXProviderPublishBuildsPublishedURLFromCredentialsUsername(t *testing.T)
 	}
 	if result.PublishedURL != "https://x.com/postflowbot/status/x_post_1" {
 		t.Fatalf("unexpected published url %q", result.PublishedURL)
+	}
+}
+
+func TestXProviderPublishRejectsLegacyOAuth1Credentials(t *testing.T) {
+	provider := NewXProvider(XConfig{})
+
+	_, err := provider.Publish(context.Background(), domain.SocialAccount{Platform: domain.PlatformX}, Credentials{
+		AccessToken:       "token",
+		AccessTokenSecret: "legacy-secret",
+		TokenType:         "oauth1",
+	}, domain.Post{
+		Platform: domain.PlatformX,
+		Text:     "hello",
+	}, PublishOptions{})
+	if err == nil {
+		t.Fatalf("expected legacy oauth1 credentials to be rejected")
+	}
+	if !strings.Contains(err.Error(), "reconnect via oauth") {
+		t.Fatalf("expected reconnect guidance, got %v", err)
 	}
 }
 

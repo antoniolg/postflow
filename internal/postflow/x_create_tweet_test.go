@@ -27,12 +27,9 @@ func TestCreateStatusUsesV2TweetsEndpoint(t *testing.T) {
 	defer srv.Close()
 
 	client, err := NewXClient(XConfig{
-		APIBaseURL:        srv.URL,
-		UploadBaseURL:     srv.URL,
-		APIKey:            "key",
-		APIKeySecret:      "secret",
-		AccessToken:       "token",
-		AccessTokenSecret: "token_secret",
+		APIBaseURL:    srv.URL,
+		UploadBaseURL: srv.URL,
+		AccessToken:   "bearer-token",
 	})
 	if err != nil {
 		t.Fatalf("NewXClient() error = %v", err)
@@ -75,12 +72,9 @@ func TestCreateStatusSupportsLegacyResponseID(t *testing.T) {
 	defer srv.Close()
 
 	client, err := NewXClient(XConfig{
-		APIBaseURL:        srv.URL,
-		UploadBaseURL:     srv.URL,
-		APIKey:            "key",
-		APIKeySecret:      "secret",
-		AccessToken:       "token",
-		AccessTokenSecret: "token_secret",
+		APIBaseURL:    srv.URL,
+		UploadBaseURL: srv.URL,
+		AccessToken:   "bearer-token",
 	})
 	if err != nil {
 		t.Fatalf("NewXClient() error = %v", err)

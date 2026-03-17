@@ -64,7 +64,7 @@ func (s Server) newMCPHandler() http.Handler {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "postflow_create_static_account",
-		Description: "Create or update a static account and store encrypted credentials.",
+		Description: "Create or update a static account for LinkedIn, Facebook, or Instagram and store encrypted credentials.",
 		Annotations: &mcp.ToolAnnotations{
 			IdempotentHint: false,
 		},

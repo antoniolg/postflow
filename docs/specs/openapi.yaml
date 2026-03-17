@@ -45,7 +45,7 @@ paths:
 
   /accounts/static:
     post:
-      summary: Create or update a static account and store encrypted credentials
+      summary: Create or update a static account for LinkedIn, Facebook, or Instagram
       requestBody:
         required: true
         content:
@@ -854,6 +854,7 @@ components:
     CreateStaticAccountRequest:
       type: object
       required: [platform, external_account_id, credentials]
+      description: Static accounts are supported for linkedin, facebook, and instagram. X accounts must connect via OAuth.
       properties:
         platform:
           $ref: '#/components/schemas/Platform'

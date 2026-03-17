@@ -119,7 +119,7 @@ func TestAccessibilityMarkupAddsLabelsAndLandmarks(t *testing.T) {
 	if !strings.Contains(createBody, "for=\"create-scheduled-at\"") || !strings.Contains(createBody, "id=\"create-scheduled-at\"") {
 		t.Fatalf("expected create scheduled datetime label association")
 	}
-	if !strings.Contains(createBody, "aria-label=\"X Default · x\"") {
+	if !strings.Contains(createBody, "aria-label=\"X Test · x\"") {
 		t.Fatalf("expected network chips to expose accessible names")
 	}
 	if !strings.Contains(createBody, `const pickerHour = "hour";`) || !strings.Contains(createBody, `const pickerMinute = "minute";`) {

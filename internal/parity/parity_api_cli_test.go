@@ -12,6 +12,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/antoniolg/postflow/internal/db"
+	"github.com/antoniolg/postflow/internal/domain"
 )
 
 func (e *parityEnv) apiCreatePost(text string, scheduledAt time.Time, mediaIDs []string) string {
@@ -360,6 +363,21 @@ func (e *parityEnv) apiSetXPremium(id string, enabled bool) {
 	if status != http.StatusOK {
 		e.t.Fatalf("set x premium status=%d body=%s", status, string(raw))
 	}
+}
+
+func (e *parityEnv) seedXOAuthAccount(externalID string) string {
+	e.t.Helper()
+	account, err := e.store.UpsertAccount(e.t.Context(), db.UpsertAccountParams{
+		Platform:          domain.PlatformX,
+		DisplayName:       "Parity X " + strings.TrimSpace(externalID),
+		ExternalAccountID: strings.TrimSpace(externalID),
+		AuthMethod:        domain.AuthMethodOAuth,
+		Status:            domain.AccountStatusConnected,
+	})
+	if err != nil {
+		e.t.Fatalf("seed x oauth account: %v", err)
+	}
+	return account.ID
 }
 
 func (e *parityEnv) apiSetTimezone(timezone string) {

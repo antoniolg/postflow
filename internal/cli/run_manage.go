@@ -269,7 +269,7 @@ func runAccounts(ctx context.Context, client *APIClient, cfg config, args []stri
 func runAccountsCreateStatic(ctx context.Context, client *APIClient, cfg config, args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("accounts create-static", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	platform := fs.String("platform", "", "Platform: x|linkedin|facebook|instagram")
+	platform := fs.String("platform", "", "Platform: linkedin|facebook|instagram")
 	accountKind := fs.String("account-kind", "", "Optional account kind. LinkedIn supports personal|organization")
 	displayName := fs.String("display-name", "", "Display name")
 	externalAccountID := fs.String("external-account-id", "", "External account id")
@@ -287,6 +287,10 @@ func runAccountsCreateStatic(ctx context.Context, client *APIClient, cfg config,
 	}
 	if len(credentials) == 0 {
 		fmt.Fprintln(stderr, "--credential is required")
+		return 2
+	}
+	if strings.EqualFold(strings.TrimSpace(*platform), string(domain.PlatformX)) {
+		fmt.Fprintln(stderr, "static x accounts are not supported; connect via oauth")
 		return 2
 	}
 

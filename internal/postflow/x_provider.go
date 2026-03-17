@@ -43,18 +43,16 @@ func (p *XProvider) ValidateDraft(_ context.Context, account domain.SocialAccoun
 
 func (p *XProvider) Publish(ctx context.Context, _ domain.SocialAccount, credentials Credentials, post domain.Post, opts PublishOptions) (PublishResult, error) {
 	token := strings.TrimSpace(credentials.AccessToken)
-	tokenSecret := strings.TrimSpace(credentials.AccessTokenSecret)
+	if strings.TrimSpace(credentials.AccessTokenSecret) != "" || strings.EqualFold(strings.TrimSpace(credentials.TokenType), "oauth1") {
+		return PublishResult{}, fmt.Errorf("x static/oauth1 accounts are no longer supported; reconnect via oauth")
+	}
 	if token == "" {
-		token = strings.TrimSpace(p.cfg.AccessToken)
-		tokenSecret = strings.TrimSpace(p.cfg.AccessTokenSecret)
+		return PublishResult{}, fmt.Errorf("x account is missing an oauth access token; reconnect via oauth")
 	}
 	client, err := NewXClient(XConfig{
-		APIBaseURL:        p.cfg.APIBaseURL,
-		UploadBaseURL:     p.cfg.UploadBaseURL,
-		APIKey:            p.cfg.APIKey,
-		APIKeySecret:      p.cfg.APIKeySecret,
-		AccessToken:       token,
-		AccessTokenSecret: tokenSecret,
+		APIBaseURL:    p.cfg.APIBaseURL,
+		UploadBaseURL: p.cfg.UploadBaseURL,
+		AccessToken:   token,
 	})
 	if err != nil {
 		return PublishResult{}, fmt.Errorf("build x client: %w", err)

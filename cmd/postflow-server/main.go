@@ -56,11 +56,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := bootstrapXAccount(context.Background(), store, cipher, cfg); err != nil {
-		slog.Error("bootstrap x account", "error", err)
-		os.Exit(1)
-	}
-
 	apiServer := api.Server{
 		Store:             store,
 		DataDir:           cfg.DataDir,
@@ -121,16 +116,12 @@ func buildProviderRegistry(cfg config.Config, cipher *secure.Cipher) (*postflow.
 		), nil
 	case "live", "real", "x":
 		xProvider := postflow.NewXProvider(postflow.XConfig{
-			APIBaseURL:        cfg.X.APIBaseURL,
-			UploadBaseURL:     cfg.X.UploadBaseURL,
-			AuthBaseURL:       cfg.X.AuthBaseURL,
-			TokenURL:          cfg.X.TokenURL,
-			APIKey:            cfg.X.APIKey,
-			APIKeySecret:      cfg.X.APIKeySecret,
-			ClientID:          cfg.X.ClientID,
-			ClientSecret:      cfg.X.ClientSecret,
-			AccessToken:       cfg.X.AccessToken,
-			AccessTokenSecret: cfg.X.AccessTokenSecret,
+			APIBaseURL:    cfg.X.APIBaseURL,
+			UploadBaseURL: cfg.X.UploadBaseURL,
+			AuthBaseURL:   cfg.X.AuthBaseURL,
+			TokenURL:      cfg.X.TokenURL,
+			ClientID:      cfg.X.ClientID,
+			ClientSecret:  cfg.X.ClientSecret,
 		})
 		linkedinProvider := postflow.NewLinkedInProvider(postflow.LinkedInProviderConfig{
 			ClientID:     cfg.LinkedIn.ClientID,
@@ -173,41 +164,4 @@ func buildSignedMediaURLBuilder(baseURL string, cipher *secure.Cipher) func(medi
 		query.Set("sig", signature)
 		return fmt.Sprintf("%s/media/%s/content?%s", base, url.PathEscape(mediaID), query.Encode()), nil
 	}
-}
-
-func bootstrapXAccount(ctx context.Context, store *db.Store, cipher *secure.Cipher, cfg config.Config) error {
-	if strings.TrimSpace(cfg.X.AccessToken) == "" || strings.TrimSpace(cfg.X.AccessTokenSecret) == "" {
-		return nil
-	}
-	disabled, err := store.GetBootstrapXAccountDisabled(ctx)
-	if err != nil {
-		return err
-	}
-	if disabled {
-		return nil
-	}
-	account, err := store.UpsertAccount(ctx, db.UpsertAccountParams{
-		Platform:          domain.PlatformX,
-		DisplayName:       "X Default",
-		ExternalAccountID: "x-default",
-		AuthMethod:        domain.AuthMethodStatic,
-		Status:            domain.AccountStatusConnected,
-	})
-	if err != nil {
-		return err
-	}
-	sealed, nonce, err := cipher.EncryptJSON(postflow.Credentials{
-		AccessToken:       strings.TrimSpace(cfg.X.AccessToken),
-		AccessTokenSecret: strings.TrimSpace(cfg.X.AccessTokenSecret),
-		TokenType:         "oauth1",
-	})
-	if err != nil {
-		return err
-	}
-	return store.SaveAccountCredentials(ctx, account.ID, db.EncryptedCredentials{
-		Ciphertext: sealed,
-		Nonce:      nonce,
-		KeyVersion: cipher.KeyVersion(),
-		UpdatedAt:  time.Now().UTC(),
-	})
 }

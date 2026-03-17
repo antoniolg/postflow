@@ -26,9 +26,6 @@ type xTokenResponse struct {
 }
 
 func (p *XProvider) RefreshIfNeeded(ctx context.Context, _ domain.SocialAccount, credentials Credentials) (Credentials, bool, error) {
-	if strings.TrimSpace(credentials.AccessTokenSecret) != "" || strings.EqualFold(strings.TrimSpace(credentials.TokenType), "oauth1") {
-		return credentials, false, nil
-	}
 	if credentials.ExpiresAt == nil || strings.TrimSpace(credentials.RefreshToken) == "" {
 		return credentials, false, nil
 	}

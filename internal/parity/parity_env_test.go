@@ -44,7 +44,7 @@ func newParityEnv(t *testing.T) *parityEnv {
 		Platform:          domain.PlatformX,
 		DisplayName:       "Parity X",
 		ExternalAccountID: "parity_" + strings.ReplaceAll(t.Name(), "/", "_"),
-		AuthMethod:        domain.AuthMethodStatic,
+		AuthMethod:        domain.AuthMethodOAuth,
 		Status:            domain.AccountStatusConnected,
 	})
 	if err != nil {

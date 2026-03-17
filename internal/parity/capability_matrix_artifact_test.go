@@ -472,17 +472,17 @@ func capabilityChecks() map[string]map[capabilities.Surface]parityCheck {
 		},
 		capabilities.CapabilityAccountsSetXPremium: {
 			capabilities.SurfaceAPI: func(env *parityEnv) error {
-				id := env.apiCreateStaticAccount("x", "matrix_xpremium_api", map[string]any{"access_token": "tok_xpremium_api", "access_token_secret": "sec_xpremium_api"})
+				id := env.seedXOAuthAccount("matrix_xpremium_api")
 				env.apiSetXPremium(id, true)
 				return nil
 			},
 			capabilities.SurfaceCLI: func(env *parityEnv) error {
-				id := env.apiCreateStaticAccount("x", "matrix_xpremium_cli", map[string]any{"access_token": "tok_xpremium_cli", "access_token_secret": "sec_xpremium_cli"})
+				id := env.seedXOAuthAccount("matrix_xpremium_cli")
 				env.cliSetXPremium(id, true)
 				return nil
 			},
 			capabilities.SurfaceMCP: func(env *parityEnv) error {
-				id := env.apiCreateStaticAccount("x", "matrix_xpremium_mcp", map[string]any{"access_token": "tok_xpremium_mcp", "access_token_secret": "sec_xpremium_mcp"})
+				id := env.seedXOAuthAccount("matrix_xpremium_mcp")
 				env.mcpSetXPremium(id, true)
 				return nil
 			},

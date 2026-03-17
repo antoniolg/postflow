@@ -19,7 +19,7 @@ func testMasterKey() string {
 func TestLoadReadsDotEnvFile(t *testing.T) {
 	tempDir := t.TempDir()
 	envPath := filepath.Join(tempDir, "postflow.env")
-	envContent := "PORT=9090\nWORKER_INTERVAL_SECONDS=45\nPOSTFLOW_DRIVER=x\nX_API_KEY=abc123\nX_CLIENT_ID=oauth-client-123\nPOSTFLOW_MASTER_KEY=" + testMasterKey() + "\n"
+	envContent := "PORT=9090\nWORKER_INTERVAL_SECONDS=45\nPOSTFLOW_DRIVER=x\nX_CLIENT_ID=oauth-client-123\nPOSTFLOW_MASTER_KEY=" + testMasterKey() + "\n"
 	if err := os.WriteFile(envPath, []byte(envContent), 0o600); err != nil {
 		t.Fatalf("write env file: %v", err)
 	}
@@ -28,7 +28,6 @@ func TestLoadReadsDotEnvFile(t *testing.T) {
 	unsetEnvForTest(t, "PORT")
 	unsetEnvForTest(t, "WORKER_INTERVAL_SECONDS")
 	unsetEnvForTest(t, "POSTFLOW_DRIVER")
-	unsetEnvForTest(t, "X_API_KEY")
 	unsetEnvForTest(t, "X_CLIENT_ID")
 	unsetEnvForTest(t, "POSTFLOW_MASTER_KEY")
 
@@ -45,9 +44,6 @@ func TestLoadReadsDotEnvFile(t *testing.T) {
 	}
 	if cfg.PostflowDriver != "x" {
 		t.Fatalf("PostflowDriver = %q, want %q", cfg.PostflowDriver, "x")
-	}
-	if cfg.X.APIKey != "abc123" {
-		t.Fatalf("X.APIKey = %q, want %q", cfg.X.APIKey, "abc123")
 	}
 	if cfg.X.ClientID != "oauth-client-123" {
 		t.Fatalf("X.ClientID = %q, want %q", cfg.X.ClientID, "oauth-client-123")

@@ -83,7 +83,6 @@ Use `.env.example` as template. These are the key ones:
 | Network | Variables | Where to get them |
 |---|---|---|
 | X | `X_CLIENT_ID`, `X_CLIENT_SECRET` | X Developer Portal OAuth 2.0 app credentials for account connection |
-| X (static optional) | `X_API_KEY`, `X_API_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_TOKEN_SECRET` | Static OAuth1 credentials for bootstrap/default X publishing |
 | LinkedIn | `LINKEDIN_CLIENT_ID`, `LINKEDIN_CLIENT_SECRET` | LinkedIn Developer app with member posting enabled. To connect company pages, the app must also have organization posting/admin scopes approved. |
 | Facebook/Instagram | `META_APP_ID`, `META_APP_SECRET` | Meta Developers app |
 
@@ -93,8 +92,6 @@ Important:
 - OAuth account connection is available for X, LinkedIn, Facebook, and Instagram.
 - LinkedIn OAuth connects the personal profile and, when available, any organization pages the user administers.
 - In the web UI, if an OAuth provider returns multiple accounts, PostFlow shows a selection step before saving them.
-- X also supports static credentials via env vars or `/accounts/static` / `postflow accounts create-static`.
-- If X static env credentials bootstrap the default `x-default` account, deleting that account disables the auto-bootstrap for that instance on future restarts.
 - In production (Coolify), set secrets in the platform UI, not in committed files.
 
 ---
@@ -215,7 +212,6 @@ postflow posts edit --id pst_xxx --text "copy + media" --replace-media --media-i
 postflow posts delete --id pst_xxx
 postflow posts cancel --id pst_xxx
 postflow accounts list
-postflow accounts create-static --platform x --external-account-id x-default --credential access_token=... --credential access_token_secret=...
 postflow settings set-timezone --timezone Europe/Madrid
 postflow media list --limit 20
 ```

@@ -86,18 +86,17 @@ func TestAccountsStaticLifecycleJSON(t *testing.T) {
 		Store:             store,
 		DataDir:           tempDir,
 		DefaultMaxRetries: 3,
-		Registry:          postflow.NewProviderRegistry(postflow.NewMockProvider(domain.PlatformX)),
+		Registry:          postflow.NewProviderRegistry(postflow.NewMockProvider(domain.PlatformLinkedIn)),
 	}
 	h := srv.Handler()
 
 	createPayload := map[string]any{
-		"platform":            "x",
-		"display_name":        "X Primary",
-		"external_account_id": "x-primary-e2e",
+		"platform":            "linkedin",
+		"display_name":        "LinkedIn Primary",
+		"external_account_id": "li-primary-e2e",
 		"credentials": map[string]any{
-			"access_token":        "token_x",
-			"access_token_secret": "secret_x",
-			"token_type":          "oauth1",
+			"access_token": "token_li",
+			"token_type":   "bearer",
 		},
 	}
 	createStatus, createRaw := apiTestJSON(t, h, http.MethodPost, "/accounts/static", createPayload)

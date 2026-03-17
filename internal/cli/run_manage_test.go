@@ -248,51 +248,21 @@ func TestRunPostsDelete(t *testing.T) {
 	}
 }
 
-func TestRunAccountsCreateStaticWithXPremium(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == http.MethodPost && r.URL.Path == "/accounts/static":
-			var payload map[string]any
-			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-				t.Fatalf("decode payload: %v", err)
-			}
-			credentials, ok := payload["credentials"].(map[string]any)
-			if !ok || strings.TrimSpace(anyString(credentials["access_token"])) == "" {
-				t.Fatalf("expected credentials.access_token in payload")
-			}
-			_ = json.NewEncoder(w).Encode(map[string]any{"id": "acc_1", "platform": "x"})
-		case r.Method == http.MethodPost && r.URL.Path == "/accounts/acc_1/x-premium":
-			var payload map[string]any
-			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-				t.Fatalf("decode x-premium payload: %v", err)
-			}
-			enabled, _ := payload["x_premium"].(bool)
-			if !enabled {
-				t.Fatalf("expected x_premium=true")
-			}
-			_ = json.NewEncoder(w).Encode(map[string]any{"id": "acc_1", "x_premium": true})
-		default:
-			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
-		}
-	}))
-	defer server.Close()
-
+func TestRunAccountsCreateStaticRejectsX(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"--base-url", server.URL,
+		"--base-url", "http://example.invalid",
 		"accounts", "create-static",
 		"--platform", "x",
-		"--external-account-id", "x-default",
+		"--external-account-id", "x-test",
 		"--credential", "access_token=tok_1",
-		"--credential", "access_token_secret=sec_1",
-		"--x-premium", "true",
 	}, &stdout, &stderr)
-	if code != 0 {
-		t.Fatalf("expected exit 0, got %d, stderr=%s", code, stderr.String())
+	if code != 2 {
+		t.Fatalf("expected exit 2, got %d, stderr=%s", code, stderr.String())
 	}
-	if !strings.Contains(stdout.String(), "account upserted: acc_1") {
-		t.Fatalf("expected create-static output, got %s", stdout.String())
+	if !strings.Contains(stderr.String(), "static x accounts are not supported; connect via oauth") {
+		t.Fatalf("expected x static rejection, got stderr=%s", stderr.String())
 	}
 }
 

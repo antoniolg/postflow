@@ -28,10 +28,6 @@ services:
       META_APP_SECRET: ${META_APP_SECRET:-}
       X_CLIENT_ID: ${X_CLIENT_ID:-}
       X_CLIENT_SECRET: ${X_CLIENT_SECRET:-}
-      X_API_KEY: ${X_API_KEY:-}
-      X_API_SECRET: ${X_API_SECRET:-}
-      X_ACCESS_TOKEN: ${X_ACCESS_TOKEN:-}
-      X_ACCESS_TOKEN_SECRET: ${X_ACCESS_TOKEN_SECRET:-}
     volumes:
       - postflow_data:/srv/data
     healthcheck:

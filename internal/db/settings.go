@@ -4,13 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"strconv"
 	"strings"
 )
 
 const (
-	SettingUITimezone           = "ui.timezone"
-	SettingBootstrapXAccountOff = "bootstrap.x_account.disabled"
+	SettingUITimezone = "ui.timezone"
 )
 
 func (s *Store) GetSetting(ctx context.Context, key string) (string, error) {
@@ -55,23 +53,4 @@ func (s *Store) GetUITimezone(ctx context.Context) (string, error) {
 
 func (s *Store) SetUITimezone(ctx context.Context, timezone string) error {
 	return s.SetSetting(ctx, SettingUITimezone, timezone)
-}
-
-func (s *Store) GetBootstrapXAccountDisabled(ctx context.Context) (bool, error) {
-	value, err := s.GetSetting(ctx, SettingBootstrapXAccountOff)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return false, nil
-		}
-		return false, err
-	}
-	disabled, parseErr := strconv.ParseBool(strings.TrimSpace(value))
-	if parseErr != nil {
-		return false, nil
-	}
-	return disabled, nil
-}
-
-func (s *Store) SetBootstrapXAccountDisabled(ctx context.Context, disabled bool) error {
-	return s.SetSetting(ctx, SettingBootstrapXAccountOff, strconv.FormatBool(disabled))
 }

@@ -98,9 +98,6 @@ func TestSettingsViewRendersAccountsBlockWithActions(t *testing.T) {
 			t.Fatalf("expected oauth start action %s in settings", oauthStartPath)
 		}
 	}
-	if !strings.Contains(body, "x also supports static oauth1 credentials via env, API, or CLI") {
-		t.Fatalf("expected x static credentials hint in settings")
-	}
 	if !strings.Contains(body, "@media (max-width: 520px)") {
 		t.Fatalf("expected mobile breakpoint css in settings view")
 	}
@@ -168,9 +165,8 @@ func TestConnectAccountFormRedirectsBackToSettings(t *testing.T) {
 
 	accountID := testAccountID(t, store)
 	if err := srv.saveCredentials(t.Context(), accountID, postflow.Credentials{
-		AccessToken:       "token-connect-test",
-		AccessTokenSecret: "secret-connect-test",
-		TokenType:         "oauth1",
+		AccessToken: "token-connect-test",
+		TokenType:   "bearer",
 	}); err != nil {
 		t.Fatalf("save account credentials: %v", err)
 	}

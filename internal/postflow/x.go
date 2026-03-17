@@ -19,31 +19,19 @@ const (
 )
 
 type XConfig struct {
-	APIBaseURL        string
-	UploadBaseURL     string
-	AuthBaseURL       string
-	TokenURL          string
-	APIKey            string
-	APIKeySecret      string
-	ClientID          string
-	ClientSecret      string
-	AccessToken       string
-	AccessTokenSecret string
+	APIBaseURL    string
+	UploadBaseURL string
+	AuthBaseURL   string
+	TokenURL      string
+	ClientID      string
+	ClientSecret  string
+	AccessToken   string
 }
-
-type xAuthMode string
-
-const (
-	xAuthModeOAuth1 xAuthMode = "oauth1"
-	xAuthModeBearer xAuthMode = "bearer"
-)
 
 type XClient struct {
 	httpClient  *http.Client
 	apiBaseURL  string
 	uploadBase  string
-	authMode    xAuthMode
-	signer      *oauth1Signer
 	bearerToken string
 }
 
@@ -57,34 +45,16 @@ func NewXClient(cfg XConfig) (*XClient, error) {
 		uploadBase = "https://upload.twitter.com"
 	}
 	accessToken := strings.TrimSpace(cfg.AccessToken)
-	accessTokenSecret := strings.TrimSpace(cfg.AccessTokenSecret)
 	if accessToken == "" {
 		return nil, errors.New("missing X access token")
 	}
 
-	client := &XClient{
-		httpClient: &http.Client{Timeout: 60 * time.Second},
-		apiBaseURL: apiBaseURL,
-		uploadBase: uploadBase,
-	}
-	if accessTokenSecret != "" {
-		if strings.TrimSpace(cfg.APIKey) == "" || strings.TrimSpace(cfg.APIKeySecret) == "" {
-			return nil, errors.New("missing X oauth1 credentials")
-		}
-		signer := newOAuth1Signer(oauth1Credentials{
-			ConsumerKey:    strings.TrimSpace(cfg.APIKey),
-			ConsumerSecret: strings.TrimSpace(cfg.APIKeySecret),
-			Token:          accessToken,
-			TokenSecret:    accessTokenSecret,
-		})
-		client.authMode = xAuthModeOAuth1
-		client.signer = &signer
-		return client, nil
-	}
-
-	client.authMode = xAuthModeBearer
-	client.bearerToken = accessToken
-	return client, nil
+	return &XClient{
+		httpClient:  &http.Client{Timeout: 60 * time.Second},
+		apiBaseURL:  apiBaseURL,
+		uploadBase:  uploadBase,
+		bearerToken: accessToken,
+	}, nil
 }
 
 func (c *XClient) Publish(ctx context.Context, post domain.Post, opts PublishOptions) (string, error) {
@@ -105,9 +75,6 @@ func (c *XClient) Publish(ctx context.Context, post domain.Post, opts PublishOpt
 }
 
 func (c *XClient) uploadChunked(ctx context.Context, media domain.Media) (string, error) {
-	if c.usesOAuth1() {
-		return c.uploadChunkedOAuth1(ctx, media)
-	}
 	return c.uploadChunkedOAuth2(ctx, media)
 }
 
@@ -135,9 +102,7 @@ func (c *XClient) createStatus(ctx context.Context, text string, mediaIDs []stri
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if err := c.authorizeRequest(req); err != nil {
-		return "", err
-	}
+	c.authorizeRequest(req)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -171,16 +136,8 @@ func (c *XClient) createStatus(ctx context.Context, text string, mediaIDs []stri
 	return "", errors.New("x create tweet response missing id")
 }
 
-func (c *XClient) usesOAuth1() bool {
-	return c != nil && c.authMode == xAuthModeOAuth1 && c.signer != nil
-}
-
-func (c *XClient) authorizeRequest(req *http.Request) error {
-	if c.usesOAuth1() {
-		return signRequest(req, *c.signer, nil)
-	}
+func (c *XClient) authorizeRequest(req *http.Request) {
 	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(c.bearerToken))
-	return nil
 }
 
 func mediaCategoryFor(m domain.Media) string {

@@ -11,9 +11,9 @@ func createTestAccount(t *testing.T, store *db.Store) domain.SocialAccount {
 	t.Helper()
 	account, err := store.UpsertAccount(t.Context(), db.UpsertAccountParams{
 		Platform:          domain.PlatformX,
-		DisplayName:       "X Default",
-		ExternalAccountID: "x-default",
-		AuthMethod:        domain.AuthMethodStatic,
+		DisplayName:       "X Test",
+		ExternalAccountID: "x_test",
+		AuthMethod:        domain.AuthMethodOAuth,
 		Status:            domain.AccountStatusConnected,
 	})
 	if err != nil {

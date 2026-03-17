@@ -47,6 +47,10 @@ func (s Server) handleCreateStaticAccount(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusBadRequest, errors.New("platform is required"))
 		return
 	}
+	if platform == domain.PlatformX {
+		writeError(w, http.StatusBadRequest, errors.New("static x accounts are not supported; connect via oauth"))
+		return
+	}
 	accountKind := normalizeAccountKind(platform, req.AccountKind)
 	if accountKind == "" {
 		writeError(w, http.StatusBadRequest, errors.New("account_kind is invalid for platform"))
@@ -66,10 +70,6 @@ func (s Server) handleCreateStaticAccount(w http.ResponseWriter, r *http.Request
 	}
 	if strings.TrimSpace(credentials.AccessToken) == "" {
 		writeError(w, http.StatusBadRequest, errors.New("credentials.access_token is required"))
-		return
-	}
-	if platform == domain.PlatformX && strings.TrimSpace(credentials.AccessTokenSecret) == "" {
-		writeError(w, http.StatusBadRequest, errors.New("credentials.access_token_secret is required for x"))
 		return
 	}
 	account, err := s.Store.UpsertAccount(r.Context(), db.UpsertAccountParams{

@@ -18,11 +18,11 @@ type mcpListAccountsOutput struct {
 }
 
 type mcpCreateStaticAccountInput struct {
-	Platform          string         `json:"platform" jsonschema:"Platform: x|linkedin|facebook|instagram."`
+	Platform          string         `json:"platform" jsonschema:"Platform: linkedin|facebook|instagram."`
 	AccountKind       string         `json:"account_kind,omitempty" jsonschema:"Optional account kind. LinkedIn supports personal|organization. Other platforms use default."`
 	DisplayName       string         `json:"display_name,omitempty" jsonschema:"Optional display name."`
 	ExternalAccountID string         `json:"external_account_id" jsonschema:"Network account ID or handle."`
-	Credentials       map[string]any `json:"credentials" jsonschema:"Credential payload. Must include access_token. X also requires access_token_secret."`
+	Credentials       map[string]any `json:"credentials" jsonschema:"Credential payload. Must include access_token."`
 	XPremium          *bool          `json:"x_premium,omitempty" jsonschema:"Optional. Only for X accounts."`
 }
 
@@ -70,6 +70,9 @@ func (s Server) mcpCreateStaticAccountTool(ctx context.Context, _ *mcp.CallToolR
 	if platform == "" {
 		return nil, mcpCreateStaticAccountOutput{}, errors.New("platform is required")
 	}
+	if platform == domain.PlatformX {
+		return nil, mcpCreateStaticAccountOutput{}, errors.New("static x accounts are not supported; connect via oauth")
+	}
 	accountKind := normalizeAccountKind(platform, in.AccountKind)
 	if accountKind == "" {
 		return nil, mcpCreateStaticAccountOutput{}, errors.New("account_kind is invalid for platform")
@@ -84,9 +87,6 @@ func (s Server) mcpCreateStaticAccountTool(ctx context.Context, _ *mcp.CallToolR
 	}
 	if strings.TrimSpace(credentials.AccessToken) == "" {
 		return nil, mcpCreateStaticAccountOutput{}, errors.New("credentials.access_token is required")
-	}
-	if platform == domain.PlatformX && strings.TrimSpace(credentials.AccessTokenSecret) == "" {
-		return nil, mcpCreateStaticAccountOutput{}, errors.New("credentials.access_token_secret is required for x")
 	}
 
 	account, err := s.Store.UpsertAccount(ctx, db.UpsertAccountParams{

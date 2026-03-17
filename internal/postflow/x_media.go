@@ -49,132 +49,6 @@ type processingInfo struct {
 	} `json:"error"`
 }
 
-func (c *XClient) uploadChunkedOAuth1(ctx context.Context, media domain.Media) (string, error) {
-	f, err := os.Open(media.StoragePath)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-
-	initResp, err := c.uploadCommandOAuth1(ctx, http.MethodPost, map[string]string{
-		"command":        "INIT",
-		"total_bytes":    fmt.Sprintf("%d", media.SizeBytes),
-		"media_type":     media.MimeType,
-		"media_category": mediaCategoryFor(media),
-	})
-	if err != nil {
-		return "", err
-	}
-	mediaID := initResp.mediaID()
-	if mediaID == "" {
-		return "", errors.New("x upload INIT returned empty media_id_string")
-	}
-
-	buf := make([]byte, uploadChunkSize)
-	segment := 0
-	for {
-		n, readErr := io.ReadFull(f, buf)
-		if readErr != nil && readErr != io.EOF && readErr != io.ErrUnexpectedEOF {
-			return "", readErr
-		}
-		if n > 0 {
-			if err := c.uploadAppendOAuth1(ctx, mediaID, segment, buf[:n]); err != nil {
-				return "", err
-			}
-			segment++
-		}
-		if readErr == io.EOF || readErr == io.ErrUnexpectedEOF {
-			break
-		}
-	}
-
-	finalResp, err := c.uploadCommandOAuth1(ctx, http.MethodPost, map[string]string{
-		"command":  "FINALIZE",
-		"media_id": mediaID,
-	})
-	if err != nil {
-		return "", err
-	}
-	if err := waitForXProcessing(ctx, finalResp.processing(), func(ctx context.Context) (*processingInfo, error) {
-		statusResp, err := c.uploadCommandOAuth1(ctx, http.MethodGet, map[string]string{
-			"command":  "STATUS",
-			"media_id": mediaID,
-		})
-		if err != nil {
-			return nil, err
-		}
-		return statusResp.processing(), nil
-	}); err != nil {
-		return "", err
-	}
-	return mediaID, nil
-}
-
-func (c *XClient) uploadCommandOAuth1(ctx context.Context, method string, params map[string]string) (xUploadResponse, error) {
-	u, err := url.Parse(c.uploadBase + "/1.1/media/upload.json")
-	if err != nil {
-		return xUploadResponse{}, err
-	}
-	q := u.Query()
-	for k, v := range params {
-		q.Set(k, v)
-	}
-	u.RawQuery = q.Encode()
-
-	req, err := http.NewRequestWithContext(ctx, method, u.String(), nil)
-	if err != nil {
-		return xUploadResponse{}, err
-	}
-	if err := c.authorizeRequest(req); err != nil {
-		return xUploadResponse{}, err
-	}
-	return c.doUploadRequest(req, fmt.Sprintf("x upload command %s failed", params["command"]))
-}
-
-func (c *XClient) uploadAppendOAuth1(ctx context.Context, mediaID string, segment int, chunk []byte) error {
-	u, err := url.Parse(c.uploadBase + "/1.1/media/upload.json")
-	if err != nil {
-		return err
-	}
-	q := u.Query()
-	q.Set("command", "APPEND")
-	q.Set("media_id", mediaID)
-	q.Set("segment_index", fmt.Sprintf("%d", segment))
-	u.RawQuery = q.Encode()
-
-	var body bytes.Buffer
-	mw := multipart.NewWriter(&body)
-	part, err := mw.CreateFormFile("media", "chunk_"+filepath.Base(mediaID)+".bin")
-	if err != nil {
-		return err
-	}
-	if _, err := part.Write(chunk); err != nil {
-		return err
-	}
-	if err := mw.Close(); err != nil {
-		return err
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), &body)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", mw.FormDataContentType())
-	if err := c.authorizeRequest(req); err != nil {
-		return err
-	}
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
-		return fmt.Errorf("x upload APPEND failed: status=%d body=%s", resp.StatusCode, string(body))
-	}
-	return nil
-}
-
 func (c *XClient) uploadChunkedOAuth2(ctx context.Context, media domain.Media) (string, error) {
 	mediaID, err := c.uploadInitializeOAuth2(ctx, media)
 	if err != nil {
@@ -214,9 +88,7 @@ func (c *XClient) uploadInitializeOAuth2(ctx context.Context, media domain.Media
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if err := c.authorizeRequest(req); err != nil {
-		return "", err
-	}
+	c.authorizeRequest(req)
 	resp, err := c.doUploadRequest(req, "x upload initialize failed")
 	if err != nil {
 		return "", err
@@ -257,9 +129,7 @@ func (c *XClient) uploadAppendOAuth2(ctx context.Context, mediaID string, media 
 		return err
 	}
 	req.Header.Set("Content-Type", mw.FormDataContentType())
-	if err := c.authorizeRequest(req); err != nil {
-		return err
-	}
+	c.authorizeRequest(req)
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return err
@@ -277,9 +147,7 @@ func (c *XClient) uploadFinalizeOAuth2(ctx context.Context, mediaID string) (xUp
 	if err != nil {
 		return xUploadResponse{}, err
 	}
-	if err := c.authorizeRequest(req); err != nil {
-		return xUploadResponse{}, err
-	}
+	c.authorizeRequest(req)
 	return c.doUploadRequest(req, "x upload finalize failed")
 }
 
@@ -291,9 +159,7 @@ func (c *XClient) uploadStatusOAuth2(ctx context.Context, mediaID string) (xUplo
 	if err != nil {
 		return xUploadResponse{}, err
 	}
-	if err := c.authorizeRequest(req); err != nil {
-		return xUploadResponse{}, err
-	}
+	c.authorizeRequest(req)
 	return c.doUploadRequest(req, "x upload status failed")
 }
 
