@@ -30,17 +30,13 @@ func groupCalendarEventsByContent(posts []domain.Post, threadLabelFor func(domai
 		if !ok {
 			idx = len(states)
 			indexByKey[groupKey] = idx
-			preview := strings.TrimSpace(post.Text)
-			if len(preview) > 56 {
-				preview = preview[:53] + "..."
-			}
 			states = append(states, calendarEventGroupState{
 				event: calendarEvent{
 					TimeLabel:     post.ScheduledAt.Format("15:04"),
 					StatusClass:   statusClass,
 					StatusLabel:   statusLabel,
 					StatusKey:     statusKey,
-					TextPreview:   preview,
+					TextPreview:   compactCalendarPreview(post.Text),
 					ThreadLabel:   threadLabel,
 					Platform:      post.Platform,
 					Platforms:     make([]domain.Platform, 0, 2),
@@ -65,6 +61,14 @@ func groupCalendarEventsByContent(posts []domain.Post, threadLabelFor func(domai
 		out = append(out, state.event)
 	}
 	return out
+}
+
+func compactCalendarPreview(raw string) string {
+	preview := strings.Join(strings.Fields(raw), " ")
+	if len(preview) > 56 {
+		preview = preview[:53] + "..."
+	}
+	return preview
 }
 
 func calendarStatusMeta(status domain.PostStatus) (statusClass string, statusLabel string, statusKey string) {

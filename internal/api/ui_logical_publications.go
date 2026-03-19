@@ -382,16 +382,12 @@ func groupCalendarEventsFromPublicationGroups(groups []publicationGroupItem) []c
 			continue
 		}
 		statusClass, statusLabel, statusKey := calendarStatusMetaFromGroup(group.StatusKey)
-		preview := strings.TrimSpace(group.Text)
-		if len(preview) > 56 {
-			preview = preview[:53] + "..."
-		}
 		out = append(out, calendarEvent{
 			TimeLabel:     group.ScheduledAt.Format("15:04"),
 			StatusClass:   statusClass,
 			StatusLabel:   statusLabel,
 			StatusKey:     statusKey,
-			TextPreview:   preview,
+			TextPreview:   compactCalendarPreview(group.Text),
 			ThreadLabel:   group.ThreadLabel,
 			Platform:      group.PrimaryPlatform,
 			Platforms:     append([]domain.Platform(nil), group.Platforms...),
