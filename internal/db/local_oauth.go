@@ -292,7 +292,7 @@ func (s *Store) GetOAuthTokenByAccessToken(ctx context.Context, rawAccessToken s
 	if err != nil {
 		return OAuthToken{}, err
 	}
-	if token.RevokedAt != nil || !token.AccessExpiresAt.After(time.Now().UTC()) {
+	if !token.AccessExpiresAt.After(time.Now().UTC()) {
 		return OAuthToken{}, ErrOAuthAccessTokenInvalid
 	}
 	now := time.Now().UTC()

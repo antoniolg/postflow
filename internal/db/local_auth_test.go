@@ -3,6 +3,7 @@ package db
 import (
 	"path/filepath"
 	"testing"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -55,5 +56,57 @@ func TestUpsertLocalOwnerBootstrapCreatesAndUpdatesSingleOwner(t *testing.T) {
 	}
 	if authed.ID != created.ID {
 		t.Fatalf("expected updated auth to resolve same owner id, got %q want %q", authed.ID, created.ID)
+	}
+}
+
+func TestOAuthRefreshKeepsPreviousAccessTokenUsableUntilExpiry(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "auth.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	hash, err := bcrypt.GenerateFromPassword([]byte("owner-pass"), bcrypt.MinCost)
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	owner, err := store.UpsertLocalOwnerBootstrap(t.Context(), "owner@example.com", string(hash))
+	if err != nil {
+		t.Fatalf("bootstrap owner: %v", err)
+	}
+	client, err := store.RegisterOAuthClient(t.Context(), []string{"https://chatgpt.example/callback"})
+	if err != nil {
+		t.Fatalf("register client: %v", err)
+	}
+
+	accessToken1, refreshToken1, firstToken, err := store.CreateOAuthToken(t.Context(), CreateOAuthTokenParams{
+		ClientID:   client.ClientID,
+		OwnerID:    owner.ID,
+		Scope:      "mcp",
+		AccessTTL:  time.Hour,
+		RefreshTTL: 24 * time.Hour,
+	})
+	if err != nil {
+		t.Fatalf("create oauth token: %v", err)
+	}
+
+	accessToken2, refreshToken2, _, err := store.RotateOAuthRefreshToken(t.Context(), refreshToken1, client.ClientID, time.Hour, 24*time.Hour)
+	if err != nil {
+		t.Fatalf("rotate refresh token: %v", err)
+	}
+	if accessToken2 == "" || refreshToken2 == "" {
+		t.Fatalf("expected rotated tokens to be returned")
+	}
+
+	gotFirst, err := store.GetOAuthTokenByAccessToken(t.Context(), accessToken1)
+	if err != nil {
+		t.Fatalf("expected previous access token to remain usable until expiry: %v", err)
+	}
+	if gotFirst.ID != firstToken.ID {
+		t.Fatalf("expected original access token to resolve original row, got %q want %q", gotFirst.ID, firstToken.ID)
+	}
+
+	if _, _, _, err := store.RotateOAuthRefreshToken(t.Context(), refreshToken1, client.ClientID, time.Hour, 24*time.Hour); err == nil {
+		t.Fatalf("expected old refresh token to be unusable after rotation")
 	}
 }
