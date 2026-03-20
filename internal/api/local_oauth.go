@@ -30,7 +30,7 @@ func (s Server) handleOAuthAuthorizationServerMetadata(w http.ResponseWriter, r 
 		"grant_types_supported":                 []string{"authorization_code", "refresh_token"},
 		"code_challenge_methods_supported":      []string{"S256"},
 		"token_endpoint_auth_methods_supported": []string{"none"},
-		"scopes_supported":                      []string{"mcp"},
+		"scopes_supported":                      []string{"mcp", "offline_access"},
 	})
 }
 

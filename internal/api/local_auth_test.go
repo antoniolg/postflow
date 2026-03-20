@@ -320,6 +320,48 @@ func TestLocalOAuthAuthorizationCodeFlowUnlocksMCP(t *testing.T) {
 	}
 }
 
+func TestLocalOAuthMetadataAdvertisesOfflineAccess(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{
+		Store:             store,
+		DataDir:           tempDir,
+		DefaultMaxRetries: 3,
+		LocalAuthEnabled:  true,
+		PublicBaseURL:     "https://postflow.example",
+	}
+	httpServer := httptest.NewServer(srv.Handler())
+	defer httpServer.Close()
+
+	resp, err := http.Get(httpServer.URL + "/.well-known/openid-configuration")
+	if err != nil {
+		t.Fatalf("get openid configuration: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected metadata 200, got %d body=%s", resp.StatusCode, string(body))
+	}
+
+	var payload struct {
+		ScopesSupported []string `json:"scopes_supported"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode metadata: %v", err)
+	}
+	if !containsString(payload.ScopesSupported, "mcp") {
+		t.Fatalf("expected metadata to advertise mcp scope, got %v", payload.ScopesSupported)
+	}
+	if !containsString(payload.ScopesSupported, "offline_access") {
+		t.Fatalf("expected metadata to advertise offline_access scope, got %v", payload.ScopesSupported)
+	}
+}
+
 func cookieValue(t *testing.T, cookies []*http.Cookie, name string) string {
 	t.Helper()
 	for _, cookie := range cookies {
@@ -328,4 +370,13 @@ func cookieValue(t *testing.T, cookies []*http.Cookie, name string) string {
 		}
 	}
 	return ""
+}
+
+func containsString(values []string, expected string) bool {
+	for _, value := range values {
+		if value == expected {
+			return true
+		}
+	}
+	return false
 }
