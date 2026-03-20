@@ -362,6 +362,85 @@ func TestLocalOAuthMetadataAdvertisesOfflineAccess(t *testing.T) {
 	}
 }
 
+func TestLocalAuthAllowsAnonymousMCPDiscoveryButProtectsToolCalls(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte("super-secret"), bcrypt.MinCost)
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	if _, err := store.UpsertLocalOwnerBootstrap(t.Context(), "owner@example.com", string(passwordHash)); err != nil {
+		t.Fatalf("bootstrap owner: %v", err)
+	}
+
+	srv := Server{
+		Store:             store,
+		DataDir:           tempDir,
+		DefaultMaxRetries: 3,
+		LocalAuthEnabled:  true,
+	}
+	httpServer := httptest.NewServer(srv.Handler())
+	defer httpServer.Close()
+
+	client := &http.Client{}
+
+	initializeBody := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"chatgpt-test","version":"1.0.0"}}}`
+	initializeReq, err := http.NewRequest(http.MethodPost, httpServer.URL+"/mcp", strings.NewReader(initializeBody))
+	if err != nil {
+		t.Fatalf("build initialize request: %v", err)
+	}
+	initializeReq.Header.Set("Content-Type", "application/json")
+	initializeReq.Header.Set("Accept", "application/json, text/event-stream")
+	initializeResp, err := client.Do(initializeReq)
+	if err != nil {
+		t.Fatalf("call initialize without auth: %v", err)
+	}
+	defer initializeResp.Body.Close()
+	if initializeResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(initializeResp.Body)
+		t.Fatalf("expected initialize without auth to succeed, got %d body=%s", initializeResp.StatusCode, string(body))
+	}
+
+	listToolsBody := `{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}`
+	listToolsReq, err := http.NewRequest(http.MethodPost, httpServer.URL+"/mcp", strings.NewReader(listToolsBody))
+	if err != nil {
+		t.Fatalf("build tools/list request: %v", err)
+	}
+	listToolsReq.Header.Set("Content-Type", "application/json")
+	listToolsReq.Header.Set("Accept", "application/json, text/event-stream")
+	listToolsResp, err := client.Do(listToolsReq)
+	if err != nil {
+		t.Fatalf("call tools/list without auth: %v", err)
+	}
+	defer listToolsResp.Body.Close()
+	if listToolsResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(listToolsResp.Body)
+		t.Fatalf("expected tools/list without auth to succeed, got %d body=%s", listToolsResp.StatusCode, string(body))
+	}
+
+	toolCallBody := `{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"postflow_health","arguments":{}}}`
+	toolCallReq, err := http.NewRequest(http.MethodPost, httpServer.URL+"/mcp", strings.NewReader(toolCallBody))
+	if err != nil {
+		t.Fatalf("build tools/call request: %v", err)
+	}
+	toolCallReq.Header.Set("Content-Type", "application/json")
+	toolCallReq.Header.Set("Accept", "application/json, text/event-stream")
+	toolCallResp, err := client.Do(toolCallReq)
+	if err != nil {
+		t.Fatalf("call tools/call without auth: %v", err)
+	}
+	defer toolCallResp.Body.Close()
+	if toolCallResp.StatusCode != http.StatusUnauthorized {
+		body, _ := io.ReadAll(toolCallResp.Body)
+		t.Fatalf("expected tools/call without auth to stay protected, got %d body=%s", toolCallResp.StatusCode, string(body))
+	}
+}
+
 func cookieValue(t *testing.T, cookies []*http.Cookie, name string) string {
 	t.Helper()
 	for _, cookie := range cookies {

@@ -1,9 +1,12 @@
 package api
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -88,6 +91,10 @@ func (s Server) authMiddleware(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
+		if isMCPPath(r.URL.Path) && mcpAllowsAnonymousRequest(r) {
+			next.ServeHTTP(w, r)
+			return
+		}
 		if mediaID, ok := parseMediaContentPath(r.URL.Path); ok && s.signedMediaAccessAllowed(r, mediaID) {
 			next.ServeHTTP(w, r)
 			return
@@ -145,6 +152,54 @@ func isLocalAuthPublicPath(path string) bool {
 func isMCPPath(path string) bool {
 	trimmed := strings.TrimSpace(path)
 	return trimmed == "/mcp" || strings.HasPrefix(trimmed, "/mcp/")
+}
+
+func mcpAllowsAnonymousRequest(r *http.Request) bool {
+	if r == nil || r.Method != http.MethodPost || !isMCPPath(r.URL.Path) {
+		return false
+	}
+
+	const maxBodyBytes = 1 << 20
+	body, err := io.ReadAll(io.LimitReader(r.Body, maxBodyBytes+1))
+	if err != nil {
+		return false
+	}
+	r.Body = io.NopCloser(bytes.NewReader(body))
+	if len(body) == 0 || len(body) > maxBodyBytes {
+		return false
+	}
+
+	var single struct {
+		Method string `json:"method"`
+	}
+	if err := json.Unmarshal(body, &single); err == nil {
+		return isAnonymousMCPMethod(single.Method)
+	}
+
+	var batch []struct {
+		Method string `json:"method"`
+	}
+	if err := json.Unmarshal(body, &batch); err != nil {
+		return false
+	}
+	if len(batch) == 0 {
+		return false
+	}
+	for _, item := range batch {
+		if !isAnonymousMCPMethod(item.Method) {
+			return false
+		}
+	}
+	return true
+}
+
+func isAnonymousMCPMethod(method string) bool {
+	switch strings.TrimSpace(method) {
+	case "initialize", "notifications/initialized", "ping", "tools/list":
+		return true
+	default:
+		return false
+	}
 }
 
 func (s Server) rateLimitMiddleware(next http.Handler) http.Handler {
