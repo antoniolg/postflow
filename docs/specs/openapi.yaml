@@ -257,6 +257,7 @@ paths:
   /.well-known/oauth-authorization-server:
     get:
       summary: Local OAuth server metadata for ChatGPT and other remote MCP clients
+      description: Advertises the local MCP OAuth server, including support for the `mcp` and `offline_access` scopes.
       responses:
         '200':
           description: Authorization server metadata
@@ -264,6 +265,7 @@ paths:
   /.well-known/oauth-protected-resource:
     get:
       summary: Protected resource metadata for the MCP endpoint
+      description: Used by remote MCP clients after an unauthenticated MCP probe to discover how to authorize against `/mcp`.
       responses:
         '200':
           description: Protected resource metadata
@@ -293,6 +295,7 @@ paths:
   /authorize:
     get:
       summary: Authorize a registered OAuth client using the current owner web session
+      description: If the owner is not logged in yet, PostFlow redirects to `/login` first and then resumes the OAuth flow.
       parameters:
         - in: query
           name: response_type
@@ -340,6 +343,7 @@ paths:
   /token:
     post:
       summary: Exchange or refresh OAuth tokens for the local MCP server
+      description: Returns bearer access and refresh tokens for the local MCP server. Remote MCP clients use these tokens for authenticated `tools/call` requests.
       requestBody:
         required: true
         content:

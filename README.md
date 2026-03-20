@@ -51,6 +51,12 @@ Generate `OWNER_PASSWORD_HASH` with the helper script in this repo:
 go run ./scripts/hash-password.go 'replace-with-your-password'
 ```
 
+If you store it in a local `.env`, quote the value because bcrypt hashes contain `$`:
+
+```dotenv
+OWNER_PASSWORD_HASH='$2a$10$...'
+```
+
 Run:
 
 ```bash
@@ -101,6 +107,7 @@ Important:
 - LinkedIn OAuth connects the personal profile and, when available, any organization pages the user administers.
 - In the web UI, if an OAuth provider returns multiple accounts, PostFlow shows a selection step before saving them.
 - In production (Coolify), set secrets in the platform UI, not in committed files.
+- In Coolify, mark `OWNER_PASSWORD_HASH` as a literal/secret value so `$` is not interpolated.
 
 ---
 
@@ -124,6 +131,8 @@ For ChatGPT / remote MCP clients with OAuth:
 - Protected resource metadata: `http://localhost:8080/.well-known/oauth-protected-resource`
 - The login page is `http://localhost:8080/login`
 - Dynamic client registration is available at `POST /oauth/register`
+- PostFlow allows MCP discovery requests without auth (`initialize`, `notifications/initialized`, `ping`, and `tools/list`) so ChatGPT can complete the handshake cleanly.
+- Actual MCP tool execution (`tools/call`) remains protected and requires OAuth bearer auth (or the legacy `API_TOKEN` flow for non-OAuth clients).
 
 Main MCP tools available:
 - `postflow_health`

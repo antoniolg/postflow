@@ -37,8 +37,8 @@ Set these in Coolify:
 - `DATABASE_PATH=/srv/data/postflow.db`
 - `DATA_DIR=/srv/data/media`
 - `API_TOKEN=<long-random-token>`
-- `UI_BASIC_USER=<your-user>`
-- `UI_BASIC_PASS=<long-password>`
+- `OWNER_EMAIL=<your-email>`
+- `OWNER_PASSWORD_HASH=<bcrypt-hash>`
 - `POSTFLOW_MASTER_KEY=<base64-32-bytes>`
 - `PUBLIC_BASE_URL=https://<your-coolify-domain>` (must be publicly reachable; do not use `localhost` in production)
 
@@ -49,6 +49,7 @@ Optional recommended:
 - `WORKER_INTERVAL_SECONDS=30`
 - `RETRY_BACKOFF_SECONDS=30`
 - `DEFAULT_MAX_RETRIES=3`
+- `UI_BASIC_USER=<your-user>` and `UI_BASIC_PASS=<long-password>` only if you want the temporary legacy Basic Auth fallback for the UI
 
 For real X publishing:
 
@@ -71,6 +72,8 @@ Notes:
 
 - For local development, use `.env` (template available at `.env.example`).
 - In Coolify, configure secrets in the service environment UI, not in a committed `.env`.
+- In Coolify, mark `OWNER_PASSWORD_HASH` as a literal value (`isLiteral`) so the `$` characters in the bcrypt hash are not expanded.
+- For ChatGPT MCP usage, PostFlow keeps `tools/call` protected with OAuth, but allows MCP handshake/discovery requests (`initialize`, `notifications/initialized`, `ping`, `tools/list`) without auth to avoid reconnect loops during setup.
 
 ## 3) Post-deploy smoke test
 
