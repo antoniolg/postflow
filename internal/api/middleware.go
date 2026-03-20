@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -66,7 +67,8 @@ func (s Server) requestLoggingMiddleware(next http.Handler) http.Handler {
 func (s Server) authMiddleware(next http.Handler) http.Handler {
 	requireToken := strings.TrimSpace(s.APIToken) != ""
 	basicEnabled := strings.TrimSpace(s.UIBasicUser) != "" || strings.TrimSpace(s.UIBasicPass) != ""
-	if !requireToken && !basicEnabled {
+	localAuthEnabled := s.LocalAuthEnabled
+	if !requireToken && !basicEnabled && !localAuthEnabled {
 		return next
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -82,6 +84,10 @@ func (s Server) authMiddleware(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
+		if isLocalAuthPublicPath(r.URL.Path) {
+			next.ServeHTTP(w, r)
+			return
+		}
 		if mediaID, ok := parseMediaContentPath(r.URL.Path); ok && s.signedMediaAccessAllowed(r, mediaID) {
 			next.ServeHTTP(w, r)
 			return
@@ -90,11 +96,31 @@ func (s Server) authMiddleware(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
+		if isMCPPath(r.URL.Path) && s.oauthAccessTokenMatches(r) {
+			next.ServeHTTP(w, r)
+			return
+		}
 		if basicEnabled && basicMatches(r, s.UIBasicUser, s.UIBasicPass) {
 			next.ServeHTTP(w, r)
 			return
 		}
-		if basicEnabled {
+		if localAuthEnabled && requestCanUseLocalSession(r) {
+			if _, _, err := s.currentOwnerFromSession(r); err == nil {
+				next.ServeHTTP(w, r)
+				return
+			}
+			target := "/login"
+			if r.Method == http.MethodGet {
+				if returnTo := sanitizeReturnTo(r.URL.RequestURI()); returnTo != "" {
+					target += "?return_to=" + url.QueryEscape(returnTo)
+				}
+			}
+			http.Redirect(w, r, target, http.StatusSeeOther)
+			return
+		}
+		if isMCPPath(r.URL.Path) {
+			w.Header().Set("WWW-Authenticate", oauthWWWAuthenticateHeader(r, s.publicBaseURL(r)))
+		} else if basicEnabled {
 			w.Header().Set("WWW-Authenticate", `Basic realm="postflow"`)
 		}
 		writeError(w, http.StatusUnauthorized, fmt.Errorf("unauthorized"))
@@ -104,6 +130,21 @@ func (s Server) authMiddleware(next http.Handler) http.Handler {
 func isPublicAssetPath(path string) bool {
 	trimmed := strings.TrimSpace(path)
 	return strings.HasPrefix(trimmed, "/assets/")
+}
+
+func isLocalAuthPublicPath(path string) bool {
+	trimmed := strings.TrimSpace(path)
+	switch trimmed {
+	case "/login", "/logout", "/authorize", "/token", "/oauth/register", "/.well-known/oauth-authorization-server", "/.well-known/openid-configuration", "/.well-known/oauth-protected-resource", "/.well-known/oauth-protected-resource/mcp":
+		return true
+	default:
+		return false
+	}
+}
+
+func isMCPPath(path string) bool {
+	trimmed := strings.TrimSpace(path)
+	return trimmed == "/mcp" || strings.HasPrefix(trimmed, "/mcp/")
 }
 
 func (s Server) rateLimitMiddleware(next http.Handler) http.Handler {

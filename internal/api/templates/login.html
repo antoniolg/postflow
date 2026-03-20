@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="{{.Lang}}">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{t "login.title"}}</title>
+  <meta name="theme-color" content="#1a1a1a" />
+  <link rel="icon" type="image/x-icon" href="/assets/icons/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png" />
+  <link rel="manifest" href="/assets/icons/site.webmanifest" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg-page: #1a1a1a;
+      --bg-card: #212121;
+      --bg-elevated: #2d2d2d;
+      --text-primary: #ffffff;
+      --text-secondary: #a8a8a8;
+      --accent-orange: #ff6b35;
+      --border: #2a2a2a;
+      --radius: 16px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text-primary);
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background:
+        radial-gradient(1200px 540px at 90% -12%, rgba(255, 107, 53, 0.07), transparent 62%),
+        radial-gradient(950px 480px at -10% -18%, rgba(255, 255, 255, 0.03), transparent 65%),
+        var(--bg-page);
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .card {
+      width: min(100%, 420px);
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 28px;
+      box-shadow: 0 28px 80px rgba(0, 0, 0, 0.32);
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 22px;
+    }
+    .logo-mark {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      display: block;
+    }
+    .logo span {
+      font-family: "Oswald", sans-serif;
+      font-size: 20px;
+      letter-spacing: 0.02em;
+    }
+    .eyebrow {
+      margin: 0 0 10px;
+      color: var(--accent-orange);
+      font-size: 12px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+    .card h2 {
+      margin: 0;
+      font-family: "Oswald", sans-serif;
+      font-size: 32px;
+      line-height: 1;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+    .intro {
+      margin-top: 14px;
+      color: var(--text-secondary);
+      line-height: 1.7;
+      font-size: 14px;
+    }
+    .divider {
+      height: 1px;
+      margin: 22px 0;
+      background: var(--border);
+    }
+    form { margin-top: 0; }
+    label {
+      display: block;
+      margin-top: 14px;
+      margin-bottom: 8px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    input {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+      padding: 14px 16px;
+      font: inherit;
+    }
+    input:focus {
+      outline: none;
+      border-color: var(--accent-orange);
+      box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.16);
+    }
+    .actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      align-items: center;
+      margin-top: 24px;
+    }
+    button {
+      border: none;
+      border-radius: var(--radius);
+      background: var(--accent-orange);
+      color: #111111;
+      padding: 12px 18px;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 160ms ease, filter 160ms ease, background 160ms ease;
+    }
+    button:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.04);
+    }
+    .note {
+      margin-top: 18px;
+      padding: 12px 14px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.03);
+      color: var(--text-secondary);
+    }
+    .note.error {
+      border-color: rgba(255, 95, 112, 0.24);
+      color: #ff8d9d;
+      background: rgba(201, 61, 79, 0.12);
+    }
+    .foot {
+      color: var(--text-secondary);
+      font-size: 12px;
+      line-height: 1.6;
+    }
+    @media (max-width: 900px) {
+      body { padding: 18px; }
+    }
+    @media (max-width: 560px) {
+      .card h2 {
+        font-size: 28px;
+      }
+      .card {
+        padding: 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <div class="logo">
+      <img class="logo-mark" src="/assets/icons/postflow-logo-header-transparent-64.png" alt="" aria-hidden="true" />
+      <span>PostFlow</span>
+    </div>
+
+    <h2>{{t "login.title"}}</h2>
+    <p class="intro">
+      {{if .OwnerConfigured}}
+        {{t "login.subtitle"}}
+      {{else}}
+        {{t "login.not_configured"}}
+      {{end}}
+    </p>
+
+    {{if .Error}}
+    <div class="note error">{{.Error}}</div>
+    {{end}}
+
+    {{if .Success}}
+    <div class="note">{{.Success}}</div>
+    {{end}}
+
+    {{if .OwnerConfigured}}
+    <div class="divider"></div>
+    <form method="post" action="/login">
+      <input type="hidden" name="return_to" value="{{.ReturnTo}}" />
+      <label for="email">{{t "login.email"}}</label>
+      <input id="email" name="email" type="email" autocomplete="username" required value="{{.Email}}" />
+
+      <label for="password">{{t "login.password"}}</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required />
+
+      <div class="actions">
+        <button type="submit">{{t "login.submit"}}</button>
+      </div>
+    </form>
+    {{else}}
+    <div class="note">{{t "login.bootstrap_hint"}}</div>
+    {{end}}
+  </main>
+</body>
+</html>

@@ -44,6 +44,22 @@ func main() {
 	}
 	defer store.Close()
 
+	if cfg.OwnerEmail != "" || cfg.OwnerPasswordHash != "" {
+		if cfg.OwnerEmail == "" || cfg.OwnerPasswordHash == "" {
+			slog.Error("owner bootstrap requires both OWNER_EMAIL and OWNER_PASSWORD_HASH")
+			os.Exit(1)
+		}
+		if _, err := store.UpsertLocalOwnerBootstrap(context.Background(), cfg.OwnerEmail, cfg.OwnerPasswordHash); err != nil {
+			slog.Error("bootstrap local owner", "error", err)
+			os.Exit(1)
+		}
+	}
+	localAuthEnabled, err := store.HasLocalOwner(context.Background())
+	if err != nil {
+		slog.Error("check local auth owner", "error", err)
+		os.Exit(1)
+	}
+
 	cipher, err := secure.NewCipherFromBase64(cfg.MasterKeyBase64, 1)
 	if err != nil {
 		slog.Error("build credentials cipher", "error", err)
@@ -68,6 +84,7 @@ func main() {
 		Cipher:            cipher,
 		PublicBaseURL:     cfg.PublicBaseURL,
 		AppVersion:        Version,
+		LocalAuthEnabled:  localAuthEnabled,
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

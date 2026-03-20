@@ -30,6 +30,7 @@ type Server struct {
 	Cipher            *secure.Cipher
 	PublicBaseURL     string
 	AppVersion        string
+	LocalAuthEnabled  bool
 }
 
 func (s Server) Handler() http.Handler {
@@ -37,6 +38,16 @@ func (s Server) Handler() http.Handler {
 	mcpHandler := s.newMCPHandler()
 	mux.HandleFunc("GET /healthz", s.handleHealthz)
 	mux.Handle("GET /assets/", http.StripPrefix("/assets/", uiAssetsHandler()))
+	mux.HandleFunc("GET /login", s.handleLoginPage)
+	mux.HandleFunc("POST /login", s.handleLoginSubmit)
+	mux.HandleFunc("POST /logout", s.handleLogout)
+	mux.HandleFunc("GET /.well-known/oauth-authorization-server", s.handleOAuthAuthorizationServerMetadata)
+	mux.HandleFunc("GET /.well-known/openid-configuration", s.handleOAuthAuthorizationServerMetadata)
+	mux.HandleFunc("GET /.well-known/oauth-protected-resource", s.handleOAuthProtectedResourceMetadata)
+	mux.HandleFunc("GET /.well-known/oauth-protected-resource/mcp", s.handleOAuthProtectedResourceMetadata)
+	mux.HandleFunc("GET /authorize", s.handleOAuthAuthorize)
+	mux.HandleFunc("POST /token", s.handleOAuthToken)
+	mux.HandleFunc("POST /oauth/register", s.handleOAuthRegisterClient)
 	mux.Handle("GET /mcp", mcpHandler)
 	mux.Handle("POST /mcp", mcpHandler)
 	mux.Handle("DELETE /mcp", mcpHandler)

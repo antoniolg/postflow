@@ -219,6 +219,152 @@ paths:
         '400':
           $ref: '#/components/responses/Error'
 
+  /login:
+    get:
+      summary: Render the local owner login page
+      responses:
+        '200':
+          description: HTML login page
+
+    post:
+      summary: Create a local owner web session
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+                return_to:
+                  type: string
+      responses:
+        '303':
+          description: Redirect to the requested HTML page after login
+        '400':
+          $ref: '#/components/responses/Error'
+
+  /logout:
+    post:
+      summary: Destroy the current local owner web session
+      responses:
+        '303':
+          description: Redirect back to login
+
+  /.well-known/oauth-authorization-server:
+    get:
+      summary: Local OAuth server metadata for ChatGPT and other remote MCP clients
+      responses:
+        '200':
+          description: Authorization server metadata
+
+  /.well-known/oauth-protected-resource:
+    get:
+      summary: Protected resource metadata for the MCP endpoint
+      responses:
+        '200':
+          description: Protected resource metadata
+
+  /oauth/register:
+    post:
+      summary: Register a public OAuth client for the local MCP server
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                client_name:
+                  type: string
+                redirect_uris:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '201':
+          description: Registered OAuth client
+        '400':
+          $ref: '#/components/responses/Error'
+
+  /authorize:
+    get:
+      summary: Authorize a registered OAuth client using the current owner web session
+      parameters:
+        - in: query
+          name: response_type
+          required: true
+          schema:
+            type: string
+            enum: [code]
+        - in: query
+          name: client_id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: redirect_uri
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: code_challenge
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: code_challenge_method
+          required: true
+          schema:
+            type: string
+            enum: [S256]
+        - in: query
+          name: scope
+          schema:
+            type: string
+        - in: query
+          name: state
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect back to the client redirect URI with an authorization code
+        '303':
+          description: Redirect to local login if no owner session exists
+        '400':
+          $ref: '#/components/responses/Error'
+
+  /token:
+    post:
+      summary: Exchange or refresh OAuth tokens for the local MCP server
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                grant_type:
+                  type: string
+                client_id:
+                  type: string
+                redirect_uri:
+                  type: string
+                code:
+                  type: string
+                code_verifier:
+                  type: string
+                refresh_token:
+                  type: string
+      responses:
+        '200':
+          description: OAuth bearer token pair
+        '400':
+          $ref: '#/components/responses/Error'
+
   /media:
     post:
       summary: Upload a media file

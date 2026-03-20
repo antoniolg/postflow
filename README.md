@@ -40,9 +40,15 @@ Put those values in `.env`:
 POSTFLOW_MASTER_KEY=<base64-from-openssl>
 API_TOKEN=<hex-token>
 PUBLIC_BASE_URL=http://localhost:8080
-UI_BASIC_USER=admin
-UI_BASIC_PASS=<strong-password>
+OWNER_EMAIL=owner@example.com
+OWNER_PASSWORD_HASH=<bcrypt-hash>
 POSTFLOW_DRIVER=mock
+```
+
+Generate `OWNER_PASSWORD_HASH` with the helper script in this repo:
+
+```bash
+go run ./scripts/hash-password.go 'replace-with-your-password'
 ```
 
 Run:
@@ -66,9 +72,11 @@ Use `.env.example` as template. These are the key ones:
 | Variable | Required | Where it comes from |
 |---|---:|---|
 | `POSTFLOW_MASTER_KEY` | Yes | Generate locally: `openssl rand -base64 32` |
-| `API_TOKEN` | Recommended | Generate locally (random token), used for API/MCP auth |
+| `API_TOKEN` | Recommended | Generate locally (random token), kept for API/MCP auth for CLI, Codex, Claude, and other legacy clients |
+| `OWNER_EMAIL` | Recommended for UI/ChatGPT | Owner email for the single-user local login |
+| `OWNER_PASSWORD_HASH` | Recommended for UI/ChatGPT | Bcrypt hash for the owner password |
 | `PUBLIC_BASE_URL` | Yes for OAuth and Instagram media URLs | Your app URL (`http://localhost:8080` locally, your public HTTPS domain in prod) |
-| `UI_BASIC_USER` / `UI_BASIC_PASS` | Recommended | Values you define for UI basic auth |
+| `UI_BASIC_USER` / `UI_BASIC_PASS` | Temporary compatibility only | Optional legacy Basic Auth fallback for the UI |
 
 ### Storage/runtime
 
@@ -104,11 +112,18 @@ Endpoint:
 http://localhost:8080/mcp
 ```
 
-If `API_TOKEN` is set, send:
+For Codex, Claude, CLI, and other legacy clients, if `API_TOKEN` is set, send:
 
 ```text
 Authorization: Bearer <API_TOKEN>
 ```
+
+For ChatGPT / remote MCP clients with OAuth:
+
+- Authorization metadata: `http://localhost:8080/.well-known/oauth-authorization-server`
+- Protected resource metadata: `http://localhost:8080/.well-known/oauth-protected-resource`
+- The login page is `http://localhost:8080/login`
+- Dynamic client registration is available at `POST /oauth/register`
 
 Main MCP tools available:
 - `postflow_health`

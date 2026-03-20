@@ -22,6 +22,8 @@ type Config struct {
 	APIToken          string
 	UIBasicUser       string
 	UIBasicPass       string
+	OwnerEmail        string
+	OwnerPasswordHash string
 	LogLevel          string
 	PostflowDriver    string
 	PublicBaseURL     string
@@ -101,6 +103,8 @@ func Load() (Config, error) {
 		APIToken:          os.Getenv("API_TOKEN"),
 		UIBasicUser:       os.Getenv("UI_BASIC_USER"),
 		UIBasicPass:       os.Getenv("UI_BASIC_PASS"),
+		OwnerEmail:        strings.TrimSpace(os.Getenv("OWNER_EMAIL")),
+		OwnerPasswordHash: strings.TrimSpace(os.Getenv("OWNER_PASSWORD_HASH")),
 		LogLevel:          getenv("LOG_LEVEL", "info"),
 		PostflowDriver:    getenv("POSTFLOW_DRIVER", "mock"),
 		PublicBaseURL:     strings.TrimRight(strings.TrimSpace(os.Getenv("PUBLIC_BASE_URL")), "/"),

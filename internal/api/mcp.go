@@ -737,9 +737,14 @@ func (s Server) mcpSettingsInfo(r *http.Request) (url string, authHint string, c
 	apiTokenConfigured := strings.TrimSpace(s.APIToken) != ""
 	basicConfigured := strings.TrimSpace(s.UIBasicUser) != "" || strings.TrimSpace(s.UIBasicPass) != ""
 	switch {
+	case apiTokenConfigured && s.LocalAuthEnabled:
+		authHint = "auth: ChatGPT puede usar OAuth local; Codex/Claude/CLI pueden seguir con Authorization: Bearer <API_TOKEN>."
+		authHeader = "Bearer <API_TOKEN>"
 	case apiTokenConfigured:
 		authHint = "auth: usa Authorization: Bearer <API_TOKEN> (recomendado)."
 		authHeader = "Bearer <API_TOKEN>"
+	case s.LocalAuthEnabled:
+		authHint = "auth: ChatGPT puede usar OAuth local. Para clientes legacy, configura también API_TOKEN."
 	case basicConfigured:
 		authHint = "auth: endpoint protegido con Basic Auth. Usa Authorization: Basic <BASE64_USER_PASS>."
 		authHeader = "Basic <BASE64_USER_PASS>"

@@ -50,6 +50,11 @@ var dbMigrations = []migration{
 		Name:    "posts_published_url",
 		Up:      migrationAddPostsPublishedURL,
 	},
+	{
+		Version: 7,
+		Name:    "local_auth",
+		Up:      migrationAddLocalAuth,
+	},
 }
 
 func (s *Store) hasPendingMigrations(ctx context.Context) (bool, error) {
