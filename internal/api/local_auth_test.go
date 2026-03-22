@@ -9,11 +9,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/antoniolg/postflow/internal/db"
+	"github.com/antoniolg/postflow/internal/domain"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -438,6 +440,67 @@ func TestLocalAuthAllowsAnonymousMCPDiscoveryButProtectsToolCalls(t *testing.T) 
 	if toolCallResp.StatusCode != http.StatusUnauthorized {
 		body, _ := io.ReadAll(toolCallResp.Body)
 		t.Fatalf("expected tools/call without auth to stay protected, got %d body=%s", toolCallResp.StatusCode, string(body))
+	}
+}
+
+func TestLocalAuthSessionAllowsMediaPreviewWithoutBasicPrompt(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte("super-secret"), bcrypt.MinCost)
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	owner, err := store.UpsertLocalOwnerBootstrap(t.Context(), "owner@example.com", string(passwordHash))
+	if err != nil {
+		t.Fatalf("bootstrap owner: %v", err)
+	}
+	sessionToken, _, err := store.CreateWebSession(t.Context(), owner.ID, localSessionTTL)
+	if err != nil {
+		t.Fatalf("create web session: %v", err)
+	}
+
+	mediaPath := filepath.Join(tempDir, "preview.png")
+	if err := os.WriteFile(mediaPath, []byte("preview-bytes"), 0o644); err != nil {
+		t.Fatalf("seed media file: %v", err)
+	}
+	createdMedia, err := store.CreateMedia(t.Context(), domain.Media{
+		Kind:         "image",
+		OriginalName: "preview.png",
+		StoragePath:  mediaPath,
+		MimeType:     "image/png",
+		SizeBytes:    int64(len("preview-bytes")),
+	})
+	if err != nil {
+		t.Fatalf("create media: %v", err)
+	}
+
+	srv := Server{
+		Store:             store,
+		DataDir:           tempDir,
+		DefaultMaxRetries: 3,
+		LocalAuthEnabled:  true,
+		UIBasicUser:       "legacy-user",
+		UIBasicPass:       "legacy-pass",
+	}
+	h := srv.Handler()
+
+	req := httptest.NewRequest(http.MethodGet, "/media/"+createdMedia.ID+"/content", nil)
+	req.AddCookie(&http.Cookie{Name: localSessionCookieName, Value: sessionToken})
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected media preview to load with local session, got %d body=%s", w.Code, w.Body.String())
+	}
+	if got := w.Header().Get("WWW-Authenticate"); got != "" {
+		t.Fatalf("expected no basic auth challenge for media preview, got %q", got)
+	}
+	if body := w.Body.String(); body != "preview-bytes" {
+		t.Fatalf("expected media bytes, got %q", body)
 	}
 }
 

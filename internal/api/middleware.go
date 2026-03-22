@@ -95,9 +95,17 @@ func (s Server) authMiddleware(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		if mediaID, ok := parseMediaContentPath(r.URL.Path); ok && s.signedMediaAccessAllowed(r, mediaID) {
-			next.ServeHTTP(w, r)
-			return
+		if mediaID, ok := parseMediaContentPath(r.URL.Path); ok {
+			if s.signedMediaAccessAllowed(r, mediaID) {
+				next.ServeHTTP(w, r)
+				return
+			}
+			if localAuthEnabled {
+				if _, _, err := s.currentOwnerFromSession(r); err == nil {
+					next.ServeHTTP(w, r)
+					return
+				}
+			}
 		}
 		if requireToken && tokenMatches(r, s.APIToken) {
 			next.ServeHTTP(w, r)
