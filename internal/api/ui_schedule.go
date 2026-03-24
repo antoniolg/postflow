@@ -57,18 +57,6 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	}
 	monthStartLocal := displayMonth
 	monthEndLocal := monthStartLocal.AddDate(0, 1, 0).Add(-time.Second)
-	from := monthStartLocal.UTC()
-	to := monthEndLocal.UTC()
-	items, err := s.Store.ListSchedule(r.Context(), from, to)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	for i := range items {
-		if !items[i].ScheduledAt.IsZero() {
-			items[i].ScheduledAt = items[i].ScheduledAt.In(uiLoc)
-		}
-	}
 	publicationsWindowDays := 14
 	publicationsFrom := nowLocal
 	publicationsTo := nowLocal.AddDate(0, 0, publicationsWindowDays)
@@ -147,6 +135,26 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		}
 		failedEnvelopes = append(failedEnvelopes, envelope)
 		failedByPostID[strings.TrimSpace(post.ID)] = envelope
+	}
+
+	firstWeekday := int(monthStartLocal.Weekday())
+	firstWeekday = (firstWeekday + 6) % 7
+	gridStart := monthStartLocal.AddDate(0, 0, -firstWeekday)
+
+	lastDayLocal := monthEndLocal
+	lastWeekday := int(lastDayLocal.Weekday())
+	lastWeekday = (lastWeekday + 6) % 7
+	gridEnd := lastDayLocal.AddDate(0, 0, 6-lastWeekday)
+
+	items, err := s.Store.ListSchedule(r.Context(), gridStart.UTC(), gridEnd.UTC())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	for i := range items {
+		if !items[i].ScheduledAt.IsZero() {
+			items[i].ScheduledAt = items[i].ScheduledAt.In(uiLoc)
+		}
 	}
 
 	rootIDs := make([]string, 0, len(items)+len(publicationsRaw)+len(drafts)+len(failedEnvelopes))
@@ -286,15 +294,6 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 			oauthPendingSelection = buildOAuthPendingSelectionView(uiLang, oauthSelectID, payload)
 		}
 	}
-
-	firstWeekday := int(monthStartLocal.Weekday())
-	firstWeekday = (firstWeekday + 6) % 7
-	gridStart := monthStartLocal.AddDate(0, 0, -firstWeekday)
-
-	lastDayLocal := monthEndLocal
-	lastWeekday := int(lastDayLocal.Weekday())
-	lastWeekday = (lastWeekday + 6) % 7
-	gridEnd := lastDayLocal.AddDate(0, 0, 6-lastWeekday)
 
 	calendarGroupsByDate := make(map[string][]publicationGroupItem)
 	calendarGroups := groupPublicationThreads(
