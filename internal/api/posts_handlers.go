@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -386,6 +387,27 @@ func normalizeIDList(ids []string) []string {
 	return out
 }
 
+func appendSelectionQueryValues(rawURL string, accountIDs []string, postIDs []string) string {
+	accountIDs = normalizeIDList(accountIDs)
+	postIDs = normalizeIDList(postIDs)
+	if len(accountIDs) == 0 && len(postIDs) == 0 {
+		return rawURL
+	}
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return rawURL
+	}
+	values := parsed.Query()
+	if len(accountIDs) > 0 {
+		values.Set("account_ids", strings.Join(accountIDs, ","))
+	}
+	if len(postIDs) > 0 {
+		values.Set("post_ids", strings.Join(postIDs, ","))
+	}
+	parsed.RawQuery = values.Encode()
+	return parsed.String()
+}
+
 func (s Server) handleScheduleDraftPost(w http.ResponseWriter, r *http.Request) {
 	postID, err := extractPostIDFromPath(r.URL.Path, "schedule")
 	if err != nil {
@@ -450,10 +472,13 @@ func (s Server) handleEditPost(w http.ResponseWriter, r *http.Request) {
 	}
 	fromForm := !strings.Contains(strings.ToLower(r.Header.Get("content-type")), "application/json")
 	returnTo := strings.TrimSpace(r.FormValue("return_to"))
+	accountIDs := normalizeIDList(r.Form["account_ids"])
+	postIDs := normalizeIDList(r.Form["post_ids"])
 	uiLoc, _, _, err := s.resolveUILocation(r.Context())
 	if err != nil {
 		if fromForm {
-			http.Redirect(w, r, createViewURL(postID, "", strings.TrimSpace(r.FormValue("scheduled_at_local")), returnTo, err.Error(), ""), http.StatusSeeOther)
+			redirectURL := createViewURL(postID, "", strings.TrimSpace(r.FormValue("scheduled_at_local")), returnTo, err.Error(), "")
+			http.Redirect(w, r, appendSelectionQueryValues(redirectURL, accountIDs, postIDs), http.StatusSeeOther)
 			return
 		}
 		writeError(w, http.StatusInternalServerError, err)
@@ -483,7 +508,8 @@ func (s Server) handleEditPost(w http.ResponseWriter, r *http.Request) {
 	if rawSegments := strings.TrimSpace(r.FormValue("segments_json")); rawSegments != "" {
 		if len(rawSegments) > maxPostRequestBodyBytes {
 			if fromForm {
-				http.Redirect(w, r, createViewURL(postID, text, strings.TrimSpace(r.FormValue("scheduled_at_local")), returnTo, "segments_json payload is too large", ""), http.StatusSeeOther)
+				redirectURL := createViewURL(postID, text, strings.TrimSpace(r.FormValue("scheduled_at_local")), returnTo, "segments_json payload is too large", "")
+				http.Redirect(w, r, appendSelectionQueryValues(redirectURL, accountIDs, postIDs), http.StatusSeeOther)
 				return
 			}
 			writeError(w, http.StatusBadRequest, errors.New("segments_json payload is too large"))
@@ -492,7 +518,8 @@ func (s Server) handleEditPost(w http.ResponseWriter, r *http.Request) {
 		var parsed []createPostSegment
 		if err := json.Unmarshal([]byte(rawSegments), &parsed); err != nil {
 			if fromForm {
-				http.Redirect(w, r, createViewURL(postID, text, strings.TrimSpace(r.FormValue("scheduled_at_local")), returnTo, "segments_json must be valid json", ""), http.StatusSeeOther)
+				redirectURL := createViewURL(postID, text, strings.TrimSpace(r.FormValue("scheduled_at_local")), returnTo, "segments_json must be valid json", "")
+				http.Redirect(w, r, appendSelectionQueryValues(redirectURL, accountIDs, postIDs), http.StatusSeeOther)
 				return
 			}
 			writeError(w, http.StatusBadRequest, fmt.Errorf("segments_json must be valid json: %w", err))
@@ -504,6 +531,8 @@ func (s Server) handleEditPost(w http.ResponseWriter, r *http.Request) {
 		var body struct {
 			Text             string              `json:"text"`
 			Intent           string              `json:"intent"`
+			AccountIDs       []string            `json:"account_ids"`
+			PostIDs          []string            `json:"post_ids"`
 			ScheduledAt      string              `json:"scheduled_at"`
 			ScheduledAtLocal string              `json:"scheduled_at_local"`
 			MediaIDs         []string            `json:"media_ids"`
@@ -515,6 +544,12 @@ func (s Server) handleEditPost(w http.ResponseWriter, r *http.Request) {
 			}
 			if intent == "" {
 				intent = strings.ToLower(strings.TrimSpace(body.Intent))
+			}
+			if len(accountIDs) == 0 {
+				accountIDs = normalizeIDList(body.AccountIDs)
+			}
+			if len(postIDs) == 0 {
+				postIDs = normalizeIDList(body.PostIDs)
 			}
 			if scheduledAtRaw == "" {
 				scheduledAtRaw = strings.TrimSpace(body.ScheduledAt)
@@ -544,7 +579,8 @@ func (s Server) handleEditPost(w http.ResponseWriter, r *http.Request) {
 	}
 	if text == "" && len(segments) == 0 {
 		if fromForm {
-			http.Redirect(w, r, createViewURL(postID, text, strings.TrimSpace(r.FormValue("scheduled_at_local")), returnTo, "text is required", ""), http.StatusSeeOther)
+			redirectURL := createViewURL(postID, text, strings.TrimSpace(r.FormValue("scheduled_at_local")), returnTo, "text is required", "")
+			http.Redirect(w, r, appendSelectionQueryValues(redirectURL, accountIDs, postIDs), http.StatusSeeOther)
 			return
 		}
 		writeError(w, http.StatusBadRequest, errors.New("text is required"))
@@ -555,7 +591,8 @@ func (s Server) handleEditPost(w http.ResponseWriter, r *http.Request) {
 		parsed, err := parseScheduledAtInputInLocation(scheduledAtRaw, uiLoc)
 		if err != nil {
 			if fromForm {
-				http.Redirect(w, r, createViewURL(postID, text, scheduledAtRaw, returnTo, err.Error(), ""), http.StatusSeeOther)
+				redirectURL := createViewURL(postID, text, scheduledAtRaw, returnTo, err.Error(), "")
+				http.Redirect(w, r, appendSelectionQueryValues(redirectURL, accountIDs, postIDs), http.StatusSeeOther)
 				return
 			}
 			writeError(w, http.StatusBadRequest, err)
@@ -567,8 +604,9 @@ func (s Server) handleEditPost(w http.ResponseWriter, r *http.Request) {
 		Store:    s.Store,
 		Registry: s.providerRegistry(),
 	}
-	post, err := svc.UpdateEditable(r.Context(), postsapp.EditInput{
+	posts, err := svc.UpdateEditableMany(r.Context(), postsapp.EditInput{
 		PostID:       postID,
+		PostIDs:      postIDs,
 		Text:         text,
 		Intent:       intent,
 		ScheduledAt:  scheduledAt,
@@ -578,7 +616,8 @@ func (s Server) handleEditPost(w http.ResponseWriter, r *http.Request) {
 	}, time.Now)
 	if errors.Is(err, postsapp.ErrScheduledAtNeeded) {
 		if fromForm {
-			http.Redirect(w, r, createViewURL(postID, text, scheduledAtRaw, returnTo, "scheduled_at is required to schedule", ""), http.StatusSeeOther)
+			redirectURL := createViewURL(postID, text, scheduledAtRaw, returnTo, "scheduled_at is required to schedule", "")
+			http.Redirect(w, r, appendSelectionQueryValues(redirectURL, accountIDs, postIDs), http.StatusSeeOther)
 			return
 		}
 		writeError(w, http.StatusBadRequest, errors.New("scheduled_at is required"))
@@ -586,13 +625,25 @@ func (s Server) handleEditPost(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		if fromForm {
-			http.Redirect(w, r, createViewURL(postID, text, scheduledAtRaw, returnTo, err.Error(), ""), http.StatusSeeOther)
+			redirectURL := createViewURL(postID, text, scheduledAtRaw, returnTo, err.Error(), "")
+			http.Redirect(w, r, appendSelectionQueryValues(redirectURL, accountIDs, postIDs), http.StatusSeeOther)
 			return
 		}
 		writeError(w, http.StatusConflict, err)
 		return
 	}
+	post := posts[0]
 	if !fromForm {
+		if len(posts) > 1 {
+			writeJSON(w, http.StatusOK, map[string]any{
+				"id":     post.ID,
+				"status": string(post.Status),
+				"post":   post,
+				"count":  len(posts),
+				"items":  posts,
+			})
+			return
+		}
 		writeJSON(w, http.StatusOK, map[string]any{"id": post.ID, "status": string(post.Status), "post": post})
 		return
 	}
@@ -600,7 +651,8 @@ func (s Server) handleEditPost(w http.ResponseWriter, r *http.Request) {
 	if !post.ScheduledAt.IsZero() {
 		scheduledLocal = post.ScheduledAt.In(uiLoc).Format("2006-01-02T15:04")
 	}
-	http.Redirect(w, r, createViewURL(post.ID, post.Text, scheduledLocal, returnTo, "", "changes saved"), http.StatusSeeOther)
+	redirectURL := createViewURL(post.ID, post.Text, scheduledLocal, returnTo, "", "changes saved")
+	http.Redirect(w, r, appendSelectionQueryValues(redirectURL, accountIDs, postIDs), http.StatusSeeOther)
 }
 
 func toAppSegments(raw []createPostSegment) []postsapp.ThreadSegmentInput {

@@ -128,6 +128,13 @@ func TestRunPostsEdit(t *testing.T) {
 		if got := strings.TrimSpace(anyString(payload["scheduled_at"])); got != "2026-03-01T10:15:00Z" {
 			t.Fatalf("expected scheduled_at payload, got %q", got)
 		}
+		rawPostIDs, ok := payload["post_ids"].([]any)
+		if !ok {
+			t.Fatalf("expected post_ids array in payload, got %#v", payload["post_ids"])
+		}
+		if len(rawPostIDs) != 1 || strings.TrimSpace(anyString(rawPostIDs[0])) != "pst_2" {
+			t.Fatalf("expected post_ids [pst_2], got %#v", rawPostIDs)
+		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"id": "pst_1", "status": "scheduled"})
 	}))
 	defer server.Close()
@@ -141,6 +148,7 @@ func TestRunPostsEdit(t *testing.T) {
 		"--text", "updated text",
 		"--intent", "schedule",
 		"--scheduled-at", "2026-03-01T10:15:00Z",
+		"--post-id", "pst_2",
 	}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d, stderr=%s", code, stderr.String())

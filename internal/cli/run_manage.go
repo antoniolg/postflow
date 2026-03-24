@@ -120,12 +120,14 @@ func runPostsEdit(ctx context.Context, client *APIClient, cfg config, args []str
 	fs := flag.NewFlagSet("posts edit", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	id := fs.String("id", "", "Editable post ID")
+	var postIDs stringListFlag
 	text := fs.String("text", "", "Updated post text")
 	segmentsJSON := fs.String("segments-json", "", "Thread segments JSON: [{\"text\":\"...\",\"media_ids\":[\"med_x\"]}]")
 	intent := fs.String("intent", "", "Optional intent: draft|schedule|publish_now")
 	scheduledAt := fs.String("scheduled-at", "", "Optional scheduled datetime (RFC3339 or datetime-local)")
 	replaceMedia := fs.Bool("replace-media", false, "Replace media IDs. Use with repeated --media-id; can be empty to clear all media")
 	var mediaIDs stringListFlag
+	fs.Var(&postIDs, "post-id", "Additional editable post ID to update together with --id (repeatable)")
 	fs.Var(&mediaIDs, "media-id", "Replacement media ID (repeatable)")
 	if err := fs.Parse(args); err != nil {
 		return 2
@@ -163,6 +165,9 @@ func runPostsEdit(ctx context.Context, client *APIClient, cfg config, args []str
 	}
 	if trimmed := strings.TrimSpace(*scheduledAt); trimmed != "" {
 		payload["scheduled_at"] = trimmed
+	}
+	if len(postIDs) > 0 {
+		payload["post_ids"] = append([]string{}, postIDs...)
 	}
 	if *replaceMedia {
 		payload["media_ids"] = append([]string{}, mediaIDs...)

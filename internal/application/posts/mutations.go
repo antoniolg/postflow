@@ -35,12 +35,23 @@ type MutationsService struct {
 
 type EditInput struct {
 	PostID       string
+	PostIDs      []string
 	Text         string
 	Intent       string
 	ScheduledAt  time.Time
 	MediaIDs     []string
 	ReplaceMedia bool
 	Segments     []ThreadSegmentInput
+}
+
+type preparedEdit struct {
+	postID       string
+	resultPostID string
+	text         string
+	scheduledAt  time.Time
+	mediaIDs     []string
+	replaceMedia bool
+	steps        []db.ThreadStepUpdate
 }
 
 func ResolveScheduledAtForEdit(intent string, scheduledAt time.Time, currentScheduledAt time.Time, now func() time.Time) (time.Time, error) {
@@ -101,31 +112,84 @@ func (s MutationsService) ScheduleDraft(ctx context.Context, postID string, sche
 }
 
 func (s MutationsService) UpdateEditable(ctx context.Context, in EditInput, now func() time.Time) (domain.Post, error) {
-	postID := strings.TrimSpace(in.PostID)
-	if postID == "" {
+	posts, err := s.UpdateEditableMany(ctx, in, now)
+	if err != nil {
+		return domain.Post{}, err
+	}
+	if len(posts) == 0 {
 		return domain.Post{}, ErrPostIDRequired
+	}
+	return posts[0], nil
+}
+
+func (s MutationsService) UpdateEditableMany(ctx context.Context, in EditInput, now func() time.Time) ([]domain.Post, error) {
+	postIDs := normalizeEditablePostIDs(in.PostID, in.PostIDs)
+	if len(postIDs) == 0 {
+		return nil, ErrPostIDRequired
+	}
+
+	prepared := make([]preparedEdit, 0, len(postIDs))
+	for _, postID := range postIDs {
+		item, err := s.prepareEditableUpdate(ctx, postID, in, now)
+		if err != nil {
+			return nil, err
+		}
+		prepared = append(prepared, item)
+	}
+
+	updated := make([]domain.Post, 0, len(prepared))
+	for _, item := range prepared {
+		if len(item.steps) > 0 {
+			if err := s.Store.UpdateThreadEditable(ctx, item.resultPostID, item.steps); err != nil {
+				return nil, err
+			}
+			post, err := s.Store.GetPost(ctx, item.resultPostID)
+			if err != nil {
+				return nil, err
+			}
+			updated = append(updated, post)
+			continue
+		}
+
+		if err := s.Store.UpdatePostEditable(ctx, item.postID, item.text, item.scheduledAt, item.mediaIDs, item.replaceMedia); err != nil {
+			return nil, err
+		}
+		post, err := s.Store.GetPost(ctx, item.resultPostID)
+		if err != nil {
+			return nil, err
+		}
+		updated = append(updated, post)
+	}
+
+	return updated, nil
+}
+
+func (s MutationsService) prepareEditableUpdate(ctx context.Context, postID string, in EditInput, now func() time.Time) (preparedEdit, error) {
+	postID = strings.TrimSpace(postID)
+	if postID == "" {
+		return preparedEdit{}, ErrPostIDRequired
 	}
 	current, err := s.Store.GetPost(ctx, postID)
 	if err != nil {
-		return domain.Post{}, err
+		return preparedEdit{}, err
 	}
 	scheduledAt, err := ResolveScheduledAtForEdit(in.Intent, in.ScheduledAt, current.ScheduledAt, now)
 	if err != nil {
-		return domain.Post{}, err
+		return preparedEdit{}, err
 	}
 
 	if len(in.Segments) > 0 {
 		if len(in.Segments) > MaxThreadSegments {
-			return domain.Post{}, ErrThreadTooLong
+			return preparedEdit{}, ErrThreadTooLong
 		}
 		if err := s.validateEditableThread(ctx, current, in.Segments); err != nil {
-			return domain.Post{}, err
+			return preparedEdit{}, err
 		}
 		steps := make([]db.ThreadStepUpdate, 0, len(in.Segments))
 		for _, segment := range in.Segments {
 			text := strings.TrimSpace(segment.Text)
 			if text == "" {
-				return domain.Post{}, ErrTextRequired
+				return preparedEdit{}, ErrTextRequired
 			}
 			steps = append(steps, db.ThreadStepUpdate{
 				Text:        text,
@@ -137,15 +201,17 @@ func (s MutationsService) UpdateEditable(ctx context.Context, in EditInput, now 
 		if current.RootPostID != nil && strings.TrimSpace(*current.RootPostID) != "" {
 			rootID = strings.TrimSpace(*current.RootPostID)
 		}
-		if err := s.Store.UpdateThreadEditable(ctx, rootID, steps); err != nil {
-			return domain.Post{}, err
-		}
-		return s.Store.GetPost(ctx, rootID)
+		return preparedEdit{
+			postID:       postID,
+			resultPostID: rootID,
+			scheduledAt:  scheduledAt,
+			steps:        steps,
+		}, nil
 	}
 
 	text := strings.TrimSpace(in.Text)
 	if text == "" {
-		return domain.Post{}, ErrTextRequired
+		return preparedEdit{}, ErrTextRequired
 	}
 
 	mediaIDs := mediaIDsFromPost(current.Media)
@@ -153,13 +219,38 @@ func (s MutationsService) UpdateEditable(ctx context.Context, in EditInput, now 
 		mediaIDs = normalizeMediaIDs(in.MediaIDs)
 	}
 	if err := s.validateEditableDraft(ctx, current, text, mediaIDs, in.ReplaceMedia); err != nil {
-		return domain.Post{}, err
+		return preparedEdit{}, err
 	}
 
-	if err := s.Store.UpdatePostEditable(ctx, postID, text, scheduledAt, mediaIDs, in.ReplaceMedia); err != nil {
-		return domain.Post{}, err
+	return preparedEdit{
+		postID:       postID,
+		resultPostID: postID,
+		text:         text,
+		scheduledAt:  scheduledAt,
+		mediaIDs:     mediaIDs,
+		replaceMedia: in.ReplaceMedia,
+	}, nil
+}
+
+func normalizeEditablePostIDs(primary string, many []string) []string {
+	seen := make(map[string]struct{}, len(many)+1)
+	out := make([]string, 0, len(many)+1)
+	add := func(raw string) {
+		id := strings.TrimSpace(raw)
+		if id == "" {
+			return
+		}
+		if _, exists := seen[id]; exists {
+			return
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
 	}
-	return s.Store.GetPost(ctx, postID)
+	for _, id := range many {
+		add(id)
+	}
+	add(primary)
+	return out
 }
 
 func (s MutationsService) validateEditableThread(ctx context.Context, post domain.Post, segments []ThreadSegmentInput) error {

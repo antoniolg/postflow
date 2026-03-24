@@ -148,6 +148,69 @@ func TestEditPostFromForm(t *testing.T) {
 	}
 }
 
+func TestEditPostFromFormUpdatesAllGroupedPostIDs(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	xAccount := createConnectedAccountForPlatform(t, store, domain.PlatformX, "x-edit-group-form")
+	linkedinAccount := createConnectedAccountForPlatform(t, store, domain.PlatformLinkedIn, "li-edit-group-form")
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	scheduledAt := time.Now().UTC().Add(3 * time.Hour).Truncate(time.Minute)
+	createdIDs := make([]string, 0, 2)
+	for _, accountID := range []string{xAccount.ID, linkedinAccount.ID} {
+		createPayload, _ := json.Marshal(map[string]any{
+			"account_id":   accountID,
+			"text":         "same grouped edit text",
+			"scheduled_at": scheduledAt.Format(time.RFC3339),
+		})
+		createReq := httptest.NewRequest(http.MethodPost, "/posts", bytes.NewReader(createPayload))
+		createW := httptest.NewRecorder()
+		h.ServeHTTP(createW, createReq)
+		if createW.Code != http.StatusCreated {
+			t.Fatalf("expected 201, got %d", createW.Code)
+		}
+		var created map[string]any
+		if err := json.Unmarshal(createW.Body.Bytes(), &created); err != nil {
+			t.Fatalf("decode create response: %v", err)
+		}
+		postID, _ := created["id"].(string)
+		if postID == "" {
+			t.Fatalf("missing post id")
+		}
+		createdIDs = append(createdIDs, postID)
+	}
+
+	editForm := url.Values{}
+	editForm.Set("text", "edited everywhere")
+	for _, postID := range createdIDs {
+		editForm.Add("post_ids", postID)
+	}
+	editReq := httptest.NewRequest(http.MethodPost, "/posts/"+createdIDs[0]+"/edit", bytes.NewBufferString(editForm.Encode()))
+	editReq.Header.Set("content-type", "application/x-www-form-urlencoded")
+	editW := httptest.NewRecorder()
+	h.ServeHTTP(editW, editReq)
+	if editW.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", editW.Code)
+	}
+
+	for _, postID := range createdIDs {
+		post, err := store.GetPost(t.Context(), postID)
+		if err != nil {
+			t.Fatalf("get post %s: %v", postID, err)
+		}
+		if post.Text != "edited everywhere" {
+			t.Fatalf("expected grouped edit to update post %s, got %q", postID, post.Text)
+		}
+	}
+}
+
 func TestEditPostFromFormPublishNowIgnoresScheduledAt(t *testing.T) {
 	tempDir := t.TempDir()
 	store, err := db.Open(filepath.Join(tempDir, "test.db"))

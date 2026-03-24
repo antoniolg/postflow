@@ -192,6 +192,9 @@ func TestPublicationsViewGroupsSameContentByScheduleAcrossNetworks(t *testing.T)
 	if !strings.Contains(groupEditURL, "account_ids=") {
 		t.Fatalf("expected grouped edit url to include account_ids query param")
 	}
+	if !strings.Contains(groupEditURL, "post_ids=") {
+		t.Fatalf("expected grouped edit url to include grouped post_ids query param")
+	}
 
 	createReq := httptest.NewRequest(http.MethodGet, groupEditURL, nil)
 	createW := httptest.NewRecorder()

@@ -78,6 +78,7 @@ func groupPublicationThreads(
 				group: publicationGroupItem{
 					PrimaryPostID:    strings.TrimSpace(root.ID),
 					PostIDs:          make([]string, 0, len(thread)),
+					EditPostIDs:      make([]string, 0, 2),
 					PrimaryPlatform:  root.Platform,
 					Platforms:        make([]domain.Platform, 0, 4),
 					AccountIDs:       make([]string, 0, 4),
@@ -103,6 +104,19 @@ func groupPublicationThreads(
 		state := &states[idx]
 		state.group.PostCount++
 		root := thread[0]
+		rootID := strings.TrimSpace(root.ID)
+		if rootID != "" {
+			alreadyTracked := false
+			for _, existingRootID := range state.group.EditPostIDs {
+				if existingRootID == rootID {
+					alreadyTracked = true
+					break
+				}
+			}
+			if !alreadyTracked {
+				state.group.EditPostIDs = append(state.group.EditPostIDs, rootID)
+			}
+		}
 		if root.Status == domain.PostStatusPublished {
 			targetKey := strings.TrimSpace(root.ID)
 			if targetKey != "" {

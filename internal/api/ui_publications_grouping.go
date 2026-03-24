@@ -34,6 +34,7 @@ func groupPublicationsByContent(posts []domain.Post, threadLabelFor func(domain.
 				group: publicationGroupItem{
 					PrimaryPostID:   post.ID,
 					PostIDs:         make([]string, 0, 2),
+					EditPostIDs:     make([]string, 0, 2),
 					PrimaryPlatform: post.Platform,
 					Platforms:       make([]domain.Platform, 0, 2),
 					AccountIDs:      make([]string, 0, 2),
@@ -56,6 +57,7 @@ func groupPublicationsByContent(posts []domain.Post, threadLabelFor func(domain.
 			if _, exists := state.postSet[postID]; !exists {
 				state.postSet[postID] = struct{}{}
 				state.group.PostIDs = append(state.group.PostIDs, postID)
+				state.group.EditPostIDs = append(state.group.EditPostIDs, postID)
 			}
 		}
 		if len(post.Media) > state.group.MediaCount {

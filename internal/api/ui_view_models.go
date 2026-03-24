@@ -97,6 +97,7 @@ type publicationPlatformLink struct {
 type publicationGroupItem struct {
 	PrimaryPostID    string
 	PostIDs          []string
+	EditPostIDs      []string
 	PrimaryPlatform  domain.Platform
 	MultiPlatform    bool
 	Platforms        []domain.Platform
@@ -176,6 +177,7 @@ type pageData struct {
 	CreateInitialSegments       []createThreadSegment
 	CreateAccountID             string
 	CreateAccountIDs            []string
+	EditPostIDs                 []string
 	CreateText                  string
 	CreateScheduledLocal        string
 	CreateError                 string

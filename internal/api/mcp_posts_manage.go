@@ -35,6 +35,7 @@ type mcpSchedulePostOutput struct {
 
 type mcpEditPostInput struct {
 	PostID      string                  `json:"post_id" jsonschema:"Editable post ID."`
+	PostIDs     []string                `json:"post_ids,omitempty" jsonschema:"Optional additional editable post IDs to update with the same edit."`
 	Text        string                  `json:"text" jsonschema:"Updated post text content for single-post edits."`
 	Intent      string                  `json:"intent,omitempty" jsonschema:"Optional intent: draft|schedule|publish_now."`
 	ScheduledAt string                  `json:"scheduled_at,omitempty" jsonschema:"Optional RFC3339 or datetime-local value. If omitted with empty intent, current scheduling is preserved."`
@@ -43,9 +44,11 @@ type mcpEditPostInput struct {
 }
 
 type mcpEditPostOutput struct {
-	PostID string         `json:"post_id"`
-	Status string         `json:"status"`
-	Post   mcpPostSummary `json:"post"`
+	PostID string           `json:"post_id"`
+	Status string           `json:"status"`
+	Post   mcpPostSummary   `json:"post"`
+	Count  int              `json:"count,omitempty"`
+	Posts  []mcpPostSummary `json:"posts,omitempty"`
 }
 
 type mcpDeletePostInput struct {
@@ -138,8 +141,9 @@ func (s Server) mcpEditPostTool(ctx context.Context, _ *mcp.CallToolRequest, in 
 		Registry: s.providerRegistry(),
 	}
 	mediaIDs := cleanMCPMediaIDs(in.MediaIDs)
-	post, err := svc.UpdateEditable(ctx, postsapp.EditInput{
+	posts, err := svc.UpdateEditableMany(ctx, postsapp.EditInput{
 		PostID:       postID,
+		PostIDs:      in.PostIDs,
 		Text:         text,
 		Intent:       strings.ToLower(strings.TrimSpace(in.Intent)),
 		ScheduledAt:  scheduledAt,
@@ -159,11 +163,18 @@ func (s Server) mcpEditPostTool(ctx context.Context, _ *mcp.CallToolRequest, in 
 			return nil, mcpEditPostOutput{}, err
 		}
 	}
+	post := posts[0]
+	postSummaries := make([]mcpPostSummary, 0, len(posts))
+	for _, item := range posts {
+		postSummaries = append(postSummaries, toMCPPostSummary(item))
+	}
 
 	return nil, mcpEditPostOutput{
 		PostID: postID,
 		Status: string(post.Status),
 		Post:   toMCPPostSummary(post),
+		Count:  len(postSummaries),
+		Posts:  postSummaries,
 	}, nil
 }
 

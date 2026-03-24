@@ -518,6 +518,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	if qAccountIDs := normalizeAccountIDListCSV(r.URL.Query().Get("account_ids")); len(qAccountIDs) > 0 {
 		createAccountIDs = qAccountIDs
 	}
+	editPostIDs := normalizeIDListCSV(r.URL.Query().Get("post_ids"))
 	if createAccountID != "" {
 		createAccountIDs = prependAccountID(createAccountIDs, createAccountID)
 	}
@@ -634,6 +635,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		CreateInitialSegments:       createInitialSegments,
 		CreateAccountID:             createAccountID,
 		CreateAccountIDs:            createAccountIDs,
+		EditPostIDs:                 editPostIDs,
 		CreateText:                  createText,
 		CreateScheduledLocal:        createScheduledLocal,
 		CreateError:                 createError,
@@ -736,6 +738,10 @@ func formatThreadLabel(post domain.Post, totals map[string]int) string {
 }
 
 func normalizeAccountIDListCSV(raw string) []string {
+	return normalizeIDListCSV(raw)
+}
+
+func normalizeIDListCSV(raw string) []string {
 	if strings.TrimSpace(raw) == "" {
 		return nil
 	}
@@ -812,6 +818,9 @@ func publicationGroupEditURL(group publicationGroupItem, currentViewURL string) 
 	if len(group.AccountIDs) > 0 {
 		values.Set("account_id", group.AccountIDs[0])
 		values.Set("account_ids", strings.Join(group.AccountIDs, ","))
+	}
+	if len(group.EditPostIDs) > 0 {
+		values.Set("post_ids", strings.Join(group.EditPostIDs, ","))
 	}
 	return "/?" + values.Encode()
 }
