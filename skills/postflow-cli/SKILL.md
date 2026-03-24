@@ -125,6 +125,7 @@ go run ./cmd/postflow dlq requeue --id dlq_xxx
 - For operational inspection (`drafts list`, `schedule list`, status checks), use `--json` first, even for manual investigations. It avoids ambiguity around state, ids, timestamps, and per-platform entries.
 - `schedule list` returns grouped publications by default. Use `--view posts` when you need raw per-post thread metadata (`thread_group_id`, `thread_position`, `parent_post_id`, `root_post_id`).
 - Prefer `--json` when output is consumed by scripts or further tooling.
+- PostFlow preserves classic Markdown emphasis in post text. When the copy needs emphasis, keep `**bold**` and `*italic*` in the payload instead of stripping them.
 - Use `--idempotency-key` for retries/replays of `posts create`.
 - Keep timestamps in RFC3339 for CLI/API consistency.
 - Use `--segments-json` when the user asks for "first comment", "next comment", "thread", or multiple steps in one publication.
