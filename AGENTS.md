@@ -23,6 +23,7 @@ PostFlow uses a **modular monolith** with an application layer.
 Authoritative docs:
 - `docs/architecture.md`
 - `docs/adr/0001-modular-monolith-application-layer.md`
+- `docs/codex-subagents.md`
 
 ### Layering rules
 

@@ -118,6 +118,24 @@ func TestRequiredCapabilitiesFailureParity(t *testing.T) {
 		assertContainsAny(t, "mcp", msg, "RFC3339", "from must", "invalid from", "cannot parse")
 	})
 
+	t.Run("schedule.list invalid view", func(t *testing.T) {
+		to := time.Now().UTC().Format(time.RFC3339)
+		raw, status := env.apiJSON(http.MethodGet, "/schedule?from="+to+"&to="+to+"&view=campaign", nil, "")
+		if status != http.StatusBadRequest {
+			t.Fatalf("api expected 400, got %d body=%s", status, string(raw))
+		}
+		assertContainsAny(t, "api", apiErrorMessage(raw), "view must be one of", "publications", "posts")
+
+		code, _, stderr := env.runCLIResult("schedule", "list", "--from", to, "--to", to, "--view", "campaign")
+		if code == 0 {
+			t.Fatalf("cli expected non-zero exit for invalid view")
+		}
+		assertContainsAny(t, "cli", stderr, "view must be one of", "publications", "posts")
+
+		msg := env.mcpCallToolError("postflow_list_schedule", map[string]any{"from": to, "to": to, "view": "campaign"})
+		assertContainsAny(t, "mcp", msg, "view must be one of", "publications", "posts")
+	})
+
 	t.Run("dlq.requeue unknown id", func(t *testing.T) {
 		raw, status := env.apiJSON(http.MethodPost, "/dlq/dlq_missing/requeue", nil, "application/json")
 		if status != http.StatusNotFound {

@@ -175,7 +175,7 @@ func (e *parityEnv) mcpEditThread(id string, segments []map[string]any) {
 func (e *parityEnv) mcpScheduleListPostsDetailed(from, to string) []parityThreadPost {
 	e.t.Helper()
 	out := e.mcpCallTool("postflow_list_schedule", map[string]any{"from": from, "to": to, "limit": 200, "view": "posts"})
-	return decodeMCPThreadPosts(out["posts"])
+	return decodeMCPThreadPosts(out["items"])
 }
 
 func (e *parityEnv) mcpScheduleListPublicationsDetailed(from, to string) []parityScheduledPublication {

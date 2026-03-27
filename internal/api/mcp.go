@@ -314,12 +314,11 @@ type mcpPostSummary struct {
 }
 
 type mcpListScheduleOutput struct {
-	Count int                       `json:"count"`
-	From  string                    `json:"from"`
-	To    string                    `json:"to"`
-	View  string                    `json:"view"`
-	Items []mcpScheduledPublication `json:"items,omitempty"`
-	Posts []mcpPostSummary          `json:"posts,omitempty"`
+	Count int    `json:"count"`
+	From  string `json:"from"`
+	To    string `json:"to"`
+	View  string `json:"view"`
+	Items any    `json:"items,omitempty"`
 }
 
 type mcpScheduledPublication struct {
@@ -423,10 +422,11 @@ func (s Server) mcpListScheduleTool(ctx context.Context, _ *mcp.CallToolRequest,
 			items = items[:limit]
 		}
 		out.Count = len(items)
-		out.Posts = make([]mcpPostSummary, 0, len(items))
+		postItems := make([]mcpPostSummary, 0, len(items))
 		for _, item := range items {
-			out.Posts = append(out.Posts, toMCPPostSummary(item))
+			postItems = append(postItems, toMCPPostSummary(item))
 		}
+		out.Items = postItems
 		return nil, out, nil
 	}
 
@@ -435,10 +435,11 @@ func (s Server) mcpListScheduleTool(ctx context.Context, _ *mcp.CallToolRequest,
 		items = items[:limit]
 	}
 	out.Count = len(items)
-	out.Items = make([]mcpScheduledPublication, 0, len(items))
+	publicationItems := make([]mcpScheduledPublication, 0, len(items))
 	for _, item := range items {
-		out.Items = append(out.Items, toMCPScheduledPublication(item))
+		publicationItems = append(publicationItems, toMCPScheduledPublication(item))
 	}
+	out.Items = publicationItems
 	return nil, out, nil
 }
 
