@@ -30,6 +30,7 @@ type LinkedInProvider struct {
 }
 
 const linkedInOAuthScope = "openid profile w_member_social rw_organization_admin w_organization_social"
+const linkedInRESTVersion = "202601"
 
 func NewLinkedInProvider(cfg LinkedInProviderConfig) *LinkedInProvider {
 	if strings.TrimSpace(cfg.AuthBaseURL) == "" {
@@ -49,6 +50,7 @@ func (p *LinkedInProvider) Platform() domain.Platform {
 }
 
 func (p *LinkedInProvider) ValidateDraft(_ context.Context, _ domain.SocialAccount, draft Draft) ([]string, error) {
+	warnings := make([]string, 0, 2)
 	if len(draft.Media) > 9 {
 		return nil, fmt.Errorf("linkedin supports up to 9 image attachments per post")
 	}
@@ -71,7 +73,14 @@ func (p *LinkedInProvider) ValidateDraft(_ context.Context, _ domain.SocialAccou
 	if videoCount > 0 && imageCount > 0 {
 		return nil, fmt.Errorf("linkedin does not support mixing images and video in this release")
 	}
-	return nil, nil
+	if firstURL := extractFirstURL(draft.Text); firstURL != "" {
+		if len(draft.Media) > 0 {
+			warnings = append(warnings, "LinkedIn media takes precedence; link unfurl will be skipped")
+		} else {
+			warnings = append(warnings, "LinkedIn will try article unfurl at publish time")
+		}
+	}
+	return warnings, nil
 }
 
 func (p *LinkedInProvider) Publish(ctx context.Context, account domain.SocialAccount, credentials Credentials, post domain.Post, opts PublishOptions) (PublishResult, error) {
@@ -94,9 +103,18 @@ func (p *LinkedInProvider) Publish(ctx context.Context, account domain.SocialAcc
 		}
 		return p.publishComment(ctx, token, actorURN, parentExternalID, postText)
 	}
-	assetURNs := make([]string, 0, len(post.Media))
+	if len(post.Media) == 0 {
+		if result, published, err := p.tryPublishArticlePost(ctx, token, actorURN, postText); err == nil && published {
+			return result, nil
+		}
+	}
+	return p.publishUGCRootPost(ctx, token, actorURN, postText, post.Media)
+}
+
+func (p *LinkedInProvider) publishUGCRootPost(ctx context.Context, token, actorURN, postText string, media []domain.Media) (PublishResult, error) {
+	assetURNs := make([]string, 0, len(media))
 	videoCount := 0
-	for _, media := range post.Media {
+	for _, media := range media {
 		if isVideoMedia(media) {
 			videoCount++
 		}
@@ -104,10 +122,10 @@ func (p *LinkedInProvider) Publish(ctx context.Context, account domain.SocialAcc
 	if videoCount > 1 {
 		return PublishResult{}, fmt.Errorf("linkedin supports a single video per post in this release")
 	}
-	if videoCount > 0 && len(post.Media) > 1 {
+	if videoCount > 0 && len(media) > 1 {
 		return PublishResult{}, fmt.Errorf("linkedin does not support mixing images and video in this release")
 	}
-	for _, media := range post.Media {
+	for _, media := range media {
 		var (
 			assetURN string
 			err      error
@@ -264,6 +282,9 @@ func (p *LinkedInProvider) bestEffortLinkedInPermalink(ctx context.Context, acce
 	targetURN := normalizeLinkedInTargetURN(externalID)
 	if targetURN == "" {
 		return ""
+	}
+	if strings.HasPrefix(targetURN, "urn:li:share:") || strings.HasPrefix(targetURN, "urn:li:ugcPost:") {
+		return "https://www.linkedin.com/feed/update/" + targetURN + "/"
 	}
 	if !strings.HasPrefix(targetURN, "urn:li:") {
 		targetURN = "urn:li:ugcPost:" + targetURN
@@ -732,7 +753,7 @@ func (p *LinkedInProvider) fetchOrganizationsREST(ctx context.Context, accessTok
 		}
 		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(accessToken))
 		req.Header.Set("X-Restli-Protocol-Version", "2.0.0")
-		req.Header.Set("LinkedIn-Version", "202601")
+		req.Header.Set("LinkedIn-Version", linkedInRESTVersion)
 
 		resp, err := p.client.Do(req)
 		if err != nil {
@@ -794,7 +815,7 @@ func (p *LinkedInProvider) fetchOrganizationLookup(ctx context.Context, accessTo
 	}
 	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(accessToken))
 	req.Header.Set("X-Restli-Protocol-Version", "2.0.0")
-	req.Header.Set("LinkedIn-Version", "202601")
+	req.Header.Set("LinkedIn-Version", linkedInRESTVersion)
 
 	resp, err := p.client.Do(req)
 	if err != nil {

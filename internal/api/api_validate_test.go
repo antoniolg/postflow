@@ -5,11 +5,14 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/antoniolg/postflow/internal/db"
+	"github.com/antoniolg/postflow/internal/domain"
 )
 
 func TestValidatePostEndpoint(t *testing.T) {
@@ -20,7 +23,12 @@ func TestValidatePostEndpoint(t *testing.T) {
 	}
 	defer store.Close()
 
-	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	srv := Server{
+		Store:             store,
+		DataDir:           tempDir,
+		DefaultMaxRetries: 3,
+		Registry:          testRegistryWithRealLinkedIn(),
+	}
 	h := srv.Handler()
 
 	payload, _ := json.Marshal(map[string]any{
@@ -53,7 +61,12 @@ func TestValidatePostEndpointDraftMode(t *testing.T) {
 	}
 	defer store.Close()
 
-	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	srv := Server{
+		Store:             store,
+		DataDir:           tempDir,
+		DefaultMaxRetries: 3,
+		Registry:          testRegistryWithRealLinkedIn(),
+	}
 	h := srv.Handler()
 
 	payload, _ := json.Marshal(map[string]any{
@@ -101,5 +114,85 @@ func TestValidatePostEndpointRejectsTooManySegments(t *testing.T) {
 	h.ServeHTTP(w, req)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestValidatePostEndpointWarnsLinkedInArticleUnfurl(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	account := createConnectedAccountForPlatform(t, store, domain.PlatformLinkedIn, "li-validate-unfurl")
+	srv := Server{
+		Store:             store,
+		DataDir:           tempDir,
+		DefaultMaxRetries: 3,
+		Registry:          testRegistryWithRealLinkedIn(),
+	}
+	h := srv.Handler()
+
+	payload, _ := json.Marshal(map[string]any{
+		"account_id": account.ID,
+		"text":       "look at https://example.com/post",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/posts/validate", bytes.NewReader(payload))
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "LinkedIn will try article unfurl at publish time") {
+		t.Fatalf("expected linkedin unfurl warning, got %s", w.Body.String())
+	}
+}
+
+func TestValidatePostEndpointWarnsLinkedInMediaWinsOverUnfurl(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	account := createConnectedAccountForPlatform(t, store, domain.PlatformLinkedIn, "li-validate-media-wins")
+	mediaPath := filepath.Join(tempDir, "cover.jpg")
+	if err := os.WriteFile(mediaPath, []byte("fake"), 0o644); err != nil {
+		t.Fatalf("write media file: %v", err)
+	}
+	media, err := store.CreateMedia(t.Context(), domain.Media{
+		Kind:         "image",
+		OriginalName: "cover.jpg",
+		StoragePath:  mediaPath,
+		MimeType:     "image/jpeg",
+		SizeBytes:    4,
+	})
+	if err != nil {
+		t.Fatalf("create media: %v", err)
+	}
+
+	srv := Server{
+		Store:             store,
+		DataDir:           tempDir,
+		DefaultMaxRetries: 3,
+		Registry:          testRegistryWithRealLinkedIn(),
+	}
+	h := srv.Handler()
+
+	payload, _ := json.Marshal(map[string]any{
+		"account_id": account.ID,
+		"text":       "look at https://example.com/post",
+		"media_ids":  []string{media.ID},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/posts/validate", bytes.NewReader(payload))
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "LinkedIn media takes precedence; link unfurl will be skipped") {
+		t.Fatalf("expected linkedin media warning, got %s", w.Body.String())
 	}
 }

@@ -406,6 +406,13 @@ func runPostsValidate(ctx context.Context, client *APIClient, cfg config, args [
 	}
 	printOutput(stdout, cfg.asJSON, out, func() {
 		fmt.Fprintf(stdout, "valid: %v\n", out["valid"])
+		if warnings, ok := out["warnings"].([]any); ok {
+			for _, warning := range warnings {
+				if text := strings.TrimSpace(fmt.Sprintf("%v", warning)); text != "" {
+					fmt.Fprintf(stdout, "warning: %s\n", text)
+				}
+			}
+		}
 	})
 	return 0
 }

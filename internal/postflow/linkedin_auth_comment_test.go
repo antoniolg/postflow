@@ -34,6 +34,7 @@ func TestLinkedInValidateDraftRules(t *testing.T) {
 		name       string
 		draft      Draft
 		wantErrSub string
+		wantWarn   string
 	}{
 		{
 			name:       "rejects too many images",
@@ -61,15 +62,33 @@ func TestLinkedInValidateDraftRules(t *testing.T) {
 				{ID: "vid_1", OriginalName: "vid.mp4", MimeType: "video/mp4"},
 			}},
 		},
+		{
+			name:     "warns about article unfurl when first link has no media",
+			draft:    Draft{Text: "read https://example.com/post please"},
+			wantWarn: "LinkedIn will try article unfurl at publish time",
+		},
+		{
+			name: "warns that media wins over link unfurl",
+			draft: Draft{
+				Text: "watch https://example.com/video",
+				Media: []domain.Media{
+					{ID: "img_2", OriginalName: "img.jpg", MimeType: "image/jpeg"},
+				},
+			},
+			wantWarn: "LinkedIn media takes precedence; link unfurl will be skipped",
+		},
 	}
 
 	for _, tc := range testCases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := provider.ValidateDraft(context.Background(), domain.SocialAccount{Platform: domain.PlatformLinkedIn}, tc.draft)
+			warnings, err := provider.ValidateDraft(context.Background(), domain.SocialAccount{Platform: domain.PlatformLinkedIn}, tc.draft)
 			if strings.TrimSpace(tc.wantErrSub) == "" {
 				if err != nil {
 					t.Fatalf("expected validation success, got %v", err)
+				}
+				if strings.TrimSpace(tc.wantWarn) != "" && !slices.Contains(warnings, tc.wantWarn) {
+					t.Fatalf("expected warning %q, got %#v", tc.wantWarn, warnings)
 				}
 				return
 			}

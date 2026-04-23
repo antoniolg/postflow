@@ -105,6 +105,7 @@ Important:
 - For local testing without real publishing, keep `POSTFLOW_DRIVER=mock`.
 - OAuth account connection is available for X, LinkedIn, Facebook, and Instagram.
 - LinkedIn OAuth connects the personal profile and, when available, any organization pages the user administers.
+- LinkedIn root posts with a first `http(s)` link and no attached media are published as article posts at publish time so PostFlow can send explicit unfurl metadata. If media is attached, media wins and link unfurl is skipped.
 - In the web UI, if an OAuth provider returns multiple accounts, PostFlow shows a selection step before saving them.
 - In production (Coolify), set secrets in the platform UI, not in committed files.
 - In Coolify, mark `OWNER_PASSWORD_HASH` as a literal/secret value so `$` is not interpolated.

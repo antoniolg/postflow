@@ -326,6 +326,36 @@ func TestRunPostsValidateSuccess(t *testing.T) {
 	}
 }
 
+func TestRunPostsValidateShowsWarnings(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/posts/validate" {
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"valid": true,
+			"warnings": []string{
+				"LinkedIn will try article unfurl at publish time",
+			},
+		})
+	}))
+	defer server.Close()
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := Run(context.Background(), []string{
+		"--base-url", server.URL,
+		"posts", "validate",
+		"--account-id", "acc_val_1",
+		"--text", "validate me",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("expected validate exit 0, got %d, stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "LinkedIn will try article unfurl at publish time") {
+		t.Fatalf("expected warning in validate output, got %s", stdout.String())
+	}
+}
+
 func TestRunPostsValidateFailureShowsAPIError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/posts/validate" {

@@ -25,7 +25,12 @@ func TestMCPStreamableHTTPExposesToolsAndCreatesPost(t *testing.T) {
 	defer store.Close()
 	account := createTestAccount(t, store)
 
-	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	srv := Server{
+		Store:             store,
+		DataDir:           tempDir,
+		DefaultMaxRetries: 3,
+		Registry:          testRegistryWithRealLinkedIn(),
+	}
 	httpServer := httptest.NewServer(srv.Handler())
 	defer httpServer.Close()
 
@@ -223,6 +228,9 @@ func TestMCPStreamableHTTPExposesToolsAndCreatesPost(t *testing.T) {
 	if !strings.Contains(string(validateRaw), `"valid":true`) {
 		t.Fatalf("expected validate tool response to confirm valid payload: %s", string(validateRaw))
 	}
+	if !strings.Contains(string(validateRaw), `draft mode: no scheduled_at provided`) {
+		t.Fatalf("expected draft warning in validate response: %s", string(validateRaw))
+	}
 
 	listMediaBody := `{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"postflow_list_media","arguments":{"limit":50}}}`
 	listMediaResp, listMediaRaw := postMCPRequest(t, mcpURL, sessionID, listMediaBody)
@@ -329,6 +337,46 @@ func TestMCPStreamableHTTPExposesToolsAndCreatesPost(t *testing.T) {
 	}
 	if !strings.Contains(string(deleteFailedRaw), `"deleted":true`) {
 		t.Fatalf("expected delete failed response with deleted=true, got: %s", string(deleteFailedRaw))
+	}
+}
+
+func TestMCPValidatePostReturnsLinkedInWarnings(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	account := createConnectedAccountForPlatform(t, store, domain.PlatformLinkedIn, "li-mcp-validate")
+	srv := Server{
+		Store:             store,
+		DataDir:           tempDir,
+		DefaultMaxRetries: 3,
+		Registry:          testRegistryWithRealLinkedIn(),
+	}
+
+	httpServer := httptest.NewServer(srv.Handler())
+	defer httpServer.Close()
+	mcpURL := httpServer.URL + "/mcp"
+
+	initializeBody := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}}}`
+	initializeResp, initializeRaw := postMCPRequest(t, mcpURL, "", initializeBody)
+	if initializeResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected initialize status 200, got %d: %s", initializeResp.StatusCode, string(initializeRaw))
+	}
+	sessionID := strings.TrimSpace(initializeResp.Header.Get("Mcp-Session-Id"))
+	if sessionID == "" {
+		t.Fatalf("expected initialize response to include mcp session id")
+	}
+
+	validateBody := `{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"postflow_validate_post","arguments":{"account_id":"` + account.ID + `","text":"check https://example.com/post"}}}`
+	validateResp, validateRaw := postMCPRequest(t, mcpURL, sessionID, validateBody)
+	if validateResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected validate tools/call status 200, got %d: %s", validateResp.StatusCode, string(validateRaw))
+	}
+	if !strings.Contains(string(validateRaw), "LinkedIn will try article unfurl at publish time") {
+		t.Fatalf("expected linkedin warning in mcp validate response: %s", string(validateRaw))
 	}
 }
 
