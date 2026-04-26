@@ -241,10 +241,10 @@ func (s Server) handleAccountActions(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusConflict, errors.New("account must be disconnected first"))
 			case errors.Is(err, db.ErrAccountHasPosts):
 				if isHTML {
-					http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", "account has pending posts"), http.StatusSeeOther)
+					http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", "account has linked posts"), http.StatusSeeOther)
 					return
 				}
-				writeError(w, http.StatusConflict, errors.New("account has pending posts"))
+				writeError(w, http.StatusConflict, errors.New("account has linked posts"))
 			default:
 				if isHTML {
 					http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", "failed to delete account"), http.StatusSeeOther)
@@ -320,7 +320,7 @@ func (s Server) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, db.ErrAccountNotDisconnect):
 			writeError(w, http.StatusConflict, errors.New("account must be disconnected first"))
 		case errors.Is(err, db.ErrAccountHasPosts):
-			writeError(w, http.StatusConflict, errors.New("account has pending posts"))
+			writeError(w, http.StatusConflict, errors.New("account has linked posts"))
 		default:
 			writeError(w, http.StatusInternalServerError, err)
 		}

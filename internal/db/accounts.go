@@ -13,7 +13,7 @@ import (
 
 var (
 	ErrAccountNotFound      = errors.New("account not found")
-	ErrAccountHasPosts      = errors.New("account has pending posts")
+	ErrAccountHasPosts      = errors.New("account has linked posts")
 	ErrAccountNotDisconnect = errors.New("account must be disconnected before delete")
 	ErrAccountNotXPlatform  = errors.New("x premium setting is only available for x accounts")
 )
@@ -298,16 +298,15 @@ func (s *Store) DeleteAccount(ctx context.Context, id string) error {
 	if account.Status != domain.AccountStatusDisconnected {
 		return ErrAccountNotDisconnect
 	}
-	var pending int
+	var linkedPosts int
 	if err := s.db.QueryRowContext(ctx, `
 		SELECT COUNT(*)
 		FROM posts
 		WHERE account_id = ?
-		  AND status IN (?, ?, ?)
-	`, id, domain.PostStatusDraft, domain.PostStatusScheduled, domain.PostStatusPublishing).Scan(&pending); err != nil {
+	`, id).Scan(&linkedPosts); err != nil {
 		return err
 	}
-	if pending > 0 {
+	if linkedPosts > 0 {
 		return ErrAccountHasPosts
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -316,15 +315,6 @@ func (s *Store) DeleteAccount(ctx context.Context, id string) error {
 	}
 	defer tx.Rollback()
 
-	if _, err := tx.ExecContext(ctx, `DELETE FROM dead_letters WHERE post_id IN (SELECT id FROM posts WHERE account_id = ?)`, id); err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM post_media WHERE post_id IN (SELECT id FROM posts WHERE account_id = ?)`, id); err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM posts WHERE account_id = ?`, id); err != nil {
-		return err
-	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM account_credentials WHERE account_id = ?`, id); err != nil {
 		return err
 	}

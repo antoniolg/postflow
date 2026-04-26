@@ -2,7 +2,6 @@ package db
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"path/filepath"
 	"testing"
@@ -41,7 +40,7 @@ func TestDeleteAccountRejectsPendingPosts(t *testing.T) {
 	}
 }
 
-func TestDeleteAccountRemovesHistoricalPostsAndAccount(t *testing.T) {
+func TestDeleteAccountRejectsHistoricalPosts(t *testing.T) {
 	store, err := Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatalf("open db: %v", err)
@@ -66,14 +65,12 @@ func TestDeleteAccountRemovesHistoricalPostsAndAccount(t *testing.T) {
 		t.Fatalf("disconnect account: %v", err)
 	}
 
-	if err := store.DeleteAccount(context.Background(), account.ID); err != nil {
-		t.Fatalf("delete account: %v", err)
+	err = store.DeleteAccount(context.Background(), account.ID)
+	if !errors.Is(err, ErrAccountHasPosts) {
+		t.Fatalf("expected ErrAccountHasPosts, got %v", err)
 	}
-	if _, err := store.GetAccount(context.Background(), account.ID); !errors.Is(err, ErrAccountNotFound) {
-		t.Fatalf("expected account to be deleted, got %v", err)
-	}
-	if _, err := store.GetPost(context.Background(), result.Post.ID); !errors.Is(err, sql.ErrNoRows) {
-		t.Fatalf("expected post to be deleted, got %v", err)
+	if _, err := store.GetPost(context.Background(), result.Post.ID); err != nil {
+		t.Fatalf("expected historical post to be preserved, got %v", err)
 	}
 }
 

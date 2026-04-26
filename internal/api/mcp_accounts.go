@@ -189,7 +189,7 @@ func (s Server) mcpDeleteAccountTool(ctx context.Context, _ *mcp.CallToolRequest
 		case errors.Is(err, db.ErrAccountNotDisconnect):
 			return nil, mcpDeleteAccountOutput{}, errors.New("account must be disconnected first")
 		case errors.Is(err, db.ErrAccountHasPosts):
-			return nil, mcpDeleteAccountOutput{}, errors.New("account has pending posts")
+			return nil, mcpDeleteAccountOutput{}, errors.New("account has linked posts")
 		default:
 			return nil, mcpDeleteAccountOutput{}, fmt.Errorf("failed to delete account: %w", err)
 		}
