@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -62,7 +63,7 @@ func (s Server) requestLoggingMiddleware(next http.Handler) http.Handler {
 			"path", r.URL.Path,
 			"status", rec.statusCode,
 			"duration_ms", time.Since(startedAt).Milliseconds(),
-			"client", rateLimitKey(r),
+			"client", requestClientLabel(r),
 		)
 	})
 }
@@ -274,6 +275,24 @@ func rateLimitKey(r *http.Request) string {
 		return "ip:" + r.RemoteAddr
 	}
 	return "unknown"
+}
+
+func requestClientLabel(r *http.Request) string {
+	if apiKey := strings.TrimSpace(r.Header.Get("X-API-Key")); apiKey != "" {
+		return "key:" + shortFingerprint(apiKey)
+	}
+	if auth := strings.TrimSpace(r.Header.Get("Authorization")); strings.HasPrefix(strings.ToLower(auth), "bearer ") {
+		token := strings.TrimSpace(auth[7:])
+		if token != "" {
+			return "bearer:" + shortFingerprint(token)
+		}
+	}
+	return rateLimitKey(r)
+}
+
+func shortFingerprint(value string) string {
+	sum := sha256.Sum256([]byte(strings.TrimSpace(value)))
+	return hex.EncodeToString(sum[:])[:12]
 }
 
 func tokenMatches(r *http.Request, expected string) bool {

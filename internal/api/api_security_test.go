@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -99,6 +100,28 @@ func TestRateLimitMiddlewareLimitsRequests(t *testing.T) {
 	h.ServeHTTP(w, req)
 	if w.Code != http.StatusTooManyRequests {
 		t.Fatalf("expected second request 429, got %d", w.Code)
+	}
+}
+
+func TestRequestClientLabelDoesNotExposeCredentials(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/schedule", nil)
+	req.Header.Set("Authorization", "Bearer secret-token")
+	got := requestClientLabel(req)
+	if strings.Contains(got, "secret-token") {
+		t.Fatalf("requestClientLabel exposed bearer token: %q", got)
+	}
+	if !strings.HasPrefix(got, "bearer:") {
+		t.Fatalf("expected bearer fingerprint label, got %q", got)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/schedule", nil)
+	req.Header.Set("X-API-Key", "secret-token")
+	got = requestClientLabel(req)
+	if strings.Contains(got, "secret-token") {
+		t.Fatalf("requestClientLabel exposed api key: %q", got)
+	}
+	if !strings.HasPrefix(got, "key:") {
+		t.Fatalf("expected api key fingerprint label, got %q", got)
 	}
 }
 
