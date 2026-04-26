@@ -444,14 +444,10 @@ func (s Server) mcpListScheduleTool(ctx context.Context, _ *mcp.CallToolRequest,
 }
 
 func (s Server) mcpListDraftsTool(ctx context.Context, _ *mcp.CallToolRequest, in mcpListDraftsInput) (*mcp.CallToolResult, mcpListDraftsOutput, error) {
-	drafts, err := s.Store.ListDrafts(ctx)
+	limit := clampMCPListLimit(in.Limit)
+	drafts, err := s.Store.ListDrafts(ctx, limit)
 	if err != nil {
 		return nil, mcpListDraftsOutput{}, err
-	}
-
-	limit := clampMCPListLimit(in.Limit)
-	if len(drafts) > limit {
-		drafts = drafts[:limit]
 	}
 
 	out := mcpListDraftsOutput{

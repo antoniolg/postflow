@@ -73,6 +73,17 @@ func TestPostListingAndMediaLookupBlackBox(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create draft post: %v", err)
 	}
+	if _, err := store.CreatePost(ctx, CreatePostParams{
+		Post: domain.Post{
+			AccountID:   account.ID,
+			Platform:    account.Platform,
+			Text:        "second draft",
+			Status:      domain.PostStatusDraft,
+			MaxAttempts: 3,
+		},
+	}); err != nil {
+		t.Fatalf("create second draft post: %v", err)
+	}
 
 	threadPosts, err := store.ListThreadPosts(ctx, rootID)
 	if err != nil {
@@ -109,6 +120,13 @@ func TestPostListingAndMediaLookupBlackBox(t *testing.T) {
 	}
 	if !foundDraft {
 		t.Fatalf("expected created draft %s in draft list", draftResult.Post.ID)
+	}
+	limitedDrafts, err := store.ListDrafts(ctx, 1)
+	if err != nil {
+		t.Fatalf("list limited drafts: %v", err)
+	}
+	if len(limitedDrafts) != 1 {
+		t.Fatalf("expected draft SQL limit to return 1 row, got %d", len(limitedDrafts))
 	}
 
 	mediaItems, err := store.GetMediaByIDs(ctx, []string{mediaB.ID, mediaA.ID})

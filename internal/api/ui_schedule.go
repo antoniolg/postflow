@@ -70,7 +70,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 			publicationsRaw[i].ScheduledAt = publicationsRaw[i].ScheduledAt.In(uiLoc)
 		}
 	}
-	drafts, err := s.Store.ListDrafts(r.Context())
+	drafts, err := s.Store.ListDrafts(r.Context(), maxMCPListLimit)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
@@ -163,6 +163,12 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	rootIDs = append(rootIDs, orderedThreadRootsFromPosts(drafts)...)
 	rootIDs = append(rootIDs, orderedThreadRootsFromFailedEnvelopes(failedEnvelopes)...)
 	threadPostsByRoot := make(map[string][]domain.Post, len(rootIDs))
+	seedThreadPostsByRoot(threadPostsByRoot, uiLoc, items)
+	seedThreadPostsByRoot(threadPostsByRoot, uiLoc, publicationsRaw)
+	seedThreadPostsByRoot(threadPostsByRoot, uiLoc, drafts)
+	for _, envelope := range failedEnvelopes {
+		seedThreadPostsByRoot(threadPostsByRoot, uiLoc, []domain.Post{envelope.Post})
+	}
 	for _, rootID := range rootIDs {
 		rootID = strings.TrimSpace(rootID)
 		if rootID == "" {
@@ -175,11 +181,7 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		if err != nil || len(threadPosts) == 0 {
 			continue
 		}
-		for i := range threadPosts {
-			if !threadPosts[i].ScheduledAt.IsZero() {
-				threadPosts[i].ScheduledAt = threadPosts[i].ScheduledAt.In(uiLoc)
-			}
-		}
+		normalizeThreadPostsForUI(threadPosts, uiLoc)
 		threadPostsByRoot[rootID] = threadPosts
 	}
 
@@ -716,6 +718,53 @@ func postThreadRootID(post domain.Post) string {
 		}
 	}
 	return strings.TrimSpace(post.ID)
+}
+
+func seedThreadPostsByRoot(out map[string][]domain.Post, loc *time.Location, posts []domain.Post) {
+	for _, post := range posts {
+		rootID := postThreadRootID(post)
+		if rootID == "" {
+			continue
+		}
+		postID := strings.TrimSpace(post.ID)
+		if postID == "" {
+			continue
+		}
+		alreadyPresent := false
+		for _, existing := range out[rootID] {
+			if strings.TrimSpace(existing.ID) == postID {
+				alreadyPresent = true
+				break
+			}
+		}
+		if alreadyPresent {
+			continue
+		}
+		out[rootID] = append(out[rootID], post)
+		normalizeThreadPostsForUI(out[rootID], loc)
+	}
+}
+
+func normalizeThreadPostsForUI(posts []domain.Post, loc *time.Location) {
+	for i := range posts {
+		if !posts[i].ScheduledAt.IsZero() && loc != nil {
+			posts[i].ScheduledAt = posts[i].ScheduledAt.In(loc)
+		}
+	}
+	sort.SliceStable(posts, func(i, j int) bool {
+		leftPos := posts[i].ThreadPosition
+		rightPos := posts[j].ThreadPosition
+		if leftPos <= 0 {
+			leftPos = 1
+		}
+		if rightPos <= 0 {
+			rightPos = 1
+		}
+		if leftPos != rightPos {
+			return leftPos < rightPos
+		}
+		return posts[i].CreatedAt.Before(posts[j].CreatedAt)
+	})
 }
 
 func formatThreadLabel(post domain.Post, totals map[string]int) string {

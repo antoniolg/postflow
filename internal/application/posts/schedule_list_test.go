@@ -56,7 +56,7 @@ func TestScheduleListServiceGroupsByThreadRootPerPlatform(t *testing.T) {
 
 	store := scheduleListStoreStub{
 		scheduled: []domain.Post{
-			{ID: linkedInRoot, AccountID: "acc_li", Platform: domain.PlatformLinkedIn, Text: "hello", Status: domain.PostStatusScheduled, ScheduledAt: scheduledAt, ThreadGroupID: "thd_li", ThreadPosition: 1},
+			{ID: linkedInRoot, AccountID: "acc_li", Platform: domain.PlatformLinkedIn, Text: "hello", Status: domain.PostStatusScheduled, ScheduledAt: scheduledAt, ThreadGroupID: "thd_li", ThreadPosition: 1, Media: []domain.Media{{ID: "med_li"}}},
 			{ID: "pst_linkedin_reply", AccountID: "acc_li", Platform: domain.PlatformLinkedIn, Text: "reply", Status: domain.PostStatusScheduled, ScheduledAt: scheduledAt, ThreadGroupID: "thd_li", ThreadPosition: 2, RootPostID: ptr("pst_linkedin_root")},
 			{ID: instagramRoot, AccountID: "acc_ig", Platform: domain.PlatformInstagram, Text: "hello", Status: domain.PostStatusScheduled, ScheduledAt: scheduledAt, ThreadGroupID: "thd_ig", ThreadPosition: 1},
 			{ID: "pst_instagram_reply", AccountID: "acc_ig", Platform: domain.PlatformInstagram, Text: "reply", Status: domain.PostStatusScheduled, ScheduledAt: scheduledAt, ThreadGroupID: "thd_ig", ThreadPosition: 2, RootPostID: ptr("pst_instagram_root")},

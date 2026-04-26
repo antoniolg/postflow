@@ -233,12 +233,6 @@ func (s Server) handleScheduleJSON(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s Server) handleListDraftsJSON(w http.ResponseWriter, r *http.Request) {
-	drafts, err := s.Store.ListDrafts(r.Context())
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-
 	limit := defaultMCPListLimit
 	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
 		var parsed int
@@ -248,8 +242,11 @@ func (s Server) handleListDraftsJSON(w http.ResponseWriter, r *http.Request) {
 		}
 		limit = clampMCPListLimit(parsed)
 	}
-	if len(drafts) > limit {
-		drafts = drafts[:limit]
+
+	drafts, err := s.Store.ListDrafts(r.Context(), limit)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{

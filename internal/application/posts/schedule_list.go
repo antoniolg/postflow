@@ -88,11 +88,16 @@ func (s ScheduleListService) List(ctx context.Context, from, to time.Time, view 
 	}
 
 	rootIDs := orderedRootIDs(items)
+	postsByRoot := postsByScheduleRoot(items)
 	publications := make([]ScheduledPublication, 0, len(rootIDs))
 	for _, rootID := range rootIDs {
-		threadPosts, err := s.Store.ListThreadPosts(ctx, rootID)
-		if err != nil {
-			return ScheduleListOutput{}, err
+		threadPosts := postsByRoot[rootID]
+		if len(threadPosts) == 0 {
+			var err error
+			threadPosts, err = s.Store.ListThreadPosts(ctx, rootID)
+			if err != nil {
+				return ScheduleListOutput{}, err
+			}
 		}
 		publications = append(publications, buildScheduledPublication(rootID, threadPosts))
 	}
@@ -119,6 +124,18 @@ func orderedRootIDs(posts []domain.Post) []string {
 		}
 		seen[rootID] = struct{}{}
 		out = append(out, rootID)
+	}
+	return out
+}
+
+func postsByScheduleRoot(posts []domain.Post) map[string][]domain.Post {
+	out := make(map[string][]domain.Post, len(posts))
+	for _, post := range posts {
+		rootID := scheduleRootPostID(post)
+		if rootID == "" {
+			continue
+		}
+		out[rootID] = append(out[rootID], post)
 	}
 	return out
 }

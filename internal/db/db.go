@@ -286,13 +286,19 @@ func (s *Store) ListSchedule(ctx context.Context, from, to time.Time) ([]domain.
 	return out, nil
 }
 
-func (s *Store) ListDrafts(ctx context.Context) ([]domain.Post, error) {
-	rows, err := s.db.QueryContext(ctx, `
+func (s *Store) ListDrafts(ctx context.Context, limits ...int) ([]domain.Post, error) {
+	query := `
 		SELECT id
 		FROM posts
 		WHERE status = ?
 		ORDER BY updated_at DESC
-	`, domain.PostStatusDraft)
+	`
+	args := []any{domain.PostStatusDraft}
+	if len(limits) > 0 && limits[0] > 0 {
+		query += ` LIMIT ?`
+		args = append(args, limits[0])
+	}
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
