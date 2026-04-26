@@ -758,6 +758,51 @@ func TestUploadMediaMissingFileReturnsBadRequest(t *testing.T) {
 	}
 }
 
+func TestUploadMediaRejectsOversizedFile(t *testing.T) {
+	oldMax := maxMediaUploadBytes
+	maxMediaUploadBytes = 4
+	t.Cleanup(func() { maxMediaUploadBytes = oldMax })
+
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	filePart, err := writer.CreateFormFile("file", "large.txt")
+	if err != nil {
+		t.Fatalf("create form file: %v", err)
+	}
+	if _, err := filePart.Write([]byte("too large")); err != nil {
+		t.Fatalf("write file payload: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close writer: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/media", &body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("expected 413, got %d: %s", w.Code, w.Body.String())
+	}
+
+	entries, err := os.ReadDir(filepath.Join(tempDir, "media"))
+	if err != nil && !os.IsNotExist(err) {
+		t.Fatalf("read media dir: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("expected oversized upload file to be removed, got %d entries", len(entries))
+	}
+}
+
 func TestUploadMediaIgnoresLegacyPlatformField(t *testing.T) {
 	tempDir := t.TempDir()
 	store, err := db.Open(filepath.Join(tempDir, "test.db"))

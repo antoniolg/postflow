@@ -64,39 +64,31 @@ func (c *APIClient) PostMultipartFile(ctx context.Context, path, fileField, file
 	if err != nil {
 		return fmt.Errorf("open file: %w", err)
 	}
-	defer file.Close()
 
-	var body bytes.Buffer
-	writer := multipart.NewWriter(&body)
-	for key, value := range fields {
-		key = strings.TrimSpace(key)
-		if key == "" {
-			continue
-		}
-		if err := writer.WriteField(key, strings.TrimSpace(value)); err != nil {
-			return fmt.Errorf("write multipart field %q: %w", key, err)
-		}
-	}
 	mimeType, err := detectUploadFileMimeType(file, filePath)
 	if err != nil {
+		_ = file.Close()
 		return err
 	}
-	part, err := createMultipartFilePart(writer, fileField, filepath.Base(filePath), mimeType)
-	if err != nil {
-		return fmt.Errorf("create form file: %w", err)
-	}
-	if _, err := io.Copy(part, file); err != nil {
-		return fmt.Errorf("copy form file: %w", err)
-	}
-	if err := writer.Close(); err != nil {
-		return fmt.Errorf("close multipart writer: %w", err)
-	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, bytes.NewReader(body.Bytes()))
+	pr, pw := io.Pipe()
+	writer := multipart.NewWriter(pw)
+	contentType := writer.FormDataContentType()
+	go func() {
+		err := writeMultipartFile(writer, file, fileField, filepath.Base(filePath), mimeType, fields)
+		if err != nil {
+			_ = pw.CloseWithError(err)
+			return
+		}
+		_ = pw.Close()
+	}()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, pr)
 	if err != nil {
+		_ = pr.Close()
 		return fmt.Errorf("build request: %w", err)
 	}
-	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set("Content-Type", contentType)
 	if c.token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
@@ -111,6 +103,30 @@ func (c *APIClient) PostMultipartFile(ctx context.Context, path, fileField, file
 		return fmt.Errorf("read response body: %w", err)
 	}
 	return decodeResponse(http.MethodPost, path, resp.StatusCode, respBody, out)
+}
+
+func writeMultipartFile(writer *multipart.Writer, file *os.File, fileField, fileName, mimeType string, fields map[string]string) error {
+	defer file.Close()
+	for key, value := range fields {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+		if err := writer.WriteField(key, strings.TrimSpace(value)); err != nil {
+			return fmt.Errorf("write multipart field %q: %w", key, err)
+		}
+	}
+	part, err := createMultipartFilePart(writer, fileField, fileName, mimeType)
+	if err != nil {
+		return fmt.Errorf("create form file: %w", err)
+	}
+	if _, err := io.Copy(part, file); err != nil {
+		return fmt.Errorf("copy form file: %w", err)
+	}
+	if err := writer.Close(); err != nil {
+		return fmt.Errorf("close multipart writer: %w", err)
+	}
+	return nil
 }
 
 func createMultipartFilePart(writer *multipart.Writer, fileField, fileName, mimeType string) (io.Writer, error) {

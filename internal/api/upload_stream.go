@@ -19,6 +19,8 @@ const (
 	uploadCopyBufferSize = 256 << 10
 )
 
+var maxMediaUploadBytes int64 = 512 << 20
+
 type mediaUpload struct {
 	MediaID      string
 	Kind         string
@@ -107,10 +109,18 @@ func (s Server) saveUploadToDisk(r *http.Request) (_ mediaUpload, status int, er
 					return mediaUpload{}, http.StatusInternalServerError, err
 				}
 			}
-			size, copyErr := io.CopyBuffer(out, part, copyBuffer)
+			remainingBytes := maxMediaUploadBytes - int64(len(sniffed))
+			if remainingBytes < 0 {
+				_ = part.Close()
+				return mediaUpload{}, http.StatusRequestEntityTooLarge, fmt.Errorf("media file exceeds max size of %d bytes", maxMediaUploadBytes)
+			}
+			size, copyErr := io.CopyBuffer(out, io.LimitReader(part, remainingBytes+1), copyBuffer)
 			_ = part.Close()
 			if copyErr != nil {
 				return mediaUpload{}, http.StatusInternalServerError, copyErr
+			}
+			if size > remainingBytes {
+				return mediaUpload{}, http.StatusRequestEntityTooLarge, fmt.Errorf("media file exceeds max size of %d bytes", maxMediaUploadBytes)
 			}
 			if closeErr := out.Close(); closeErr != nil {
 				return mediaUpload{}, http.StatusInternalServerError, closeErr

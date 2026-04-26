@@ -372,6 +372,7 @@ paths:
   /media:
     post:
       summary: Upload a media file
+      description: Uploads are capped at 512 MiB.
       requestBody:
         required: true
         content:
@@ -395,6 +396,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/Media'
         '400':
+          $ref: '#/components/responses/Error'
+        '413':
           $ref: '#/components/responses/Error'
     get:
       summary: List uploaded media

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"mime"
 	"net/http"
 	"os"
@@ -82,6 +83,7 @@ func (s Server) mcpUploadMediaTool(ctx context.Context, _ *mcp.CallToolRequest, 
 		SizeBytes:    int64(len(content)),
 	})
 	if err != nil {
+		_ = removeFileQuiet(storagePath)
 		return nil, mcpUploadMediaOutput{}, err
 	}
 
@@ -102,9 +104,12 @@ func resolveMCPUploadContent(in mcpUploadMediaInput) ([]byte, string, error) {
 		return nil, "", fmt.Errorf("content_base64 is required")
 	}
 
-	decoded, err := base64.StdEncoding.DecodeString(base64Content)
+	decoded, err := io.ReadAll(io.LimitReader(base64.NewDecoder(base64.StdEncoding, strings.NewReader(base64Content)), maxMediaUploadBytes+1))
 	if err != nil {
 		return nil, "", fmt.Errorf("decode content_base64: %w", err)
+	}
+	if int64(len(decoded)) > maxMediaUploadBytes {
+		return nil, "", fmt.Errorf("media content exceeds max size of %d bytes", maxMediaUploadBytes)
 	}
 	if originalName == "" {
 		originalName = "upload.bin"
