@@ -77,7 +77,7 @@ func TestLinkedInPublishUsesArticlePostForFirstURLWithoutMedia(t *testing.T) {
 	defer server.Close()
 	serverURL = server.URL
 
-	provider := NewLinkedInProvider(LinkedInProviderConfig{APIBaseURL: server.URL})
+	provider := newUnsafeLinkedInArticleTestProvider(server.URL)
 	result, err := provider.Publish(context.Background(), domain.SocialAccount{
 		Platform:          domain.PlatformLinkedIn,
 		ExternalAccountID: "member_1",
@@ -139,7 +139,7 @@ func TestLinkedInPublishUsesFirstURLOnlyForArticleMode(t *testing.T) {
 	}))
 	defer server.Close()
 
-	provider := NewLinkedInProvider(LinkedInProviderConfig{APIBaseURL: server.URL})
+	provider := newUnsafeLinkedInArticleTestProvider(server.URL)
 	_, err := provider.Publish(context.Background(), domain.SocialAccount{
 		Platform:          domain.PlatformLinkedIn,
 		ExternalAccountID: "member_1",
@@ -183,7 +183,7 @@ func TestLinkedInPublishSkipsArticleModeWhenMediaExists(t *testing.T) {
 	serverURL = server.URL
 
 	imagePath := writeLinkedInTestFile(t, "media.jpg", []byte("image"))
-	provider := NewLinkedInProvider(LinkedInProviderConfig{APIBaseURL: server.URL})
+	provider := newUnsafeLinkedInArticleTestProvider(server.URL)
 	_, err := provider.Publish(context.Background(), domain.SocialAccount{
 		Platform:          domain.PlatformLinkedIn,
 		ExternalAccountID: "member_1",
@@ -233,7 +233,7 @@ func TestLinkedInPublishFallsBackToUGCWhenArticleTitleCannotBeDerived(t *testing
 	}))
 	defer server.Close()
 
-	provider := NewLinkedInProvider(LinkedInProviderConfig{APIBaseURL: server.URL})
+	provider := newUnsafeLinkedInArticleTestProvider(server.URL)
 	_, err := provider.Publish(context.Background(), domain.SocialAccount{
 		Platform:          domain.PlatformLinkedIn,
 		ExternalAccountID: "member_1",
@@ -277,7 +277,7 @@ func TestLinkedInPublishPublishesArticleWithoutThumbnailWhenImageUploadFails(t *
 	}))
 	defer server.Close()
 
-	provider := NewLinkedInProvider(LinkedInProviderConfig{APIBaseURL: server.URL})
+	provider := newUnsafeLinkedInArticleTestProvider(server.URL)
 	_, err := provider.Publish(context.Background(), domain.SocialAccount{
 		Platform:          domain.PlatformLinkedIn,
 		ExternalAccountID: "member_1",
@@ -300,6 +300,62 @@ func TestLinkedInPermalinkUsesUGCPostURNDirectly(t *testing.T) {
 	}
 }
 
+func TestLinkedInPublishDoesNotFetchPrivateArticleURL(t *testing.T) {
+	var sawPrivateArticleFetch bool
+	var sawUGC bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/private":
+			sawPrivateArticleFetch = true
+			w.Header().Set("Content-Type", "text/html")
+			_, _ = io.WriteString(w, `<html><head><title>private</title></head></html>`)
+		case r.URL.Path == "/v2/ugcPosts":
+			sawUGC = true
+			w.Header().Set("x-restli-id", "li_post_private_fallback")
+			w.WriteHeader(http.StatusCreated)
+		case r.URL.Path == "/v2/ugcPosts/li_post_private_fallback":
+			_, _ = io.WriteString(w, `{"permalink":"https://www.linkedin.com/feed/update/urn:li:activity:333/"}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	provider := NewLinkedInProvider(LinkedInProviderConfig{APIBaseURL: server.URL})
+	_, err := provider.Publish(context.Background(), domain.SocialAccount{
+		Platform:          domain.PlatformLinkedIn,
+		ExternalAccountID: "member_1",
+	}, Credentials{AccessToken: "token-1"}, domain.Post{
+		Text: "read " + server.URL + "/private",
+	}, PublishOptions{})
+	if err != nil {
+		t.Fatalf("publish fallback for private article url: %v", err)
+	}
+	if sawPrivateArticleFetch {
+		t.Fatalf("did not expect private article URL to be fetched")
+	}
+	if !sawUGC {
+		t.Fatalf("expected ugc fallback when article URL is blocked")
+	}
+}
+
+func TestValidateLinkedInArticleFetchURLRejectsUnsafeTargets(t *testing.T) {
+	tests := []string{
+		"http://127.0.0.1/article",
+		"http://[::1]/article",
+		"http://localhost/article",
+		"http://169.254.169.254/latest/meta-data",
+		"ftp://example.com/article",
+	}
+	for _, rawURL := range tests {
+		t.Run(rawURL, func(t *testing.T) {
+			if err := validateLinkedInArticleFetchURL(context.Background(), rawURL); err == nil {
+				t.Fatalf("expected %q to be rejected", rawURL)
+			}
+		})
+	}
+}
+
 func writeLinkedInTestFile(t *testing.T, name string, content []byte) string {
 	t.Helper()
 	path := t.TempDir() + "/" + name
@@ -307,6 +363,12 @@ func writeLinkedInTestFile(t *testing.T, name string, content []byte) string {
 		t.Fatalf("write %s: %v", name, err)
 	}
 	return path
+}
+
+func newUnsafeLinkedInArticleTestProvider(apiBaseURL string) *LinkedInProvider {
+	provider := NewLinkedInProvider(LinkedInProviderConfig{APIBaseURL: apiBaseURL})
+	provider.allowUnsafeArticleFetches = true
+	return provider
 }
 
 func assertLinkedInArticleFallback(t *testing.T, link func(serverURL string) string) {
@@ -326,7 +388,7 @@ func assertLinkedInArticleFallback(t *testing.T, link func(serverURL string) str
 	}))
 	defer server.Close()
 
-	provider := NewLinkedInProvider(LinkedInProviderConfig{APIBaseURL: server.URL})
+	provider := newUnsafeLinkedInArticleTestProvider(server.URL)
 	_, err := provider.Publish(context.Background(), domain.SocialAccount{
 		Platform:          domain.PlatformLinkedIn,
 		ExternalAccountID: "member_1",

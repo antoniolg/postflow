@@ -25,8 +25,9 @@ type LinkedInProviderConfig struct {
 }
 
 type LinkedInProvider struct {
-	cfg    LinkedInProviderConfig
-	client *http.Client
+	cfg                       LinkedInProviderConfig
+	client                    *http.Client
+	allowUnsafeArticleFetches bool
 }
 
 const linkedInOAuthScope = "openid profile w_member_social rw_organization_admin w_organization_social"

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"html"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -17,6 +18,7 @@ import (
 const (
 	linkedInArticleHTMLReadLimit  = 2 << 20
 	linkedInArticleImageReadLimit = 8 << 20
+	linkedInArticleRedirectLimit  = 10
 	linkedInArticleTitleMaxRunes  = 400
 	linkedInArticleTextMaxRunes   = 4086
 )
@@ -81,12 +83,11 @@ func (p *LinkedInProvider) tryPublishArticlePost(ctx context.Context, accessToke
 }
 
 func (p *LinkedInProvider) fetchArticleMetadata(ctx context.Context, rawURL string) (linkedInArticleMetadata, bool) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimSpace(rawURL), nil)
+	req, client, err := p.newArticleFetchRequest(ctx, rawURL, "text/html,application/xhtml+xml")
 	if err != nil {
 		return linkedInArticleMetadata{}, false
 	}
-	req.Header.Set("Accept", "text/html,application/xhtml+xml")
-	resp, err := p.client.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return linkedInArticleMetadata{}, false
 	}
@@ -98,8 +99,14 @@ func (p *LinkedInProvider) fetchArticleMetadata(ctx context.Context, rawURL stri
 	if contentType != "" && !strings.Contains(contentType, "text/html") && !strings.Contains(contentType, "application/xhtml+xml") {
 		return linkedInArticleMetadata{}, false
 	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, linkedInArticleHTMLReadLimit))
+	if resp.ContentLength > linkedInArticleHTMLReadLimit {
+		return linkedInArticleMetadata{}, false
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, linkedInArticleHTMLReadLimit+1))
 	if err != nil {
+		return linkedInArticleMetadata{}, false
+	}
+	if len(body) > linkedInArticleHTMLReadLimit {
 		return linkedInArticleMetadata{}, false
 	}
 	source := strings.TrimSpace(rawURL)
@@ -275,12 +282,11 @@ func (p *LinkedInProvider) uploadArticleThumbnail(ctx context.Context, ownerURN,
 }
 
 func (p *LinkedInProvider) fetchArticleImage(ctx context.Context, imageURL string) ([]byte, string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimSpace(imageURL), nil)
+	req, client, err := p.newArticleFetchRequest(ctx, imageURL, "image/*")
 	if err != nil {
 		return nil, "", err
 	}
-	req.Header.Set("Accept", "image/*")
-	resp, err := p.client.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, "", err
 	}
@@ -292,9 +298,15 @@ func (p *LinkedInProvider) fetchArticleImage(ctx context.Context, imageURL strin
 	if contentType != "" && !strings.HasPrefix(contentType, "image/") {
 		return nil, "", fmt.Errorf("thumbnail fetch returned non-image content type %q", contentType)
 	}
-	content, err := io.ReadAll(io.LimitReader(resp.Body, linkedInArticleImageReadLimit))
+	if resp.ContentLength > linkedInArticleImageReadLimit {
+		return nil, "", fmt.Errorf("thumbnail fetch exceeds max size")
+	}
+	content, err := io.ReadAll(io.LimitReader(resp.Body, linkedInArticleImageReadLimit+1))
 	if err != nil {
 		return nil, "", err
+	}
+	if len(content) > linkedInArticleImageReadLimit {
+		return nil, "", fmt.Errorf("thumbnail fetch exceeds max size")
 	}
 	if len(content) == 0 {
 		return nil, "", fmt.Errorf("thumbnail fetch returned empty body")
@@ -306,6 +318,108 @@ func (p *LinkedInProvider) fetchArticleImage(ctx context.Context, imageURL strin
 		return nil, "", fmt.Errorf("thumbnail content is not an image")
 	}
 	return content, contentType, nil
+}
+
+func (p *LinkedInProvider) newArticleFetchRequest(ctx context.Context, rawURL, accept string) (*http.Request, *http.Client, error) {
+	rawURL = strings.TrimSpace(rawURL)
+	if !p.allowUnsafeArticleFetches {
+		if err := validateLinkedInArticleFetchURL(ctx, rawURL); err != nil {
+			return nil, nil, err
+		}
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	if accept != "" {
+		req.Header.Set("Accept", accept)
+	}
+	return req, p.articleFetchClient(), nil
+}
+
+func (p *LinkedInProvider) articleFetchClient() *http.Client {
+	if p.allowUnsafeArticleFetches {
+		return p.client
+	}
+	base := p.client
+	if base == nil {
+		base = http.DefaultClient
+	}
+	client := *base
+	previousCheckRedirect := base.CheckRedirect
+	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if len(via) >= linkedInArticleRedirectLimit {
+			return fmt.Errorf("article fetch stopped after %d redirects", linkedInArticleRedirectLimit)
+		}
+		if req == nil || req.URL == nil {
+			return fmt.Errorf("article fetch redirect missing url")
+		}
+		if err := validateLinkedInArticleFetchURL(req.Context(), req.URL.String()); err != nil {
+			return err
+		}
+		if previousCheckRedirect != nil {
+			return previousCheckRedirect(req, via)
+		}
+		return nil
+	}
+	return &client
+}
+
+func validateLinkedInArticleFetchURL(ctx context.Context, rawURL string) error {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil {
+		return err
+	}
+	if parsed == nil {
+		return fmt.Errorf("article fetch url is empty")
+	}
+	scheme := strings.ToLower(strings.TrimSpace(parsed.Scheme))
+	if scheme != "http" && scheme != "https" {
+		return fmt.Errorf("article fetch url scheme %q is not allowed", parsed.Scheme)
+	}
+	host := strings.TrimSpace(parsed.Hostname())
+	if host == "" {
+		return fmt.Errorf("article fetch url host is empty")
+	}
+	return validateLinkedInArticleHost(ctx, host)
+}
+
+func validateLinkedInArticleHost(ctx context.Context, host string) error {
+	host = strings.TrimSpace(host)
+	if host == "" {
+		return fmt.Errorf("article fetch url host is empty")
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		if isUnsafeLinkedInArticleIP(ip) {
+			return fmt.Errorf("article fetch host resolves to private address")
+		}
+		return nil
+	}
+	addrs, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	if err != nil {
+		return err
+	}
+	if len(addrs) == 0 {
+		return fmt.Errorf("article fetch host has no resolved addresses")
+	}
+	for _, addr := range addrs {
+		if isUnsafeLinkedInArticleIP(addr.IP) {
+			return fmt.Errorf("article fetch host resolves to private address")
+		}
+	}
+	return nil
+}
+
+func isUnsafeLinkedInArticleIP(ip net.IP) bool {
+	if ip == nil {
+		return true
+	}
+	return ip.IsUnspecified() ||
+		ip.IsLoopback() ||
+		ip.IsPrivate() ||
+		ip.IsLinkLocalUnicast() ||
+		ip.IsLinkLocalMulticast() ||
+		ip.IsMulticast()
 }
 
 func (p *LinkedInProvider) publishArticlePost(ctx context.Context, actorURN, accessToken, postText string, meta linkedInArticleMetadata) (PublishResult, error) {
