@@ -58,6 +58,7 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("GET /media", s.handleListMedia)
 	mux.HandleFunc("GET /media/{id}/content", s.handleMediaContent)
 	mux.HandleFunc("GET /media/{id}/content/{filename}", s.handleMediaContent)
+	mux.HandleFunc("GET /media/{id}/content/{exp}/{sig}/{filename}", s.handleMediaContent)
 	mux.HandleFunc("DELETE /media/{id}", s.handleDeleteMedia)
 	mux.HandleFunc("POST /media/{id}/delete", s.handleDeleteMediaForm)
 	mux.HandleFunc("POST /media/purge", s.handlePurgeMediaForm)
@@ -89,7 +90,7 @@ func (s Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 
 func (s Server) handleRobotsTXT(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	_, _ = w.Write([]byte("User-agent: *\nAllow: /media/\nDisallow: /\n"))
+	_, _ = w.Write([]byte("User-agent: *\nAllow: /\n"))
 }
 
 func (s Server) appVersion() string {

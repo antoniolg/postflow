@@ -171,17 +171,21 @@ func buildSignedMediaURLBuilder(baseURL string, cipher *secure.Cipher) func(medi
 		if mediaID == "" {
 			return "", fmt.Errorf("media id is required")
 		}
-		expiration := time.Now().UTC().Add(20 * time.Minute).Unix()
+		expiration := time.Now().UTC().Add(24 * time.Hour).Unix()
 		payload := fmt.Sprintf("%s:%d", mediaID, expiration)
 		signature := cipher.SignString(payload)
 		if signature == "" {
 			return "", fmt.Errorf("unable to sign media url")
 		}
-		query := url.Values{}
-		query.Set("exp", strconv.FormatInt(expiration, 10))
-		query.Set("sig", signature)
 		filename := signedMediaFilename(media)
-		return fmt.Sprintf("%s/media/%s/content/%s?%s", base, url.PathEscape(mediaID), url.PathEscape(filename), query.Encode()), nil
+		return fmt.Sprintf(
+			"%s/media/%s/content/%s/%s/%s",
+			base,
+			url.PathEscape(mediaID),
+			url.PathEscape(strconv.FormatInt(expiration, 10)),
+			url.PathEscape(signature),
+			url.PathEscape(filename),
+		), nil
 	}
 }
 

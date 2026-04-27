@@ -321,10 +321,16 @@ func parseMediaContentPath(path string) (mediaID string, ok bool) {
 		return "", false
 	}
 	parts := strings.Split(strings.TrimPrefix(trimmed, "/media/"), "/")
-	if len(parts) < 2 || len(parts) > 3 || parts[1] != "content" {
+	if len(parts) != 2 && len(parts) != 3 && len(parts) != 5 {
+		return "", false
+	}
+	if parts[1] != "content" {
 		return "", false
 	}
 	if len(parts) == 3 && strings.TrimSpace(parts[2]) == "" {
+		return "", false
+	}
+	if len(parts) == 5 && (strings.TrimSpace(parts[2]) == "" || strings.TrimSpace(parts[3]) == "" || strings.TrimSpace(parts[4]) == "") {
 		return "", false
 	}
 	mediaID = strings.TrimSpace(parts[0])
@@ -332,6 +338,18 @@ func parseMediaContentPath(path string) (mediaID string, ok bool) {
 		return "", false
 	}
 	return mediaID, true
+}
+
+func signedMediaPathCredentials(path string) (expRaw, sig string) {
+	trimmed := strings.TrimSpace(path)
+	if !strings.HasPrefix(trimmed, "/media/") {
+		return "", ""
+	}
+	parts := strings.Split(strings.TrimPrefix(trimmed, "/media/"), "/")
+	if len(parts) != 5 || parts[1] != "content" {
+		return "", ""
+	}
+	return strings.TrimSpace(parts[2]), strings.TrimSpace(parts[3])
 }
 
 func isOAuthCallbackPath(path string) bool {
@@ -346,6 +364,9 @@ func (s Server) signedMediaAccessAllowed(r *http.Request, mediaID string) bool {
 	expRaw := strings.TrimSpace(r.URL.Query().Get("exp"))
 	sig := strings.TrimSpace(r.URL.Query().Get("sig"))
 	if expRaw == "" || sig == "" {
+		expRaw, sig = signedMediaPathCredentials(r.URL.Path)
+	}
+	if expRaw == "" || sig == "" {
 		return false
 	}
 	expUnix, err := strconv.ParseInt(expRaw, 10, 64)
@@ -356,7 +377,7 @@ func (s Server) signedMediaAccessAllowed(r *http.Request, mediaID string) bool {
 	if expUnix < nowUnix {
 		return false
 	}
-	if expUnix > nowUnix+int64(60*60) {
+	if expUnix > nowUnix+int64(24*60*60) {
 		return false
 	}
 	payload := fmt.Sprintf("%s:%d", strings.TrimSpace(mediaID), expUnix)

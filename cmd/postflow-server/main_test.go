@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/antoniolg/postflow/internal/domain"
@@ -34,13 +35,17 @@ func TestBuildSignedMediaURLBuilderIncludesStableExtension(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse media url: %v", err)
 	}
-	if parsed.Path != "/media/med_1/content/med_1.jpg" {
-		t.Fatalf("expected media URL path to include stable extension, got %q", parsed.Path)
+	parts := strings.Split(parsed.Path, "/")
+	if len(parts) != 7 || parts[1] != "media" || parts[2] != "med_1" || parts[3] != "content" || parts[6] != "med_1.jpg" {
+		t.Fatalf("expected signed media URL path with stable extension, got %q", parsed.Path)
 	}
-	exp := parsed.Query().Get("exp")
-	sig := parsed.Query().Get("sig")
+	exp := parts[4]
+	sig := parts[5]
 	if exp == "" || sig == "" {
-		t.Fatalf("expected signed query params, got %q", parsed.RawQuery)
+		t.Fatalf("expected signed path credentials, got %q", parsed.Path)
+	}
+	if parsed.RawQuery != "" {
+		t.Fatalf("did not expect media URL query string, got %q", parsed.RawQuery)
 	}
 	if !cipher.VerifyString("med_1:"+exp, sig) {
 		t.Fatalf("expected valid signature for media URL")

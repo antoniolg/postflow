@@ -223,6 +223,47 @@ func TestAuthMiddlewareAllowsSignedMediaContentURLWithFilename(t *testing.T) {
 	}
 }
 
+func TestAuthMiddlewareAllowsPathSignedMediaContentURL(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	mediaPath := filepath.Join(tempDir, "review.jpg")
+	if err := os.WriteFile(mediaPath, []byte("hello"), 0o644); err != nil {
+		t.Fatalf("write media file: %v", err)
+	}
+	created, err := store.CreateMedia(t.Context(), domain.Media{
+		Kind:         "image",
+		OriginalName: "review.jpg",
+		StoragePath:  mediaPath,
+		MimeType:     "image/jpeg",
+		SizeBytes:    5,
+	})
+	if err != nil {
+		t.Fatalf("create media: %v", err)
+	}
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3, APIToken: "secret-token"}
+	h := srv.Handler()
+
+	exp := time.Now().UTC().Add(24 * time.Hour).Unix()
+	payload := fmt.Sprintf("%s:%d", created.ID, exp)
+	sig := srv.credentialsCipher().SignString(payload)
+
+	req := httptest.NewRequest(http.MethodGet, "/media/"+created.ID+"/content/"+fmt.Sprintf("%d", exp)+"/"+sig+"/"+created.ID+".jpg", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 with path signed media url, got %d", w.Code)
+	}
+	if got := w.Header().Get("Content-Type"); !strings.Contains(got, "image/jpeg") {
+		t.Fatalf("expected image/jpeg content type, got %q", got)
+	}
+}
+
 func TestRobotsTXTIsPublicWhenAuthEnabled(t *testing.T) {
 	tempDir := t.TempDir()
 	store, err := db.Open(filepath.Join(tempDir, "test.db"))
@@ -248,8 +289,8 @@ func TestRobotsTXTIsPublicWhenAuthEnabled(t *testing.T) {
 		t.Fatalf("expected public robots.txt, got %d", w.Code)
 	}
 	body := w.Body.String()
-	if !strings.Contains(body, "Allow: /media/") {
-		t.Fatalf("expected robots.txt to allow media, got %q", body)
+	if !strings.Contains(body, "Allow: /") {
+		t.Fatalf("expected robots.txt to allow crawlers, got %q", body)
 	}
 }
 
