@@ -88,6 +88,10 @@ func (s Server) authMiddleware(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
+		if isPublicUploadPath(r.URL.Path) {
+			next.ServeHTTP(w, r)
+			return
+		}
 		if isOAuthCallbackPath(r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return
@@ -150,6 +154,11 @@ func (s Server) authMiddleware(next http.Handler) http.Handler {
 func isPublicAssetPath(path string) bool {
 	trimmed := strings.TrimSpace(path)
 	return strings.HasPrefix(trimmed, "/assets/")
+}
+
+func isPublicUploadPath(path string) bool {
+	trimmed := strings.TrimSpace(path)
+	return strings.HasPrefix(trimmed, "/uploads/")
 }
 
 func isLocalAuthPublicPath(path string) bool {

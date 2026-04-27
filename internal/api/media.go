@@ -170,6 +170,9 @@ func (s Server) handleMediaContent(w http.ResponseWriter, r *http.Request) {
 	if item.MimeType != "" {
 		w.Header().Set("Content-Type", item.MimeType)
 	}
+	if strings.HasPrefix(r.URL.Path, "/uploads/") {
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	}
 	http.ServeFile(w, r, item.StoragePath)
 }
 

@@ -74,7 +74,7 @@ Notes:
 - In Coolify, configure secrets in the service environment UI, not in a committed `.env`.
 - In Coolify, mark `OWNER_PASSWORD_HASH` as a literal value (`isLiteral`) so the `$` characters in the bcrypt hash are not expanded.
 - For ChatGPT MCP usage, PostFlow keeps `tools/call` protected with OAuth, but allows MCP handshake/discovery requests (`initialize`, `notifications/initialized`, `ping`, `tools/list`) without auth to avoid reconnect loops during setup.
-- For Instagram publishing, keep `PUBLIC_BASE_URL` reachable by Meta crawlers. PostFlow serves signed media URLs under `/media/` and a public `robots.txt` that allows that path; do not add proxy-level auth or bot rules that block either one.
+- For Instagram publishing, keep `PUBLIC_BASE_URL` reachable by Meta crawlers. PostFlow serves public media URLs under `/uploads/` plus a public `robots.txt`; do not add proxy-level auth or bot rules that block either one.
 
 ## 3) Post-deploy smoke test
 

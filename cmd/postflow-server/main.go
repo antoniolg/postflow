@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -148,7 +147,7 @@ func buildProviderRegistry(cfg config.Config, cipher *secure.Cipher) (*postflow.
 		metaCfg := postflow.MetaProviderConfig{
 			AppID:           cfg.Meta.AppID,
 			AppSecret:       cfg.Meta.AppSecret,
-			MediaURLBuilder: buildSignedMediaURLBuilder(cfg.PublicBaseURL, cipher),
+			MediaURLBuilder: buildPublicMediaURLBuilder(cfg.PublicBaseURL),
 		}
 		facebookProvider := postflow.NewFacebookProvider(metaCfg)
 		instagramProvider := postflow.NewInstagramProvider(metaCfg)
@@ -158,10 +157,7 @@ func buildProviderRegistry(cfg config.Config, cipher *secure.Cipher) (*postflow.
 	}
 }
 
-func buildSignedMediaURLBuilder(baseURL string, cipher *secure.Cipher) func(media domain.Media) (string, error) {
-	if cipher == nil {
-		return nil
-	}
+func buildPublicMediaURLBuilder(baseURL string) func(media domain.Media) (string, error) {
 	base := strings.TrimRight(strings.TrimSpace(baseURL), "/")
 	if base == "" {
 		return nil
@@ -171,19 +167,11 @@ func buildSignedMediaURLBuilder(baseURL string, cipher *secure.Cipher) func(medi
 		if mediaID == "" {
 			return "", fmt.Errorf("media id is required")
 		}
-		expiration := time.Now().UTC().Add(24 * time.Hour).Unix()
-		payload := fmt.Sprintf("%s:%d", mediaID, expiration)
-		signature := cipher.SignString(payload)
-		if signature == "" {
-			return "", fmt.Errorf("unable to sign media url")
-		}
 		filename := signedMediaFilename(media)
 		return fmt.Sprintf(
-			"%s/media/%s/content/%s/%s/%s",
+			"%s/uploads/%s/%s",
 			base,
 			url.PathEscape(mediaID),
-			url.PathEscape(strconv.FormatInt(expiration, 10)),
-			url.PathEscape(signature),
 			url.PathEscape(filename),
 		), nil
 	}

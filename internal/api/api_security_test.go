@@ -264,6 +264,46 @@ func TestAuthMiddlewareAllowsPathSignedMediaContentURL(t *testing.T) {
 	}
 }
 
+func TestAuthMiddlewareAllowsPublicUploadsMediaURL(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	mediaPath := filepath.Join(tempDir, "review.jpg")
+	if err := os.WriteFile(mediaPath, []byte("hello"), 0o644); err != nil {
+		t.Fatalf("write media file: %v", err)
+	}
+	created, err := store.CreateMedia(t.Context(), domain.Media{
+		Kind:         "image",
+		OriginalName: "review.jpg",
+		StoragePath:  mediaPath,
+		MimeType:     "image/jpeg",
+		SizeBytes:    5,
+	})
+	if err != nil {
+		t.Fatalf("create media: %v", err)
+	}
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3, APIToken: "secret-token"}
+	h := srv.Handler()
+
+	req := httptest.NewRequest(http.MethodGet, "/uploads/"+created.ID+"/"+created.ID+".jpg", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for public uploads media url, got %d", w.Code)
+	}
+	if got := w.Header().Get("Content-Type"); !strings.Contains(got, "image/jpeg") {
+		t.Fatalf("expected image/jpeg content type, got %q", got)
+	}
+	if got := w.Header().Get("Cache-Control"); !strings.Contains(got, "public") {
+		t.Fatalf("expected public cache control, got %q", got)
+	}
+}
+
 func TestRobotsTXTIsPublicWhenAuthEnabled(t *testing.T) {
 	tempDir := t.TempDir()
 	store, err := db.Open(filepath.Join(tempDir, "test.db"))

@@ -59,6 +59,7 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("GET /media/{id}/content", s.handleMediaContent)
 	mux.HandleFunc("GET /media/{id}/content/{filename}", s.handleMediaContent)
 	mux.HandleFunc("GET /media/{id}/content/{exp}/{sig}/{filename}", s.handleMediaContent)
+	mux.HandleFunc("GET /uploads/{id}/{filename}", s.handleMediaContent)
 	mux.HandleFunc("DELETE /media/{id}", s.handleDeleteMedia)
 	mux.HandleFunc("POST /media/{id}/delete", s.handleDeleteMediaForm)
 	mux.HandleFunc("POST /media/purge", s.handlePurgeMediaForm)
