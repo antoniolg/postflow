@@ -37,6 +37,7 @@ func (s Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mcpHandler := s.newMCPHandler()
 	mux.HandleFunc("GET /healthz", s.handleHealthz)
+	mux.HandleFunc("GET /robots.txt", s.handleRobotsTXT)
 	mux.Handle("GET /assets/", http.StripPrefix("/assets/", uiAssetsHandler()))
 	mux.HandleFunc("GET /login", s.handleLoginPage)
 	mux.HandleFunc("POST /login", s.handleLoginSubmit)
@@ -56,6 +57,7 @@ func (s Server) Handler() http.Handler {
 	mux.Handle("DELETE /mcp/", mcpHandler)
 	mux.HandleFunc("GET /media", s.handleListMedia)
 	mux.HandleFunc("GET /media/{id}/content", s.handleMediaContent)
+	mux.HandleFunc("GET /media/{id}/content/{filename}", s.handleMediaContent)
 	mux.HandleFunc("DELETE /media/{id}", s.handleDeleteMedia)
 	mux.HandleFunc("POST /media/{id}/delete", s.handleDeleteMediaForm)
 	mux.HandleFunc("POST /media/purge", s.handlePurgeMediaForm)
@@ -83,6 +85,11 @@ func (s Server) Handler() http.Handler {
 
 func (s Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (s Server) handleRobotsTXT(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	_, _ = w.Write([]byte("User-agent: *\nAllow: /media/\nDisallow: /\n"))
 }
 
 func (s Server) appVersion() string {

@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -179,6 +180,52 @@ func buildSignedMediaURLBuilder(baseURL string, cipher *secure.Cipher) func(medi
 		query := url.Values{}
 		query.Set("exp", strconv.FormatInt(expiration, 10))
 		query.Set("sig", signature)
-		return fmt.Sprintf("%s/media/%s/content?%s", base, url.PathEscape(mediaID), query.Encode()), nil
+		filename := signedMediaFilename(media)
+		return fmt.Sprintf("%s/media/%s/content/%s?%s", base, url.PathEscape(mediaID), url.PathEscape(filename), query.Encode()), nil
 	}
+}
+
+func signedMediaFilename(media domain.Media) string {
+	mediaID := strings.TrimSpace(media.ID)
+	if mediaID == "" {
+		mediaID = "media"
+	}
+	return mediaID + preferredSignedMediaExtension(media)
+}
+
+func preferredSignedMediaExtension(media domain.Media) string {
+	mimeType := strings.ToLower(strings.TrimSpace(media.MimeType))
+	if i := strings.Index(mimeType, ";"); i >= 0 {
+		mimeType = strings.TrimSpace(mimeType[:i])
+	}
+	switch mimeType {
+	case "image/jpeg", "image/jpg", "image/pjpeg":
+		return ".jpg"
+	case "image/png":
+		return ".png"
+	case "video/mp4":
+		return ".mp4"
+	case "video/quicktime":
+		return ".mov"
+	}
+	for _, raw := range []string{media.OriginalName, media.StoragePath} {
+		ext := strings.ToLower(strings.TrimSpace(filepath.Ext(strings.TrimSpace(raw))))
+		if isSafeSignedMediaExtension(ext) {
+			return ext
+		}
+	}
+	return ""
+}
+
+func isSafeSignedMediaExtension(ext string) bool {
+	if ext == "" || !strings.HasPrefix(ext, ".") {
+		return false
+	}
+	for _, r := range ext[1:] {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			continue
+		}
+		return false
+	}
+	return true
 }

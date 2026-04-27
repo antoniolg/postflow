@@ -80,6 +80,10 @@ func (s Server) authMiddleware(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
+		if r.URL.Path == "/robots.txt" {
+			next.ServeHTTP(w, r)
+			return
+		}
 		if isPublicAssetPath(r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return
@@ -313,12 +317,18 @@ func tokenMatches(r *http.Request, expected string) bool {
 
 func parseMediaContentPath(path string) (mediaID string, ok bool) {
 	trimmed := strings.TrimSpace(path)
-	if !strings.HasPrefix(trimmed, "/media/") || !strings.HasSuffix(trimmed, "/content") {
+	if !strings.HasPrefix(trimmed, "/media/") {
 		return "", false
 	}
-	mediaID = strings.TrimSuffix(strings.TrimPrefix(trimmed, "/media/"), "/content")
-	mediaID = strings.TrimSpace(mediaID)
-	if mediaID == "" || strings.Contains(mediaID, "/") {
+	parts := strings.Split(strings.TrimPrefix(trimmed, "/media/"), "/")
+	if len(parts) < 2 || len(parts) > 3 || parts[1] != "content" {
+		return "", false
+	}
+	if len(parts) == 3 && strings.TrimSpace(parts[2]) == "" {
+		return "", false
+	}
+	mediaID = strings.TrimSpace(parts[0])
+	if mediaID == "" {
 		return "", false
 	}
 	return mediaID, true
