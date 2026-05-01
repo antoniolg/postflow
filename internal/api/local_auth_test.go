@@ -519,6 +519,70 @@ func TestLocalAuthAllowsAnonymousMCPDiscoveryButProtectsToolCalls(t *testing.T) 
 	}
 }
 
+func TestLocalOAuthBearerRequiresMCPScope(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte("super-secret"), bcrypt.MinCost)
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	owner, err := store.UpsertLocalOwnerBootstrap(t.Context(), "owner@example.com", string(passwordHash))
+	if err != nil {
+		t.Fatalf("bootstrap owner: %v", err)
+	}
+	clientRec, err := store.RegisterOAuthClient(t.Context(), []string{"https://chatgpt.example/callback"})
+	if err != nil {
+		t.Fatalf("register oauth client: %v", err)
+	}
+	accessToken, _, _, err := store.CreateOAuthToken(t.Context(), db.CreateOAuthTokenParams{
+		ClientID:   clientRec.ClientID,
+		OwnerID:    owner.ID,
+		Scope:      "offline_access",
+		AccessTTL:  localOAuthAccessTTL,
+		RefreshTTL: localOAuthRefreshTTL,
+	})
+	if err != nil {
+		t.Fatalf("create oauth token: %v", err)
+	}
+
+	srv := Server{
+		Store:             store,
+		DataDir:           tempDir,
+		DefaultMaxRetries: 3,
+		LocalAuthEnabled:  true,
+		PublicBaseURL:     "https://postflow.example",
+	}
+	httpServer := httptest.NewServer(srv.Handler())
+	defer httpServer.Close()
+
+	toolCallBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"postflow_health","arguments":{}}}`
+	req, err := http.NewRequest(http.MethodPost, httpServer.URL+"/mcp", strings.NewReader(toolCallBody))
+	if err != nil {
+		t.Fatalf("build mcp tools/call request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("call mcp with non-mcp oauth bearer: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected non-mcp scoped bearer to be rejected, got %d body=%s", resp.StatusCode, string(body))
+	}
+	if got := resp.Header.Get("WWW-Authenticate"); !strings.Contains(got, `scope="mcp"`) {
+		t.Fatalf("expected WWW-Authenticate to advertise mcp scope, got %q", got)
+	}
+}
+
 func TestLocalAuthSessionAllowsMediaPreviewWithoutBasicPrompt(t *testing.T) {
 	tempDir := t.TempDir()
 	store, err := db.Open(filepath.Join(tempDir, "test.db"))

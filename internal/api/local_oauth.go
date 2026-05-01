@@ -304,8 +304,11 @@ func (s Server) oauthAccessTokenMatches(r *http.Request) bool {
 	if token == "" {
 		return false
 	}
-	_, err := s.Store.GetOAuthTokenByAccessToken(r.Context(), token)
-	return err == nil
+	tokenRec, err := s.Store.GetOAuthTokenByAccessToken(r.Context(), token)
+	if err != nil {
+		return false
+	}
+	return oauthScopeContains(tokenRec.Scope, "mcp")
 }
 
 func (s Server) publicBaseURL(r *http.Request) string {
@@ -381,6 +384,19 @@ func normalizeOAuthScope(raw string) string {
 		return "mcp"
 	}
 	return strings.Join(strings.Fields(raw), " ")
+}
+
+func oauthScopeContains(scope, required string) bool {
+	required = strings.TrimSpace(required)
+	if required == "" {
+		return false
+	}
+	for _, item := range strings.Fields(scope) {
+		if item == required {
+			return true
+		}
+	}
+	return false
 }
 
 func oauthWWWAuthenticateHeader(r *http.Request, base string) string {
