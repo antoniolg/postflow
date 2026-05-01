@@ -47,6 +47,7 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("GET /.well-known/oauth-protected-resource", s.handleOAuthProtectedResourceMetadata)
 	mux.HandleFunc("GET /.well-known/oauth-protected-resource/mcp", s.handleOAuthProtectedResourceMetadata)
 	mux.HandleFunc("GET /authorize", s.handleOAuthAuthorize)
+	mux.HandleFunc("POST /authorize", s.handleOAuthAuthorize)
 	mux.HandleFunc("POST /token", s.handleOAuthToken)
 	mux.HandleFunc("POST /oauth/register", s.handleOAuthRegisterClient)
 	mux.Handle("GET /mcp", mcpHandler)

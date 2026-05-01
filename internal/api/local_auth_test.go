@@ -236,6 +236,35 @@ func TestLocalOAuthAuthorizationCodeFlowUnlocksMCP(t *testing.T) {
 		t.Fatalf("authorize with session: %v", err)
 	}
 	defer authorizeResp.Body.Close()
+	if authorizeResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(authorizeResp.Body)
+		t.Fatalf("expected authorize consent page, got %d body=%s", authorizeResp.StatusCode, string(body))
+	}
+	consentBody, _ := io.ReadAll(authorizeResp.Body)
+	approvalToken := hiddenInputValue(string(consentBody), "approval_token")
+	if approvalToken == "" {
+		t.Fatalf("expected authorization approval token in consent page")
+	}
+	approveForm := url.Values{}
+	approveForm.Set("response_type", "code")
+	approveForm.Set("client_id", registered.ClientID)
+	approveForm.Set("redirect_uri", "https://chatgpt.example/callback")
+	approveForm.Set("code_challenge", challenge)
+	approveForm.Set("code_challenge_method", "S256")
+	approveForm.Set("scope", "mcp")
+	approveForm.Set("state", "state123")
+	approveForm.Set("approval_token", approvalToken)
+	approveReq, err := http.NewRequest(http.MethodPost, httpServer.URL+"/authorize", strings.NewReader(approveForm.Encode()))
+	if err != nil {
+		t.Fatalf("build approve request: %v", err)
+	}
+	approveReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	approveReq.AddCookie(&http.Cookie{Name: localSessionCookieName, Value: sessionCookie})
+	authorizeResp, err = client.Do(approveReq)
+	if err != nil {
+		t.Fatalf("approve authorization: %v", err)
+	}
+	defer authorizeResp.Body.Close()
 	if authorizeResp.StatusCode != http.StatusFound {
 		body, _ := io.ReadAll(authorizeResp.Body)
 		t.Fatalf("expected authorize redirect with code, got %d body=%s", authorizeResp.StatusCode, string(body))
@@ -361,6 +390,53 @@ func TestLocalOAuthMetadataAdvertisesOfflineAccess(t *testing.T) {
 	}
 	if !containsString(payload.ScopesSupported, "offline_access") {
 		t.Fatalf("expected metadata to advertise offline_access scope, got %v", payload.ScopesSupported)
+	}
+}
+
+func TestLocalOAuthAuthorizeRequiresConsentPost(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte("super-secret"), bcrypt.MinCost)
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	owner, err := store.UpsertLocalOwnerBootstrap(t.Context(), "owner@example.com", string(passwordHash))
+	if err != nil {
+		t.Fatalf("bootstrap owner: %v", err)
+	}
+	sessionToken, _, err := store.CreateWebSession(t.Context(), owner.ID, localSessionTTL)
+	if err != nil {
+		t.Fatalf("create web session: %v", err)
+	}
+	clientRec, err := store.RegisterOAuthClient(t.Context(), []string{"https://attacker.example/callback"})
+	if err != nil {
+		t.Fatalf("register oauth client: %v", err)
+	}
+
+	srv := Server{Store: store, DataDir: tempDir, LocalAuthEnabled: true}
+	h := srv.Handler()
+	verifier := "csrf-verifier"
+	sum := sha256.Sum256([]byte(verifier))
+	challenge := base64.RawURLEncoding.EncodeToString(sum[:])
+	path := "/authorize?response_type=code&client_id=" + url.QueryEscape(clientRec.ClientID) + "&redirect_uri=" + url.QueryEscape("https://attacker.example/callback") + "&code_challenge=" + url.QueryEscape(challenge) + "&code_challenge_method=S256&scope=mcp&state=csrf"
+
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	req.AddCookie(&http.Cookie{Name: localSessionCookieName, Value: sessionToken})
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected consent page instead of redirect, got %d body=%s", w.Code, w.Body.String())
+	}
+	if loc := w.Header().Get("Location"); loc != "" {
+		t.Fatalf("did not expect authorization code redirect on GET, got %q", loc)
+	}
+	if !strings.Contains(w.Body.String(), "Authorize MCP access") {
+		t.Fatalf("expected consent UI, got %s", w.Body.String())
 	}
 }
 
@@ -512,6 +588,25 @@ func cookieValue(t *testing.T, cookies []*http.Cookie, name string) string {
 		}
 	}
 	return ""
+}
+
+func hiddenInputValue(html, name string) string {
+	marker := `name="` + name + `"`
+	idx := strings.Index(html, marker)
+	if idx < 0 {
+		return ""
+	}
+	valueMarker := `value="`
+	valueIdx := strings.Index(html[idx:], valueMarker)
+	if valueIdx < 0 {
+		return ""
+	}
+	start := idx + valueIdx + len(valueMarker)
+	end := strings.Index(html[start:], `"`)
+	if end < 0 {
+		return ""
+	}
+	return html[start : start+end]
 }
 
 func containsString(values []string, expected string) bool {

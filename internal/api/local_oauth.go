@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"html/template"
 	"net/http"
 	"net/url"
 	"strings"
@@ -18,6 +19,17 @@ const (
 	localOAuthRefreshTTL = 30 * 24 * time.Hour
 	localOAuthCodeTTL    = 10 * time.Minute
 )
+
+type authorizePageData struct {
+	ResponseType        string
+	ClientID            string
+	RedirectURI         string
+	CodeChallenge       string
+	CodeChallengeMethod string
+	Scope               string
+	State               string
+	ApprovalToken       string
+}
 
 func (s Server) handleOAuthAuthorizationServerMetadata(w http.ResponseWriter, r *http.Request) {
 	base := s.publicBaseURL(r)
@@ -84,22 +96,34 @@ func (s Server) handleOAuthAuthorize(w http.ResponseWriter, r *http.Request) {
 		writeOAuthError(w, http.StatusServiceUnavailable, "server_error", "local owner auth is not configured")
 		return
 	}
-	owner, _, err := s.currentOwnerFromSession(r)
+	if r.Method != http.MethodGet && r.Method != http.MethodPost {
+		w.Header().Set("Allow", "GET, POST")
+		writeOAuthError(w, http.StatusMethodNotAllowed, "invalid_request", "method is not allowed")
+		return
+	}
+	owner, session, err := s.currentOwnerFromSession(r)
 	if err != nil {
 		http.Redirect(w, r, "/login?return_to="+url.QueryEscape(sanitizeReturnTo(r.URL.RequestURI())), http.StatusSeeOther)
 		return
 	}
-	query := r.URL.Query()
-	if strings.TrimSpace(query.Get("response_type")) != "code" {
+	values := r.URL.Query()
+	if r.Method == http.MethodPost {
+		if err := r.ParseForm(); err != nil {
+			writeOAuthError(w, http.StatusBadRequest, "invalid_request", "invalid form body")
+			return
+		}
+		values = r.Form
+	}
+	if strings.TrimSpace(values.Get("response_type")) != "code" {
 		writeOAuthError(w, http.StatusBadRequest, "unsupported_response_type", "response_type must be code")
 		return
 	}
-	clientID := strings.TrimSpace(query.Get("client_id"))
-	redirectURI := strings.TrimSpace(query.Get("redirect_uri"))
-	codeChallenge := strings.TrimSpace(query.Get("code_challenge"))
-	codeChallengeMethod := strings.TrimSpace(query.Get("code_challenge_method"))
-	scope := normalizeOAuthScope(strings.TrimSpace(query.Get("scope")))
-	state := strings.TrimSpace(query.Get("state"))
+	clientID := strings.TrimSpace(values.Get("client_id"))
+	redirectURI := strings.TrimSpace(values.Get("redirect_uri"))
+	codeChallenge := strings.TrimSpace(values.Get("code_challenge"))
+	codeChallengeMethod := strings.TrimSpace(values.Get("code_challenge_method"))
+	scope := normalizeOAuthScope(strings.TrimSpace(values.Get("scope")))
+	state := strings.TrimSpace(values.Get("state"))
 	client, err := s.Store.GetOAuthClientByClientID(r.Context(), clientID)
 	if err != nil {
 		writeOAuthError(w, http.StatusBadRequest, "invalid_client", "unknown client_id")
@@ -115,6 +139,24 @@ func (s Server) handleOAuthAuthorize(w http.ResponseWriter, r *http.Request) {
 	}
 	if codeChallenge == "" {
 		writeOAuthError(w, http.StatusBadRequest, "invalid_request", "code_challenge is required")
+		return
+	}
+	approval := authorizePageData{
+		ResponseType:        "code",
+		ClientID:            client.ClientID,
+		RedirectURI:         redirectURI,
+		CodeChallenge:       codeChallenge,
+		CodeChallengeMethod: "S256",
+		Scope:               scope,
+		State:               state,
+	}
+	approval.ApprovalToken = s.authorizeApprovalToken(session.ID, approval)
+	if r.Method == http.MethodGet {
+		s.renderAuthorizePage(w, approval)
+		return
+	}
+	if !s.authorizeApprovalTokenValid(session.ID, approval, strings.TrimSpace(values.Get("approval_token"))) {
+		writeOAuthError(w, http.StatusBadRequest, "invalid_request", "authorization approval is invalid")
 		return
 	}
 	rawCode, _, err := s.Store.CreateOAuthAuthorizationCode(r.Context(), db.CreateOAuthAuthorizationCodeParams{
@@ -142,6 +184,38 @@ func (s Server) handleOAuthAuthorize(w http.ResponseWriter, r *http.Request) {
 	}
 	target.RawQuery = q.Encode()
 	http.Redirect(w, r, target.String(), http.StatusFound)
+}
+
+func (s Server) renderAuthorizePage(w http.ResponseWriter, data authorizePageData) {
+	t, err := template.New("authorize").Parse(authorizeHTMLTemplate)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_ = t.Execute(w, data)
+}
+
+func (s Server) authorizeApprovalToken(sessionID string, data authorizePageData) string {
+	return s.credentialsCipher().SignString(authorizeApprovalMessage(sessionID, data))
+}
+
+func (s Server) authorizeApprovalTokenValid(sessionID string, data authorizePageData, token string) bool {
+	return s.credentialsCipher().VerifyString(authorizeApprovalMessage(sessionID, data), token)
+}
+
+func authorizeApprovalMessage(sessionID string, data authorizePageData) string {
+	parts := []string{
+		strings.TrimSpace(sessionID),
+		strings.TrimSpace(data.ResponseType),
+		strings.TrimSpace(data.ClientID),
+		strings.TrimSpace(data.RedirectURI),
+		strings.TrimSpace(data.CodeChallenge),
+		strings.TrimSpace(data.CodeChallengeMethod),
+		strings.TrimSpace(data.Scope),
+		strings.TrimSpace(data.State),
+	}
+	return strings.Join(parts, "\n")
 }
 
 func (s Server) handleOAuthToken(w http.ResponseWriter, r *http.Request) {

@@ -7,3 +7,6 @@ var scheduleHTMLTemplate string
 
 //go:embed templates/login.html
 var loginHTMLTemplate string
+
+//go:embed templates/authorize.html
+var authorizeHTMLTemplate string
