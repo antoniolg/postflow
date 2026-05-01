@@ -286,7 +286,7 @@ func (p *LinkedInProvider) uploadArticleThumbnail(ctx context.Context, ownerURN,
 }
 
 func (p *LinkedInProvider) fetchArticleImage(ctx context.Context, imageURL string) ([]byte, string, error) {
-	req, client, err := p.newArticleFetchRequest(ctx, imageURL, "image/*")
+	req, client, err := p.newArticleImageFetchRequest(ctx, imageURL, "image/*")
 	if err != nil {
 		return nil, "", err
 	}
@@ -322,6 +322,10 @@ func (p *LinkedInProvider) fetchArticleImage(ctx context.Context, imageURL strin
 		return nil, "", fmt.Errorf("thumbnail content is not an image")
 	}
 	return content, contentType, nil
+}
+
+func (p *LinkedInProvider) newArticleImageFetchRequest(ctx context.Context, rawURL, accept string) (*http.Request, *http.Client, error) {
+	return p.newArticleFetchRequestWithDialGuard(ctx, rawURL, accept, true)
 }
 
 func (p *LinkedInProvider) newArticleFetchRequest(ctx context.Context, rawURL, accept string) (*http.Request, *http.Client, error) {

@@ -392,6 +392,40 @@ func TestLinkedInArticleMetadataDialUsesValidatedAddress(t *testing.T) {
 	}
 }
 
+func TestLinkedInArticleImageDialUsesValidatedAddress(t *testing.T) {
+	oldLookup := linkedInArticleLookupIPAddr
+	oldDial := linkedInArticleDialContext
+	t.Cleanup(func() {
+		linkedInArticleLookupIPAddr = oldLookup
+		linkedInArticleDialContext = oldDial
+	})
+
+	linkedInArticleLookupIPAddr = func(_ context.Context, host string) ([]net.IPAddr, error) {
+		if host != "image.example" {
+			t.Fatalf("unexpected lookup host %q", host)
+		}
+		return []net.IPAddr{{IP: net.ParseIP("203.0.113.20")}}, nil
+	}
+	var dialed string
+	linkedInArticleDialContext = func(_ context.Context, _ string, address string) (net.Conn, error) {
+		dialed = address
+		return nil, errors.New("stop after dial target capture")
+	}
+
+	provider := NewLinkedInProvider(LinkedInProviderConfig{})
+	req, client, err := provider.newArticleImageFetchRequest(context.Background(), "https://image.example/thumb.png", "image/*")
+	if err != nil {
+		t.Fatalf("build image request: %v", err)
+	}
+	if req.URL.Hostname() != "image.example" {
+		t.Fatalf("expected request to preserve original host, got %q", req.URL.Hostname())
+	}
+	_, _ = client.Transport.(*http.Transport).DialContext(context.Background(), "tcp", "image.example:443")
+	if dialed != "203.0.113.20:443" {
+		t.Fatalf("expected dial to use validated IP, got %q", dialed)
+	}
+}
+
 func writeLinkedInTestFile(t *testing.T, name string, content []byte) string {
 	t.Helper()
 	path := t.TempDir() + "/" + name
