@@ -128,7 +128,11 @@ func (s Server) saveUploadToDisk(r *http.Request) (_ mediaUpload, status int, er
 			out = nil
 
 			upload.SizeBytes = int64(len(sniffed)) + size
-			upload.MimeType = detectUploadedMimeType(part.Header.Get("Content-Type"), upload.OriginalName, sniffed)
+			mimeType, detectErr := detectUploadedMimeType(part.Header.Get("Content-Type"), upload.OriginalName, sniffed)
+			if detectErr != nil {
+				return mediaUpload{}, http.StatusUnsupportedMediaType, detectErr
+			}
+			upload.MimeType = mimeType
 		default:
 			_, _ = io.Copy(io.Discard, part)
 			_ = part.Close()
@@ -167,20 +171,36 @@ func readPartPrefix(part *multipart.Part, maxBytes int) ([]byte, error) {
 	}
 }
 
-func detectUploadedMimeType(contentType, originalName string, content []byte) string {
+func detectUploadedMimeType(contentType, originalName string, content []byte) (string, error) {
 	mimeType := strings.TrimSpace(contentType)
-	if !isGenericUploadMimeType(mimeType) && mimeType != "" {
-		return mimeType
+	if isActiveUploadMimeType(mimeType) {
+		return "", fmt.Errorf("unsupported media type %q", normalizeUploadMimeType(mimeType))
+	}
+	if len(content) > 0 {
+		if sniffed := strings.TrimSpace(http.DetectContentType(content)); isActiveUploadMimeType(sniffed) {
+			return "", fmt.Errorf("unsupported media type %q", sniffed)
+		} else if isAllowedUploadMimeType(sniffed) {
+			return normalizeUploadMimeType(sniffed), nil
+		}
 	}
 	if extMimeType := strings.TrimSpace(mime.TypeByExtension(strings.ToLower(filepath.Ext(originalName)))); extMimeType != "" {
-		return extMimeType
+		if isAllowedUploadMimeType(extMimeType) {
+			return normalizeUploadMimeType(extMimeType), nil
+		}
+		if isActiveUploadMimeType(extMimeType) {
+			return "", fmt.Errorf("unsupported media type %q", extMimeType)
+		}
+		return normalizeUploadMimeType(extMimeType), nil
+	}
+	if !isGenericUploadMimeType(mimeType) && mimeType != "" {
+		return normalizeUploadMimeType(mimeType), nil
 	}
 	if len(content) > 0 {
 		if sniffed := strings.TrimSpace(http.DetectContentType(content)); sniffed != "" {
-			return sniffed
+			return normalizeUploadMimeType(sniffed), nil
 		}
 	}
-	return "application/octet-stream"
+	return "application/octet-stream", nil
 }
 
 func isGenericUploadMimeType(raw string) bool {
@@ -192,6 +212,30 @@ func isGenericUploadMimeType(raw string) bool {
 		}
 	}
 	return strings.EqualFold(mimeType, "application/octet-stream")
+}
+
+func isAllowedUploadMimeType(raw string) bool {
+	mimeType := normalizeUploadMimeType(raw)
+	return strings.HasPrefix(mimeType, "image/") && mimeType != "image/svg+xml" ||
+		strings.HasPrefix(mimeType, "video/")
+}
+
+func isActiveUploadMimeType(raw string) bool {
+	mimeType := normalizeUploadMimeType(raw)
+	return mimeType == "text/html" ||
+		mimeType == "application/xhtml+xml" ||
+		mimeType == "image/svg+xml"
+}
+
+func normalizeUploadMimeType(raw string) string {
+	mimeType, _, err := mime.ParseMediaType(strings.TrimSpace(raw))
+	if err != nil {
+		mimeType = strings.TrimSpace(raw)
+		if i := strings.Index(mimeType, ";"); i >= 0 {
+			mimeType = strings.TrimSpace(mimeType[:i])
+		}
+	}
+	return strings.ToLower(strings.TrimSpace(mimeType))
 }
 
 func removeFileQuiet(path string) error {

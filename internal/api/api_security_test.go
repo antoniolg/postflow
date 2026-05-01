@@ -180,6 +180,15 @@ func TestAuthMiddlewareAllowsSignedMediaContentURL(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200 with signed media url, got %d", w.Code)
 	}
+	if got := w.Header().Get("Content-Type"); !strings.Contains(got, "application/octet-stream") {
+		t.Fatalf("expected legacy text media to be served as attachment, got content type %q", got)
+	}
+	if got := w.Header().Get("Content-Disposition"); got != "attachment" {
+		t.Fatalf("expected attachment disposition for legacy text media, got %q", got)
+	}
+	if got := w.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+		t.Fatalf("expected nosniff header, got %q", got)
+	}
 }
 
 func TestAuthMiddlewareAllowsSignedMediaContentURLWithFilename(t *testing.T) {
@@ -220,6 +229,9 @@ func TestAuthMiddlewareAllowsSignedMediaContentURLWithFilename(t *testing.T) {
 	}
 	if got := w.Header().Get("Content-Type"); !strings.Contains(got, "image/jpeg") {
 		t.Fatalf("expected image/jpeg content type, got %q", got)
+	}
+	if got := w.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+		t.Fatalf("expected nosniff header, got %q", got)
 	}
 }
 

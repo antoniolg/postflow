@@ -79,7 +79,7 @@ func TestMCPStreamableHTTPExposesToolsAndCreatesPost(t *testing.T) {
 		}
 	}
 
-	uploadBody := `{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"postflow_upload_media","arguments":{"kind":"image","original_name":"hello.txt","content_base64":"aGVsbG8gd29ybGQ="}}}`
+	uploadBody := `{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"postflow_upload_media","arguments":{"kind":"image","original_name":"hello.png","content_base64":"aGVsbG8gd29ybGQ="}}}`
 	uploadResp, uploadRaw := postMCPRequest(t, mcpURL, sessionID, uploadBody)
 	if uploadResp.StatusCode != http.StatusOK {
 		t.Fatalf("expected upload tools/call status 200, got %d: %s", uploadResp.StatusCode, string(uploadRaw))
@@ -244,7 +244,7 @@ func TestMCPStreamableHTTPExposesToolsAndCreatesPost(t *testing.T) {
 		t.Fatalf("expected media list to include uploaded media id %q", mediaID)
 	}
 
-	uploadDeletableBody := `{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"postflow_upload_media","arguments":{"kind":"image","original_name":"delete-me.txt","content_base64":"ZGVsZXRlLW1l"}}}`
+	uploadDeletableBody := `{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"postflow_upload_media","arguments":{"kind":"image","original_name":"delete-me.png","content_base64":"ZGVsZXRlLW1l"}}}`
 	uploadDeletableResp, uploadDeletableRaw := postMCPRequest(t, mcpURL, sessionID, uploadDeletableBody)
 	if uploadDeletableResp.StatusCode != http.StatusOK {
 		t.Fatalf("expected second upload tools/call status 200, got %d: %s", uploadDeletableResp.StatusCode, string(uploadDeletableRaw))

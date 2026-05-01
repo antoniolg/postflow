@@ -167,8 +167,12 @@ func (s Server) handleMediaContent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	item := media[0]
-	if item.MimeType != "" {
-		w.Header().Set("Content-Type", item.MimeType)
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	if isAllowedUploadMimeType(item.MimeType) {
+		w.Header().Set("Content-Type", normalizeUploadMimeType(item.MimeType))
+	} else {
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Header().Set("Content-Disposition", "attachment")
 	}
 	if strings.HasPrefix(r.URL.Path, "/uploads/") {
 		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")

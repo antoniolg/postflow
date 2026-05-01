@@ -574,7 +574,7 @@ func TestUploadMediaAcceptsOutOfOrderMultipartFields(t *testing.T) {
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
 
-	filePart, err := writer.CreateFormFile("file", "clip.txt")
+	filePart, err := writer.CreateFormFile("file", "clip.png")
 	if err != nil {
 		t.Fatalf("create form file: %v", err)
 	}
@@ -616,8 +616,8 @@ func TestUploadMediaAcceptsOutOfOrderMultipartFields(t *testing.T) {
 	if resp.Kind != "image" {
 		t.Fatalf("expected kind=image, got %q", resp.Kind)
 	}
-	if resp.OriginalName != "clip.txt" {
-		t.Fatalf("expected original_name=clip.txt, got %q", resp.OriginalName)
+	if resp.OriginalName != "clip.png" {
+		t.Fatalf("expected original_name=clip.png, got %q", resp.OriginalName)
 	}
 	if resp.SizeBytes != int64(len(payload)) {
 		t.Fatalf("expected size_bytes=%d, got %d", len(payload), resp.SizeBytes)
@@ -629,6 +629,50 @@ func TestUploadMediaAcceptsOutOfOrderMultipartFields(t *testing.T) {
 	}
 	if !bytes.Equal(stored, payload) {
 		t.Fatalf("stored file contents mismatch")
+	}
+}
+
+func TestUploadMediaRejectsActiveContent(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	filePart, err := writer.CreateFormFile("file", "payload.html")
+	if err != nil {
+		t.Fatalf("create form file: %v", err)
+	}
+	if _, err := filePart.Write([]byte("<!doctype html><script>alert(1)</script>")); err != nil {
+		t.Fatalf("write file payload: %v", err)
+	}
+	if err := writer.WriteField("kind", "image"); err != nil {
+		t.Fatalf("write kind field: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close writer: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/media", &body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusUnsupportedMediaType {
+		t.Fatalf("expected 415, got %d: %s", w.Code, w.Body.String())
+	}
+
+	entries, err := os.ReadDir(filepath.Join(tempDir, "media"))
+	if err != nil && !os.IsNotExist(err) {
+		t.Fatalf("read media dir: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("expected rejected upload file to be removed, got %d entries", len(entries))
 	}
 }
 
@@ -819,7 +863,7 @@ func TestUploadMediaIgnoresLegacyPlatformField(t *testing.T) {
 	if err := writer.WriteField("platform", "linkedin"); err != nil {
 		t.Fatalf("write platform field: %v", err)
 	}
-	filePart, err := writer.CreateFormFile("file", "tmp.txt")
+	filePart, err := writer.CreateFormFile("file", "tmp.png")
 	if err != nil {
 		t.Fatalf("create form file: %v", err)
 	}

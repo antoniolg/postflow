@@ -5,8 +5,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-	"mime"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -63,15 +61,10 @@ func (s Server) mcpUploadMediaTool(ctx context.Context, _ *mcp.CallToolRequest, 
 		return nil, mcpUploadMediaOutput{}, err
 	}
 
-	mimeType := strings.TrimSpace(in.MimeType)
-	if mimeType == "" {
-		mimeType = mime.TypeByExtension(filepath.Ext(name))
-	}
-	if mimeType == "" {
-		mimeType = http.DetectContentType(content)
-	}
-	if mimeType == "" {
-		mimeType = "application/octet-stream"
+	mimeType, err := detectUploadedMimeType(in.MimeType, originalName, content)
+	if err != nil {
+		_ = removeFileQuiet(storagePath)
+		return nil, mcpUploadMediaOutput{}, err
 	}
 
 	created, err := s.Store.CreateMedia(ctx, domain.Media{
