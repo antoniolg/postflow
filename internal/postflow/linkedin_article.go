@@ -83,7 +83,7 @@ func (p *LinkedInProvider) tryPublishArticlePost(ctx context.Context, accessToke
 }
 
 func (p *LinkedInProvider) fetchArticleMetadata(ctx context.Context, rawURL string) (linkedInArticleMetadata, bool) {
-	req, client, err := p.newArticleFetchRequest(ctx, rawURL, "text/html,application/xhtml+xml")
+	req, client, err := p.newArticleMetadataFetchRequest(ctx, rawURL, "text/html,application/xhtml+xml")
 	if err != nil {
 		return linkedInArticleMetadata{}, false
 	}
@@ -124,6 +124,10 @@ func (p *LinkedInProvider) fetchArticleMetadata(ctx context.Context, rawURL stri
 		ImageURL:    strings.TrimSpace(resolveLinkedInArticleURL(source, imageURL)),
 		ImageAlt:    truncateRunes(imageAlt, linkedInArticleTextMaxRunes),
 	}, true
+}
+
+func (p *LinkedInProvider) newArticleMetadataFetchRequest(ctx context.Context, rawURL, accept string) (*http.Request, *http.Client, error) {
+	return p.newArticleFetchRequestWithDialGuard(ctx, rawURL, accept, true)
 }
 
 func parseLinkedInArticleHTML(body []byte) (title, description, imageURL, imageAlt string) {
@@ -321,6 +325,10 @@ func (p *LinkedInProvider) fetchArticleImage(ctx context.Context, imageURL strin
 }
 
 func (p *LinkedInProvider) newArticleFetchRequest(ctx context.Context, rawURL, accept string) (*http.Request, *http.Client, error) {
+	return p.newArticleFetchRequestWithDialGuard(ctx, rawURL, accept, false)
+}
+
+func (p *LinkedInProvider) newArticleFetchRequestWithDialGuard(ctx context.Context, rawURL, accept string, guardDial bool) (*http.Request, *http.Client, error) {
 	rawURL = strings.TrimSpace(rawURL)
 	if !p.allowUnsafeArticleFetches {
 		if err := validateLinkedInArticleFetchURL(ctx, rawURL); err != nil {
@@ -334,10 +342,10 @@ func (p *LinkedInProvider) newArticleFetchRequest(ctx context.Context, rawURL, a
 	if accept != "" {
 		req.Header.Set("Accept", accept)
 	}
-	return req, p.articleFetchClient(), nil
+	return req, p.articleFetchClient(guardDial), nil
 }
 
-func (p *LinkedInProvider) articleFetchClient() *http.Client {
+func (p *LinkedInProvider) articleFetchClient(guardDial bool) *http.Client {
 	if p.allowUnsafeArticleFetches {
 		return p.client
 	}
@@ -346,6 +354,9 @@ func (p *LinkedInProvider) articleFetchClient() *http.Client {
 		base = http.DefaultClient
 	}
 	client := *base
+	if guardDial {
+		client.Transport = safeLinkedInArticleTransport(base.Transport)
+	}
 	previousCheckRedirect := base.CheckRedirect
 	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		if len(via) >= linkedInArticleRedirectLimit {
@@ -363,6 +374,48 @@ func (p *LinkedInProvider) articleFetchClient() *http.Client {
 		return nil
 	}
 	return &client
+}
+
+var (
+	linkedInArticleLookupIPAddr = net.DefaultResolver.LookupIPAddr
+	linkedInArticleDialContext  = (&net.Dialer{}).DialContext
+)
+
+func safeLinkedInArticleTransport(base http.RoundTripper) http.RoundTripper {
+	transport, ok := base.(*http.Transport)
+	if !ok || transport == nil {
+		transport = http.DefaultTransport.(*http.Transport)
+	}
+	clone := transport.Clone()
+	clone.DialContext = safeLinkedInArticleDialContext
+	return clone
+}
+
+func safeLinkedInArticleDialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(address)
+	if err != nil {
+		return nil, err
+	}
+	addrs, err := linkedInArticleLookupIPAddr(ctx, host)
+	if err != nil {
+		return nil, err
+	}
+	var lastErr error
+	for _, addr := range addrs {
+		if isUnsafeLinkedInArticleIP(addr.IP) {
+			lastErr = fmt.Errorf("article fetch host resolves to private address")
+			continue
+		}
+		conn, err := linkedInArticleDialContext(ctx, network, net.JoinHostPort(addr.IP.String(), port))
+		if err == nil {
+			return conn, nil
+		}
+		lastErr = err
+	}
+	if lastErr != nil {
+		return nil, lastErr
+	}
+	return nil, fmt.Errorf("article fetch host has no resolved addresses")
 }
 
 func validateLinkedInArticleFetchURL(ctx context.Context, rawURL string) error {
@@ -395,7 +448,7 @@ func validateLinkedInArticleHost(ctx context.Context, host string) error {
 		}
 		return nil
 	}
-	addrs, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	addrs, err := linkedInArticleLookupIPAddr(ctx, host)
 	if err != nil {
 		return err
 	}

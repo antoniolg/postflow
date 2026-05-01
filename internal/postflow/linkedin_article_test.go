@@ -3,7 +3,9 @@ package postflow
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -353,6 +355,40 @@ func TestValidateLinkedInArticleFetchURLRejectsUnsafeTargets(t *testing.T) {
 				t.Fatalf("expected %q to be rejected", rawURL)
 			}
 		})
+	}
+}
+
+func TestLinkedInArticleMetadataDialUsesValidatedAddress(t *testing.T) {
+	oldLookup := linkedInArticleLookupIPAddr
+	oldDial := linkedInArticleDialContext
+	t.Cleanup(func() {
+		linkedInArticleLookupIPAddr = oldLookup
+		linkedInArticleDialContext = oldDial
+	})
+
+	linkedInArticleLookupIPAddr = func(_ context.Context, host string) ([]net.IPAddr, error) {
+		if host != "article.example" {
+			t.Fatalf("unexpected lookup host %q", host)
+		}
+		return []net.IPAddr{{IP: net.ParseIP("203.0.113.10")}}, nil
+	}
+	var dialed string
+	linkedInArticleDialContext = func(_ context.Context, _ string, address string) (net.Conn, error) {
+		dialed = address
+		return nil, errors.New("stop after dial target capture")
+	}
+
+	provider := NewLinkedInProvider(LinkedInProviderConfig{})
+	req, client, err := provider.newArticleMetadataFetchRequest(context.Background(), "https://article.example/post", "text/html")
+	if err != nil {
+		t.Fatalf("build metadata request: %v", err)
+	}
+	if req.URL.Hostname() != "article.example" {
+		t.Fatalf("expected request to preserve original host, got %q", req.URL.Hostname())
+	}
+	_, _ = client.Transport.(*http.Transport).DialContext(context.Background(), "tcp", "article.example:443")
+	if dialed != "203.0.113.10:443" {
+		t.Fatalf("expected dial to use validated IP, got %q", dialed)
 	}
 }
 
