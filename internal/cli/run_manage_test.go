@@ -301,6 +301,47 @@ func TestRunSettingsSetTimezone(t *testing.T) {
 	}
 }
 
+func TestRunSettingsSetSMTP(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/settings/smtp" {
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		var payload map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode payload: %v", err)
+		}
+		if got := strings.TrimSpace(anyString(payload["host"])); got != "smtp.sendgrid.net" {
+			t.Fatalf("expected smtp host, got %q", got)
+		}
+		if got := strings.TrimSpace(anyString(payload["from"])); got != "postflow@example.com" {
+			t.Fatalf("expected from address, got %q", got)
+		}
+		if payload["enabled"] != true || payload["start_tls"] != true {
+			t.Fatalf("expected enabled starttls payload, got %+v", payload)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"enabled": true, "ready": true})
+	}))
+	defer server.Close()
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := Run(context.Background(), []string{
+		"--base-url", server.URL,
+		"settings", "set-smtp",
+		"--host", "smtp.sendgrid.net",
+		"--username", "apikey",
+		"--password", "secret",
+		"--from", "postflow@example.com",
+		"--to", "antonio@example.com",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d, stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "smtp notifications enabled: postflow@example.com -> antonio@example.com") {
+		t.Fatalf("expected smtp output, got %s", stdout.String())
+	}
+}
+
 func anyString(v any) string {
 	switch t := v.(type) {
 	case string:

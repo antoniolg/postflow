@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	notificationsapp "github.com/antoniolg/postflow/internal/application/notifications"
 	"github.com/antoniolg/postflow/internal/db"
 	"github.com/antoniolg/postflow/internal/domain"
 	"github.com/antoniolg/postflow/internal/textfmt"
@@ -44,6 +45,8 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 	failedSuccess := strings.TrimSpace(r.URL.Query().Get("failed_success"))
 	settingsError := strings.TrimSpace(r.URL.Query().Get("tz_error"))
 	settingsSuccess := strings.TrimSpace(r.URL.Query().Get("tz_success"))
+	smtpError := strings.TrimSpace(r.URL.Query().Get("smtp_error"))
+	smtpSuccess := strings.TrimSpace(r.URL.Query().Get("smtp_success"))
 	accountsError := strings.TrimSpace(r.URL.Query().Get("accounts_error"))
 	accountsSuccess := strings.TrimSpace(r.URL.Query().Get("accounts_success"))
 	oauthSelectID := strings.TrimSpace(r.URL.Query().Get("oauth_select"))
@@ -295,6 +298,12 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		} else {
 			oauthPendingSelection = buildOAuthPendingSelectionView(uiLang, oauthSelectID, payload)
 		}
+	}
+
+	smtpConfig, err := (notificationsapp.Service{Store: s.Store, Cipher: s.credentialsCipher()}).GetSMTPConfigView(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
 	}
 
 	calendarGroupsByDate := make(map[string][]publicationGroupItem)
@@ -578,6 +587,9 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		},
 		"trim":      strings.TrimSpace,
 		"hasPrefix": strings.HasPrefix,
+		"join": func(values []string, sep string) string {
+			return strings.Join(values, sep)
+		},
 		"accountSelected": func(accountID string) bool {
 			_, ok := selectedCreateAccountIDs[strings.TrimSpace(accountID)]
 			return ok
@@ -646,6 +658,9 @@ func (s Server) handleScheduleHTML(w http.ResponseWriter, r *http.Request) {
 		FailedSuccess:               failedSuccess,
 		SettingsError:               settingsError,
 		SettingsSuccess:             settingsSuccess,
+		SMTPError:                   smtpError,
+		SMTPSuccess:                 smtpSuccess,
+		SMTPConfig:                  smtpConfig,
 		AccountsError:               accountsError,
 		AccountsSuccess:             accountsSuccess,
 		OAuthPendingSelection:       oauthPendingSelection,

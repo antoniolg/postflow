@@ -107,6 +107,7 @@ Important:
 - LinkedIn OAuth connects the personal profile and, when available, any organization pages the user administers.
 - LinkedIn root posts with a first `http(s)` link and no attached media are published as article posts at publish time so PostFlow can send explicit unfurl metadata. If media is attached, media wins and link unfurl is skipped.
 - In the web UI, if an OAuth provider returns multiple accounts, PostFlow shows a selection step before saving them.
+- Publish failure emails are configured from Settings, the CLI, or MCP. SMTP passwords are stored encrypted with `POSTFLOW_MASTER_KEY`.
 - In production (Coolify), set secrets in the platform UI, not in committed files.
 - In Coolify, mark `OWNER_PASSWORD_HASH` as a literal/secret value so `$` is not interpolated.
 
@@ -238,6 +239,7 @@ postflow posts delete --id pst_xxx
 postflow posts cancel --id pst_xxx
 postflow accounts list
 postflow settings set-timezone --timezone Europe/Madrid
+postflow settings set-smtp --host smtp.sendgrid.net --port 587 --username apikey --password "$SMTP_PASSWORD" --from postflow@example.com --to owner@example.com
 postflow media list --limit 20
 ```
 

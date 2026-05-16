@@ -209,6 +209,14 @@ func (s Server) newMCPHandler() http.Handler {
 		},
 	}, s.mcpSetTimezoneTool)
 
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "postflow_set_smtp_notifications",
+		Description: "Configure SMTP email notifications for publish failures.",
+		Annotations: &mcp.ToolAnnotations{
+			IdempotentHint: false,
+		},
+	}, s.mcpSetSMTPNotificationsTool)
+
 	base := mcp.NewStreamableHTTPHandler(func(_ *http.Request) *mcp.Server {
 		return server
 	}, &mcp.StreamableHTTPOptions{

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/antoniolg/postflow/internal/application/ports"
 	"github.com/antoniolg/postflow/internal/domain"
 	"github.com/antoniolg/postflow/internal/postflow"
 )
@@ -86,6 +87,15 @@ func (f fakeRegistry) Get(platform domain.Platform) (postflow.Provider, bool) {
 type fakeCredentialsStore struct {
 	load postflow.Credentials
 	save int
+}
+
+type fakeFailureNotifier struct {
+	calls []ports.PublishFailureNotification
+}
+
+func (f *fakeFailureNotifier) NotifyPublishFailure(_ context.Context, notification ports.PublishFailureNotification) error {
+	f.calls = append(f.calls, notification)
+	return nil
 }
 
 func (f *fakeCredentialsStore) LoadCredentials(context.Context, string) (postflow.Credentials, error) {
@@ -170,6 +180,7 @@ func TestRunnerPublishesAndMarksAccountConnected(t *testing.T) {
 }
 
 func TestRunnerRecordsFailureWhenProviderMissing(t *testing.T) {
+	notifier := &fakeFailureNotifier{}
 	store := &fakeStore{
 		duePosts: []domain.Post{
 			{ID: "pst_2", AccountID: "acc_2", Platform: domain.PlatformInstagram},
@@ -179,11 +190,12 @@ func TestRunnerRecordsFailureWhenProviderMissing(t *testing.T) {
 		},
 	}
 	runner := Runner{
-		Store:        store,
-		Registry:     fakeRegistry{providers: map[domain.Platform]postflow.Provider{}},
-		Credentials:  &fakeCredentialsStore{},
-		RetryBackoff: 30 * time.Second,
-		Interval:     1 * time.Second,
+		Store:           store,
+		Registry:        fakeRegistry{providers: map[domain.Platform]postflow.Provider{}},
+		Credentials:     &fakeCredentialsStore{},
+		FailureNotifier: notifier,
+		RetryBackoff:    30 * time.Second,
+		Interval:        1 * time.Second,
 	}
 
 	runner.RunOnce(t.Context())
@@ -194,9 +206,16 @@ func TestRunnerRecordsFailureWhenProviderMissing(t *testing.T) {
 	if store.markPublishedCalls != 0 {
 		t.Fatalf("expected no mark published calls, got %d", store.markPublishedCalls)
 	}
+	if len(notifier.calls) != 1 {
+		t.Fatalf("expected one failure notification, got %d", len(notifier.calls))
+	}
+	if notifier.calls[0].Post.ID != "pst_2" || notifier.calls[0].Account.ID != "acc_2" {
+		t.Fatalf("unexpected notification payload: %+v", notifier.calls[0])
+	}
 }
 
 func TestRunnerDefersTransientMediaProcessingErrors(t *testing.T) {
+	notifier := &fakeFailureNotifier{}
 	store := &fakeStore{
 		duePosts: []domain.Post{
 			{ID: "pst_3", AccountID: "acc_3", Platform: domain.PlatformInstagram},
@@ -210,11 +229,12 @@ func TestRunnerDefersTransientMediaProcessingErrors(t *testing.T) {
 		publishErr: errors.New("instagram error 2207027: media id is not available"),
 	}
 	runner := Runner{
-		Store:        store,
-		Registry:     fakeRegistry{providers: map[domain.Platform]postflow.Provider{domain.PlatformInstagram: provider}},
-		Credentials:  &fakeCredentialsStore{},
-		RetryBackoff: 30 * time.Second,
-		Interval:     5 * time.Second,
+		Store:           store,
+		Registry:        fakeRegistry{providers: map[domain.Platform]postflow.Provider{domain.PlatformInstagram: provider}},
+		Credentials:     &fakeCredentialsStore{},
+		FailureNotifier: notifier,
+		RetryBackoff:    30 * time.Second,
+		Interval:        5 * time.Second,
 	}
 
 	runner.RunOnce(t.Context())
@@ -227,6 +247,9 @@ func TestRunnerDefersTransientMediaProcessingErrors(t *testing.T) {
 	}
 	if store.markPublishedCalls != 0 {
 		t.Fatalf("expected no mark published calls, got %d", store.markPublishedCalls)
+	}
+	if len(notifier.calls) != 0 {
+		t.Fatalf("expected no notification for transient processing, got %d", len(notifier.calls))
 	}
 }
 

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	dlqapp "github.com/antoniolg/postflow/internal/application/dlq"
+	notificationsapp "github.com/antoniolg/postflow/internal/application/notifications"
 	"github.com/antoniolg/postflow/internal/db"
 	"github.com/antoniolg/postflow/internal/domain"
 	"github.com/antoniolg/postflow/internal/postflow"
@@ -28,6 +29,7 @@ type Server struct {
 	UIBasicPass       string
 	Registry          *postflow.ProviderRegistry
 	Cipher            *secure.Cipher
+	SMTPSender        notificationsapp.SMTPSender
 	PublicBaseURL     string
 	AppVersion        string
 	LocalAuthEnabled  bool
@@ -82,6 +84,8 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("POST /dlq/delete", s.handleBulkDeleteDLQ)
 	mux.HandleFunc("POST /dlq/", s.handleDLQAction)
 	mux.HandleFunc("POST /settings/timezone", s.handleSetTimezone)
+	mux.HandleFunc("POST /settings/smtp", s.handleSetSMTPNotifications)
+	mux.HandleFunc("POST /settings/smtp/test", s.handleTestSMTPNotifications)
 	mux.HandleFunc("GET /", s.handleScheduleHTML)
 	return s.withMiddlewares(mux)
 }
@@ -410,65 +414,6 @@ func (s Server) handleBulkDeleteDLQ(w http.ResponseWriter, r *http.Request) {
 		"success":  result.Success,
 		"failed":   result.Failed,
 	})
-}
-
-func (s Server) handleSetTimezone(w http.ResponseWriter, r *http.Request) {
-	contentType := strings.ToLower(r.Header.Get("content-type"))
-	fromForm := strings.Contains(contentType, "application/x-www-form-urlencoded") || strings.Contains(contentType, "multipart/form-data")
-
-	timezone := ""
-	returnTo := "/?view=settings"
-	if fromForm {
-		if err := r.ParseForm(); err != nil {
-			http.Redirect(w, r, "/?view=settings&tz_error=invalid+form", http.StatusSeeOther)
-			return
-		}
-		timezone = strings.TrimSpace(r.FormValue("timezone"))
-		returnTo = sanitizeReturnTo(strings.TrimSpace(r.FormValue("return_to")))
-		if returnTo == "" {
-			returnTo = "/?view=settings"
-		}
-	} else {
-		var body struct {
-			Timezone string `json:"timezone"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			writeError(w, http.StatusBadRequest, fmt.Errorf("invalid json body: %w", err))
-			return
-		}
-		timezone = strings.TrimSpace(body.Timezone)
-	}
-
-	if timezone == "" {
-		if fromForm {
-			http.Redirect(w, r, withQueryValue(returnTo, "tz_error", "timezone is required"), http.StatusSeeOther)
-			return
-		}
-		writeError(w, http.StatusBadRequest, errors.New("timezone is required"))
-		return
-	}
-	if _, err := time.LoadLocation(timezone); err != nil {
-		if fromForm {
-			http.Redirect(w, r, withQueryValue(returnTo, "tz_error", "invalid timezone"), http.StatusSeeOther)
-			return
-		}
-		writeError(w, http.StatusBadRequest, fmt.Errorf("invalid timezone: %w", err))
-		return
-	}
-	if err := s.Store.SetUITimezone(r.Context(), timezone); err != nil {
-		if fromForm {
-			http.Redirect(w, r, withQueryValue(returnTo, "tz_error", err.Error()), http.StatusSeeOther)
-			return
-		}
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-
-	if fromForm {
-		http.Redirect(w, r, withQueryValue(returnTo, "tz_success", "timezone saved"), http.StatusSeeOther)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"timezone": timezone})
 }
 
 func (s Server) resolveUILocation(ctx context.Context) (*time.Location, string, bool, error) {

@@ -628,6 +628,7 @@ Commands:
   accounts x-premium     Set X premium via /accounts/{id}/x-premium
   accounts delete        Delete disconnected account via /accounts/{id}
   settings set-timezone  Set UI timezone via /settings/timezone
+  settings set-smtp      Configure publish failure emails via /settings/smtp
   dlq list               List failed dead letters via /dlq
   dlq requeue            Requeue one dead letter via /dlq/{id}/requeue
   dlq delete             Delete one dead letter via /dlq/{id}/delete

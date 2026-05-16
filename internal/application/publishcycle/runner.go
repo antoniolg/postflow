@@ -23,12 +23,13 @@ type Store interface {
 }
 
 type Runner struct {
-	Store        Store
-	Registry     ports.ProviderRegistry
-	Credentials  ports.CredentialsStore
-	RetryBackoff time.Duration
-	Interval     time.Duration
-	Logger       *slog.Logger
+	Store           Store
+	Registry        ports.ProviderRegistry
+	Credentials     ports.CredentialsStore
+	FailureNotifier ports.PublishFailureNotifier
+	RetryBackoff    time.Duration
+	Interval        time.Duration
+	Logger          *slog.Logger
 }
 
 func (r Runner) RunOnce(ctx context.Context) {
@@ -59,6 +60,7 @@ func (r Runner) RunOnce(ctx context.Context) {
 		account, err := r.Store.GetAccount(ctx, post.AccountID)
 		if err != nil {
 			_ = r.Store.RecordPublishFailure(ctx, post.ID, err, r.RetryBackoff)
+			r.notifyPublishFailure(ctx, logger, post, domain.SocialAccount{}, err)
 			logger.Error("worker account lookup failed", "post_id", post.ID, "root_post_id", rootPostID, "thread_group_id", threadGroupID, "thread_position", threadPosition, "account_id", post.AccountID, "error", err)
 			continue
 		}
@@ -67,6 +69,7 @@ func (r Runner) RunOnce(ctx context.Context) {
 		if !ok {
 			err := errUnsupportedPlatform(account.Platform)
 			_ = r.Store.RecordPublishFailure(ctx, post.ID, err, r.RetryBackoff)
+			r.notifyPublishFailure(ctx, logger, post, account, err)
 			logger.Error("worker provider not found", "post_id", post.ID, "root_post_id", rootPostID, "thread_group_id", threadGroupID, "thread_position", threadPosition, "platform", account.Platform)
 			continue
 		}
@@ -74,6 +77,7 @@ func (r Runner) RunOnce(ctx context.Context) {
 		credentials, err := r.Credentials.LoadCredentials(ctx, account.ID)
 		if err != nil {
 			_ = r.Store.RecordPublishFailure(ctx, post.ID, err, r.RetryBackoff)
+			r.notifyPublishFailure(ctx, logger, post, account, err)
 			logger.Error("worker credentials load failed", "post_id", post.ID, "root_post_id", rootPostID, "thread_group_id", threadGroupID, "thread_position", threadPosition, "account_id", account.ID, "error", err)
 			continue
 		}
@@ -81,6 +85,7 @@ func (r Runner) RunOnce(ctx context.Context) {
 		credentials, err = r.refreshIfNeeded(ctx, provider, account, credentials, false)
 		if err != nil {
 			_ = r.Store.RecordPublishFailure(ctx, post.ID, err, r.RetryBackoff)
+			r.notifyPublishFailure(ctx, logger, post, account, err)
 			_ = r.Store.UpdateAccountStatus(ctx, account.ID, domain.AccountStatusError, ptr(err.Error()))
 			logger.Error("worker proactive refresh failed", "post_id", post.ID, "root_post_id", rootPostID, "thread_group_id", threadGroupID, "thread_position", threadPosition, "account_id", account.ID, "error", err)
 			continue
@@ -98,12 +103,14 @@ func (r Runner) RunOnce(ctx context.Context) {
 			parent, err := r.Store.GetPost(ctx, targetPostID)
 			if err != nil {
 				_ = r.Store.RecordPublishFailure(ctx, post.ID, err, r.RetryBackoff)
+				r.notifyPublishFailure(ctx, logger, post, account, err)
 				logger.Error("worker parent lookup failed", "post_id", post.ID, "root_post_id", rootPostID, "thread_group_id", threadGroupID, "thread_position", threadPosition, "parent_post_id", parentPostID, "target_post_id", targetPostID, "error", err)
 				continue
 			}
 			if parent.ExternalID == nil || strings.TrimSpace(*parent.ExternalID) == "" {
 				err := errors.New("parent post external id is missing")
 				_ = r.Store.RecordPublishFailure(ctx, post.ID, err, r.RetryBackoff)
+				r.notifyPublishFailure(ctx, logger, post, account, err)
 				logger.Error("worker parent external id missing", "post_id", post.ID, "root_post_id", rootPostID, "thread_group_id", threadGroupID, "thread_position", threadPosition, "parent_post_id", parentPostID, "target_post_id", parent.ID)
 				continue
 			}
@@ -129,6 +136,7 @@ func (r Runner) RunOnce(ctx context.Context) {
 				continue
 			}
 			_ = r.Store.RecordPublishFailure(ctx, post.ID, err, r.RetryBackoff)
+			r.notifyPublishFailure(ctx, logger, post, account, err)
 			if isAuthFailure(err) {
 				_ = r.Store.UpdateAccountStatus(ctx, account.ID, domain.AccountStatusError, ptr(err.Error()))
 			}
@@ -144,6 +152,23 @@ func (r Runner) RunOnce(ctx context.Context) {
 		}
 		_ = r.Store.UpdateAccountStatus(ctx, account.ID, domain.AccountStatusConnected, nil)
 		logger.Info("worker published post", "post_id", post.ID, "root_post_id", rootPostID, "thread_group_id", threadGroupID, "thread_position", threadPosition, "platform", post.Platform, "external_id", externalID, "published_url", publishedURL)
+	}
+}
+
+func (r Runner) notifyPublishFailure(ctx context.Context, logger *slog.Logger, post domain.Post, account domain.SocialAccount, postErr error) {
+	if r.FailureNotifier == nil {
+		return
+	}
+	updatedPost, err := r.Store.GetPost(ctx, post.ID)
+	if err != nil {
+		updatedPost = post
+	}
+	if err := r.FailureNotifier.NotifyPublishFailure(ctx, ports.PublishFailureNotification{
+		Post:    updatedPost,
+		Account: account,
+		Error:   postErr,
+	}); err != nil && logger != nil {
+		logger.Warn("worker publish failure notification failed", "post_id", post.ID, "error", err)
 	}
 }
 

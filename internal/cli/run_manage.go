@@ -410,32 +410,6 @@ func runAccountDelete(ctx context.Context, client *APIClient, cfg config, args [
 	return 0
 }
 
-func runSettings(ctx context.Context, client *APIClient, cfg config, args []string, stdout, stderr io.Writer) int {
-	if len(args) == 0 || args[0] != "set-timezone" {
-		fmt.Fprintln(stderr, "usage: postflow settings set-timezone --timezone <IANA>")
-		return 2
-	}
-	fs := flag.NewFlagSet("settings set-timezone", flag.ContinueOnError)
-	fs.SetOutput(stderr)
-	timezone := fs.String("timezone", "", "IANA timezone, e.g. Europe/Madrid")
-	if err := fs.Parse(args[1:]); err != nil {
-		return 2
-	}
-	if strings.TrimSpace(*timezone) == "" {
-		fmt.Fprintln(stderr, "--timezone is required")
-		return 2
-	}
-	var out map[string]any
-	if err := client.Post(ctx, "/settings/timezone", map[string]any{"timezone": strings.TrimSpace(*timezone)}, &out); err != nil {
-		fmt.Fprintln(stderr, err.Error())
-		return 1
-	}
-	printOutput(stdout, cfg.asJSON, out, func() {
-		fmt.Fprintf(stdout, "timezone updated: %s\n", strings.TrimSpace(*timezone))
-	})
-	return 0
-}
-
 func parseCredentialPairs(values []string) (map[string]string, error) {
 	credentials := make(map[string]string, len(values))
 	for _, raw := range values {

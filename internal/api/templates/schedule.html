@@ -1402,6 +1402,13 @@
       flex-direction: column;
       gap: 6px;
     }
+    .field-grid {
+      display: grid;
+      gap: 10px;
+    }
+    .field-grid.two-columns {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
     .field label {
       font-size: 12px;
       color: #a8a8a8;
@@ -1427,7 +1434,10 @@
       width: 100%;
       max-width: none;
     }
-    .field input[type=text] {
+    .field input[type=text],
+    .field input[type=email],
+    .field input[type=number],
+    .field input[type=password] {
       min-width: 0;
       width: 100%;
       max-width: none;
@@ -1470,7 +1480,10 @@
       outline: none;
       box-shadow: 0 0 0 2px rgba(255, 107, 53, 0.2);
     }
-    .field input[type=text]:focus {
+    .field input[type=text]:focus,
+    .field input[type=email]:focus,
+    .field input[type=number]:focus,
+    .field input[type=password]:focus {
       outline: none;
       box-shadow: 0 0 0 2px rgba(255, 107, 53, 0.2);
     }
@@ -3809,6 +3822,9 @@
       }
       .field textarea,
       .field input[type=text],
+      .field input[type=email],
+      .field input[type=number],
+      .field input[type=password],
       .field select,
       #create-text,
       .thread-step-text,
@@ -3817,6 +3833,9 @@
       }
       .create-field-schedule .schedule-block {
         padding: 10px 12px;
+      }
+      .field-grid.two-columns {
+        grid-template-columns: 1fr;
       }
       .thread-step-shell,
       .thread-step-add-row {
@@ -4928,6 +4947,75 @@
             <button type="button" class="btn-secondary" id="tz-detect">{{t "settings.use_browser_timezone"}}</button>
           </div>
           <div class="meta"><span class="meta-soft">{{t "settings.current_timezone" .UITimezone}}</span></div>
+        </form>
+      </section>
+      <section class="editor editor-wide">
+        <div class="editor-head">{{t "settings.smtp"}}</div>
+        <form class="editor-body" method="post" action="/settings/smtp">
+          <input type="hidden" name="return_to" value="{{.CurrentViewURL}}" />
+          {{if .SMTPError}}<div class="alert error">{{.SMTPError}}</div>{{end}}
+          {{if .SMTPSuccess}}<div class="alert success">{{.SMTPSuccess}}</div>{{end}}
+          <label class="settings-account-premium-toggle">
+            <input class="failed-checkbox" type="checkbox" name="enabled" value="1" {{if .SMTPConfig.Enabled}}checked{{end}} />
+            <span>{{t "settings.smtp_enabled"}}</span>
+          </label>
+          <div class="field-grid two-columns">
+            <div class="field">
+              <label for="smtp-host">{{t "settings.smtp_host"}}</label>
+              <input id="smtp-host" name="host" type="text" value="{{.SMTPConfig.Host}}" autocomplete="off" />
+            </div>
+            <div class="field">
+              <label for="smtp-port">{{t "settings.smtp_port"}}</label>
+              <input id="smtp-port" name="port" type="number" min="1" max="65535" value="{{if .SMTPConfig.Port}}{{.SMTPConfig.Port}}{{else}}587{{end}}" />
+            </div>
+          </div>
+          <div class="field-grid two-columns">
+            <div class="field">
+              <label for="smtp-username">{{t "settings.smtp_username"}}</label>
+              <input id="smtp-username" name="username" type="text" value="{{.SMTPConfig.Username}}" autocomplete="username" />
+            </div>
+            <div class="field">
+              <label for="smtp-password">{{t "settings.smtp_password"}}</label>
+              <input id="smtp-password" name="password" type="password" placeholder="{{t "settings.smtp_password_placeholder"}}" autocomplete="current-password" />
+            </div>
+          </div>
+          <div class="field-grid two-columns">
+            <div class="field">
+              <label for="smtp-from">{{t "settings.smtp_from"}}</label>
+              <input id="smtp-from" name="from" type="email" value="{{.SMTPConfig.From}}" autocomplete="email" />
+            </div>
+            <div class="field">
+              <label for="smtp-to">{{t "settings.smtp_to"}}</label>
+              <input id="smtp-to" name="to" type="email" value="{{.SMTPConfig.To}}" autocomplete="email" />
+            </div>
+          </div>
+          <div class="field">
+            <label for="smtp-subject-prefix">{{t "settings.smtp_subject_prefix"}}</label>
+            <input id="smtp-subject-prefix" name="subject_prefix" type="text" value="{{.SMTPConfig.SubjectPrefix}}" />
+          </div>
+          <div class="editor-actions timezone-actions">
+            <label class="settings-account-premium-toggle">
+              <input class="failed-checkbox" type="checkbox" name="start_tls" value="1" {{if .SMTPConfig.StartTLS}}checked{{end}} />
+              <span>{{t "settings.smtp_starttls"}}</span>
+            </label>
+            <label class="settings-account-premium-toggle">
+              <input class="failed-checkbox" type="checkbox" name="use_tls" value="1" {{if .SMTPConfig.UseTLS}}checked{{end}} />
+              <span>{{t "settings.smtp_tls"}}</span>
+            </label>
+          </div>
+          <div class="editor-actions timezone-actions">
+            <button type="submit" class="btn-primary">{{t "settings.smtp_save"}}</button>
+            <button type="submit" class="btn-secondary" formaction="/settings/smtp/test">{{t "settings.smtp_send_test"}}</button>
+            <div class="meta">
+              {{if .SMTPConfig.Ready}}
+              <span class="meta-soft">{{t "settings.smtp_ready"}}</span>
+              {{else if not .SMTPConfig.Enabled}}
+              <span class="meta-soft">{{t "settings.smtp_disabled"}}</span>
+              {{else}}
+              <span class="meta-soft">{{t "settings.smtp_missing" (join .SMTPConfig.MissingRequirements ", ")}}</span>
+              {{end}}
+            </div>
+          </div>
         </form>
       </section>
       <section class="editor editor-wide">

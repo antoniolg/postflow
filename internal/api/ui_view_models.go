@@ -3,6 +3,7 @@ package api
 import (
 	"time"
 
+	notificationsapp "github.com/antoniolg/postflow/internal/application/notifications"
 	"github.com/antoniolg/postflow/internal/domain"
 )
 
@@ -186,6 +187,9 @@ type pageData struct {
 	FailedSuccess               string
 	SettingsError               string
 	SettingsSuccess             string
+	SMTPError                   string
+	SMTPSuccess                 string
+	SMTPConfig                  notificationsapp.SMTPConfigView
 	AccountsError               string
 	AccountsSuccess             string
 	OAuthPendingSelection       *oauthPendingSelectionView

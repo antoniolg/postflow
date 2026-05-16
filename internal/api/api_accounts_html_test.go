@@ -2,6 +2,8 @@ package api
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -9,10 +11,24 @@ import (
 	"strings"
 	"testing"
 
+	notificationsapp "github.com/antoniolg/postflow/internal/application/notifications"
 	"github.com/antoniolg/postflow/internal/db"
 	"github.com/antoniolg/postflow/internal/domain"
 	"github.com/antoniolg/postflow/internal/postflow"
 )
+
+type fakeSMTPSender struct {
+	calls   int
+	cfg     notificationsapp.SMTPConfig
+	message notificationsapp.EmailMessage
+}
+
+func (f *fakeSMTPSender) Send(_ context.Context, cfg notificationsapp.SMTPConfig, message notificationsapp.EmailMessage) error {
+	f.calls++
+	f.cfg = cfg
+	f.message = message
+	return nil
+}
 
 func TestListAccountsHTMLRedirectsToSettings(t *testing.T) {
 	tempDir := t.TempDir()
@@ -112,6 +128,69 @@ func TestSettingsViewRendersAccountsBlockWithActions(t *testing.T) {
 	}
 	if !strings.Contains(body, ".settings-media-library {\n        max-height: none;\n        overflow: visible;") {
 		t.Fatalf("expected settings media library to drop internal scrolling on narrow screens")
+	}
+}
+
+func TestSettingsSMTPConfigJSONAndHTML(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	smtpSender := &fakeSMTPSender{}
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3, SMTPSender: smtpSender}
+	h := srv.Handler()
+
+	payload := strings.NewReader(`{"enabled":true,"host":"smtp.sendgrid.net","port":587,"username":"apikey","password":"secret","from":"postflow@example.com","to":"antonio@example.com","subject_prefix":"PostFlow failed","start_tls":true}`)
+	req := httptest.NewRequest(http.MethodPost, "/settings/smtp", payload)
+	req.Header.Set("content-type", "application/json")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected smtp settings status 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	var out map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&out); err != nil {
+		t.Fatalf("decode smtp response: %v", err)
+	}
+	if out["password_configured"] != true || out["ready"] != true {
+		t.Fatalf("expected ready smtp response with password configured, got %+v", out)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/?view=settings", nil)
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected settings view 200, got %d", w.Code)
+	}
+	body := w.Body.String()
+	for _, expected := range []string{`action="/settings/smtp"`, `formaction="/settings/smtp/test"`, `value="smtp.sendgrid.net"`, `value="postflow@example.com"`, `value="antonio@example.com"`} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("expected settings html to contain %q", expected)
+		}
+	}
+	if strings.Contains(body, "secret") {
+		t.Fatalf("settings html leaked smtp password")
+	}
+
+	payload = strings.NewReader(`{"enabled":true,"host":"smtp.sendgrid.net","port":587,"username":"apikey","password":"","keep_password":true,"from":"postflow@example.com","to":"antonio@example.com","subject_prefix":"PostFlow failed","start_tls":true}`)
+	req = httptest.NewRequest(http.MethodPost, "/settings/smtp/test", payload)
+	req.Header.Set("content-type", "application/json")
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected smtp test status 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	if smtpSender.calls != 1 {
+		t.Fatalf("expected one smtp test email, got %d", smtpSender.calls)
+	}
+	if smtpSender.cfg.Password != "secret" {
+		t.Fatalf("expected smtp test to keep stored password, got %q", smtpSender.cfg.Password)
+	}
+	if !strings.Contains(smtpSender.message.Subject, "SMTP test") {
+		t.Fatalf("expected smtp test subject, got %+v", smtpSender.message)
 	}
 }
 

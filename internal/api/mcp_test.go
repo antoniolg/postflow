@@ -73,6 +73,7 @@ func TestMCPStreamableHTTPExposesToolsAndCreatesPost(t *testing.T) {
 		"postflow_requeue_failed",
 		"postflow_delete_failed",
 		"postflow_set_timezone",
+		"postflow_set_smtp_notifications",
 	} {
 		if !strings.Contains(string(listToolsRaw), expected) {
 			t.Fatalf("expected tools/list to include %q", expected)

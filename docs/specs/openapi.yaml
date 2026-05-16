@@ -928,6 +928,166 @@ paths:
         '400':
           $ref: '#/components/responses/Error'
 
+  /settings/smtp:
+    post:
+      summary: Configure SMTP publish failure notifications
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled, host, port, from, to]
+              properties:
+                enabled:
+                  type: boolean
+                host:
+                  type: string
+                  example: smtp.sendgrid.net
+                port:
+                  type: integer
+                  example: 587
+                username:
+                  type: string
+                  example: apikey
+                password:
+                  type: string
+                  description: SMTP password. Omit or leave empty with keep_password=true to preserve the current encrypted password.
+                keep_password:
+                  type: boolean
+                from:
+                  type: string
+                  format: email
+                to:
+                  type: string
+                  format: email
+                subject_prefix:
+                  type: string
+                  example: PostFlow publish failed
+                use_tls:
+                  type: boolean
+                  description: Use implicit TLS, usually port 465.
+                start_tls:
+                  type: boolean
+                  description: Use STARTTLS, usually port 587.
+      responses:
+        '200':
+          description: SMTP notification configuration updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enabled:
+                    type: boolean
+                  host:
+                    type: string
+                  port:
+                    type: integer
+                  username:
+                    type: string
+                  password_configured:
+                    type: boolean
+                  from:
+                    type: string
+                  to:
+                    type: string
+                  subject_prefix:
+                    type: string
+                  use_tls:
+                    type: boolean
+                  start_tls:
+                    type: boolean
+                  configured:
+                    type: boolean
+                  ready:
+                    type: boolean
+                  missing_requirements:
+                    type: array
+                    items:
+                      type: string
+        '400':
+          $ref: '#/components/responses/Error'
+
+  /settings/smtp/test:
+    post:
+      summary: Save SMTP settings and send a test email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [host, port, from, to]
+              properties:
+                enabled:
+                  type: boolean
+                host:
+                  type: string
+                  example: smtp.sendgrid.net
+                port:
+                  type: integer
+                  example: 587
+                username:
+                  type: string
+                  example: apikey
+                password:
+                  type: string
+                  description: SMTP password. Omit or leave empty with keep_password=true to preserve the current encrypted password.
+                keep_password:
+                  type: boolean
+                from:
+                  type: string
+                  format: email
+                to:
+                  type: string
+                  format: email
+                subject_prefix:
+                  type: string
+                  example: PostFlow publish failed
+                use_tls:
+                  type: boolean
+                start_tls:
+                  type: boolean
+      responses:
+        '200':
+          description: SMTP test email sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enabled:
+                    type: boolean
+                  host:
+                    type: string
+                  port:
+                    type: integer
+                  username:
+                    type: string
+                  password_configured:
+                    type: boolean
+                  from:
+                    type: string
+                  to:
+                    type: string
+                  subject_prefix:
+                    type: string
+                  use_tls:
+                    type: boolean
+                  start_tls:
+                    type: boolean
+                  configured:
+                    type: boolean
+                  ready:
+                    type: boolean
+                  missing_requirements:
+                    type: array
+                    items:
+                      type: string
+        '400':
+          $ref: '#/components/responses/Error'
+
 components:
   securitySchemes:
     bearerAuth:

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"time"
 
+	notificationsapp "github.com/antoniolg/postflow/internal/application/notifications"
 	publishcycle "github.com/antoniolg/postflow/internal/application/publishcycle"
 	"github.com/antoniolg/postflow/internal/db"
 	"github.com/antoniolg/postflow/internal/postflow"
@@ -45,11 +46,12 @@ func (w Worker) runOnce(ctx context.Context) {
 	}
 
 	runner := publishcycle.Runner{
-		Store:        w.Store,
-		Registry:     w.Registry,
-		Credentials:  workerCredentialsStore{worker: w},
-		RetryBackoff: w.RetryBackoff,
-		Interval:     w.Interval,
+		Store:           w.Store,
+		Registry:        w.Registry,
+		Credentials:     workerCredentialsStore{worker: w},
+		FailureNotifier: notificationsapp.Service{Store: w.Store, Cipher: w.Cipher},
+		RetryBackoff:    w.RetryBackoff,
+		Interval:        w.Interval,
 	}
 	runner.RunOnce(ctx)
 }
