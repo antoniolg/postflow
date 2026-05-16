@@ -109,8 +109,7 @@ func (s Server) handleTestSMTPNotifications(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	service := notificationsapp.Service{Store: s.Store, Cipher: s.credentialsCipher(), Sender: s.SMTPSender}
-	view, err := service.SaveSMTPConfig(r.Context(), update)
-	if err != nil {
+	if _, err := service.SaveSMTPConfig(r.Context(), update); err != nil {
 		if fromForm {
 			http.Redirect(w, r, withQueryValue(returnTo, "smtp_error", err.Error()), http.StatusSeeOther)
 			return
@@ -118,7 +117,7 @@ func (s Server) handleTestSMTPNotifications(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	view, err = service.SendSMTPTest(r.Context())
+	view, err := service.SendSMTPTest(r.Context())
 	if err != nil {
 		if fromForm {
 			http.Redirect(w, r, withQueryValue(returnTo, "smtp_error", err.Error()), http.StatusSeeOther)
