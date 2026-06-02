@@ -114,6 +114,12 @@ func TestSettingsViewRendersAccountsBlockWithActions(t *testing.T) {
 			t.Fatalf("expected oauth start action %s in settings", oauthStartPath)
 		}
 	}
+	if !strings.Contains(body, "name=\"account_kind\" value=\"personal\"") {
+		t.Fatalf("expected linkedin personal oauth action in settings")
+	}
+	if !strings.Contains(body, "name=\"account_kind\" value=\"organization\"") {
+		t.Fatalf("expected linkedin organization oauth action in settings")
+	}
 	if !strings.Contains(body, "@media (max-width: 520px)") {
 		t.Fatalf("expected mobile breakpoint css in settings view")
 	}

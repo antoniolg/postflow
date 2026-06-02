@@ -161,9 +161,15 @@ paths:
   /oauth/{platform}/start:
     post:
       summary: Start OAuth for a supported platform
-      description: Supported OAuth platforms are x, linkedin, facebook, and instagram.
+      description: Supported OAuth platforms are x, linkedin, facebook, and instagram. For LinkedIn, omit `account_kind` or set `personal` for profile-only OAuth; set `organization` to request company page scopes.
       parameters:
         - $ref: '#/components/parameters/PlatformPath'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OAuthStartRequest'
       responses:
         '200':
           description: Authorization URL
@@ -1184,6 +1190,13 @@ components:
     AccountKind:
       type: string
       enum: [default, personal, organization]
+
+    OAuthStartRequest:
+      type: object
+      properties:
+        account_kind:
+          $ref: '#/components/schemas/AccountKind'
+      description: Optional for LinkedIn OAuth. Defaults to `personal`; use `organization` to request company page scopes.
 
     CreatePostRequest:
       type: object

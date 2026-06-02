@@ -20,6 +20,7 @@ import (
 )
 
 type oauthLifecycleProvider struct {
+	lastStartAccountKind domain.AccountKind
 }
 
 func (p *oauthLifecycleProvider) Platform() domain.Platform {
@@ -39,6 +40,7 @@ func (p *oauthLifecycleProvider) RefreshIfNeeded(_ context.Context, _ domain.Soc
 }
 
 func (p *oauthLifecycleProvider) StartOAuth(_ context.Context, in postflow.OAuthStartInput) (postflow.OAuthStartOutput, error) {
+	p.lastStartAccountKind = in.AccountKind
 	return postflow.OAuthStartOutput{
 		AuthURL: "https://oauth.example/auth?state=" + url.QueryEscape(in.State),
 	}, nil
@@ -225,6 +227,9 @@ func TestOAuthJSONLifecycleIncludesReplayInvalidAndExpiredState(t *testing.T) {
 	if strings.TrimSpace(started.State) == "" {
 		t.Fatalf("expected oauth start state to be present")
 	}
+	if provider.lastStartAccountKind != domain.AccountKindPersonal {
+		t.Fatalf("expected default linkedin oauth start to request personal account kind, got %q", provider.lastStartAccountKind)
+	}
 
 	callbackStatus, callbackRaw := apiTestJSON(
 		t,
@@ -340,6 +345,43 @@ func TestOAuthJSONLifecycleIncludesReplayInvalidAndExpiredState(t *testing.T) {
 	if !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("expected expired oauth state to be deleted after failed consume, got %v", err)
 	}
+}
+
+func TestOAuthStartLinkedInAccountKindSelection(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	provider := &oauthLifecycleProvider{}
+	srv := Server{
+		Store:             store,
+		DataDir:           tempDir,
+		DefaultMaxRetries: 3,
+		Registry:          postflow.NewProviderRegistry(provider),
+		PublicBaseURL:     "https://postflow.example",
+	}
+	h := srv.Handler()
+
+	startStatus, startRaw := apiTestJSON(t, h, http.MethodPost, "/oauth/linkedin/start", map[string]any{
+		"account_kind": "organization",
+	})
+	if startStatus != http.StatusOK {
+		t.Fatalf("expected 200 starting organization oauth, got %d body=%s", startStatus, string(startRaw))
+	}
+	if provider.lastStartAccountKind != domain.AccountKindOrganization {
+		t.Fatalf("expected linkedin oauth start to request organization account kind, got %q", provider.lastStartAccountKind)
+	}
+
+	invalidStatus, invalidRaw := apiTestJSON(t, h, http.MethodPost, "/oauth/linkedin/start", map[string]any{
+		"account_kind": "company",
+	})
+	if invalidStatus != http.StatusBadRequest {
+		t.Fatalf("expected 400 starting oauth with invalid account_kind, got %d body=%s", invalidStatus, string(invalidRaw))
+	}
+	assertAPIErrorContains(t, invalidRaw, "account_kind is invalid for platform")
 }
 
 func apiTestJSON(t *testing.T, h http.Handler, method, path string, payload any) (int, []byte) {

@@ -53,6 +53,7 @@ type OAuthStartInput struct {
 	State        string
 	CodeVerifier string
 	RedirectURL  string
+	AccountKind  domain.AccountKind
 }
 
 type OAuthStartOutput struct {

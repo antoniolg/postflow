@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -44,12 +45,22 @@ func (s Server) handleOAuthStart(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, errors.New("oauth is not available for platform"))
 		return
 	}
+	accountKind, err := oauthStartAccountKind(r, platform)
+	if err != nil {
+		if isHTML {
+			http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", err.Error()), http.StatusSeeOther)
+			return
+		}
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
 	state := mustID("state")
 	codeVerifier := newOAuthCodeVerifier()
 	slog.Info("oauth start requested",
 		"platform", platform,
 		"state", oauthStateLabel(state),
 		"return_to", returnTo,
+		"account_kind", accountKind,
 		"is_html", isHTML,
 	)
 	recorded, err := s.Store.CreateOAuthState(r.Context(), domain.OauthState{
@@ -71,6 +82,7 @@ func (s Server) handleOAuthStart(w http.ResponseWriter, r *http.Request) {
 		State:        recorded.State,
 		CodeVerifier: recorded.CodeVerifier,
 		RedirectURL:  redirectURL,
+		AccountKind:  accountKind,
 	})
 	if err != nil {
 		if isHTML {
@@ -90,6 +102,35 @@ func (s Server) handleOAuthStart(w http.ResponseWriter, r *http.Request) {
 		"state":    recorded.State,
 		"expires":  recorded.ExpiresAt.UTC().Format(time.RFC3339),
 	})
+}
+
+type oauthStartRequest struct {
+	AccountKind string `json:"account_kind,omitempty"`
+}
+
+func oauthStartAccountKind(r *http.Request, platform domain.Platform) (domain.AccountKind, error) {
+	if platform != domain.PlatformLinkedIn {
+		return "", nil
+	}
+	raw := strings.TrimSpace(r.URL.Query().Get("account_kind"))
+	if raw == "" && strings.Contains(strings.ToLower(r.Header.Get("Content-Type")), "application/json") {
+		var req oauthStartRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
+			return "", fmt.Errorf("invalid json body: %w", err)
+		}
+		raw = strings.TrimSpace(req.AccountKind)
+	}
+	if raw == "" {
+		if err := r.ParseForm(); err != nil {
+			return "", fmt.Errorf("invalid form body: %w", err)
+		}
+		raw = strings.TrimSpace(r.Form.Get("account_kind"))
+	}
+	accountKind := domain.NormalizeAccountKind(platform, domain.AccountKind(raw))
+	if accountKind == "" {
+		return "", errors.New("account_kind is invalid for platform")
+	}
+	return accountKind, nil
 }
 
 func (s Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {

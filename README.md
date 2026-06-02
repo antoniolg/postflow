@@ -97,14 +97,14 @@ Use `.env.example` as template. These are the key ones:
 | Network | Variables | Where to get them |
 |---|---|---|
 | X | `X_CLIENT_ID`, `X_CLIENT_SECRET` | X Developer Portal OAuth 2.0 app credentials for account connection |
-| LinkedIn | `LINKEDIN_CLIENT_ID`, `LINKEDIN_CLIENT_SECRET` | LinkedIn Developer app with member posting enabled. To connect company pages, the app must also have organization posting/admin scopes approved. |
+| LinkedIn | `LINKEDIN_CLIENT_ID`, `LINKEDIN_CLIENT_SECRET` | LinkedIn Developer app with member posting enabled. Company page connections additionally require organization posting/admin scopes. |
 | Facebook/Instagram | `META_APP_ID`, `META_APP_SECRET` | Meta Developers app |
 
 Important:
 - If you want real publishing, set `POSTFLOW_DRIVER=live`.
 - For local testing without real publishing, keep `POSTFLOW_DRIVER=mock`.
 - OAuth account connection is available for X, LinkedIn, Facebook, and Instagram.
-- LinkedIn OAuth connects the personal profile and, when available, any organization pages the user administers.
+- LinkedIn OAuth connects personal profiles by default. Use the LinkedIn organization connection action, or `account_kind=organization` on `/oauth/linkedin/start`, to request company page scopes.
 - LinkedIn root posts with a first `http(s)` link and no attached media are published as article posts at publish time so PostFlow can send explicit unfurl metadata. If media is attached, media wins and link unfurl is skipped.
 - In the web UI, if an OAuth provider returns multiple accounts, PostFlow shows a selection step before saving them.
 - Publish failure emails are configured from Settings, the CLI, or MCP. SMTP passwords are stored encrypted with `POSTFLOW_MASTER_KEY`.

@@ -30,7 +30,8 @@ type LinkedInProvider struct {
 	allowUnsafeArticleFetches bool
 }
 
-const linkedInOAuthScope = "openid profile w_member_social rw_organization_admin w_organization_social"
+const linkedInPersonalOAuthScope = "openid profile w_member_social"
+const linkedInOrganizationOAuthScope = linkedInPersonalOAuthScope + " rw_organization_admin w_organization_social"
 const linkedInRESTVersion = "202601"
 
 func NewLinkedInProvider(cfg LinkedInProviderConfig) *LinkedInProvider {
@@ -554,7 +555,7 @@ func (p *LinkedInProvider) StartOAuth(_ context.Context, in OAuthStartInput) (OA
 	values.Set("client_id", p.cfg.ClientID)
 	values.Set("redirect_uri", in.RedirectURL)
 	values.Set("state", in.State)
-	values.Set("scope", linkedInOAuthScope)
+	values.Set("scope", linkedInOAuthScope(in.AccountKind))
 	values.Set("prompt", "consent")
 	return OAuthStartOutput{AuthURL: strings.TrimRight(p.cfg.AuthBaseURL, "/") + "/oauth/v2/authorization?" + values.Encode()}, nil
 }
@@ -879,6 +880,13 @@ func linkedInScopeIncludesOrganizationAccess(scope string) bool {
 		}
 	}
 	return false
+}
+
+func linkedInOAuthScope(accountKind domain.AccountKind) string {
+	if domain.NormalizeAccountKind(domain.PlatformLinkedIn, accountKind) == domain.AccountKindOrganization {
+		return linkedInOrganizationOAuthScope
+	}
+	return linkedInPersonalOAuthScope
 }
 
 func linkedInScopeValues(scope string) []string {

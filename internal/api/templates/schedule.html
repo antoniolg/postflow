@@ -5115,7 +5115,12 @@
               <button type="submit" class="btn-secondary">{{t "settings.connect_x"}}</button>
             </form>
             <form method="post" action="/oauth/linkedin/start">
+              <input type="hidden" name="account_kind" value="personal" />
               <button type="submit" class="btn-secondary">{{t "settings.connect_linkedin"}}</button>
+            </form>
+            <form method="post" action="/oauth/linkedin/start">
+              <input type="hidden" name="account_kind" value="organization" />
+              <button type="submit" class="btn-secondary">{{t "settings.connect_linkedin_organization"}}</button>
             </form>
             <form method="post" action="/oauth/facebook/start">
               <button type="submit" class="btn-secondary">{{t "settings.connect_facebook"}}</button>

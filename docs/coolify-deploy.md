@@ -62,7 +62,7 @@ For real X publishing:
 For LinkedIn OAuth:
 - `LINKEDIN_CLIENT_ID=...`
 - `LINKEDIN_CLIENT_SECRET=...`
-- Ensure the LinkedIn app is approved for organization admin/posting scopes if you want company page connections.
+- Personal profile connections require member posting. Company page connections additionally require organization admin/posting scopes.
 
 For Facebook/Instagram OAuth:
 - `META_APP_ID=...`

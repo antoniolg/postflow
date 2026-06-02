@@ -347,7 +347,7 @@ func TestLinkedInRefreshOAuthAndCallbackFlows(t *testing.T) {
 		}
 	})
 
-	t.Run("start oauth validates config and builds authorization URL", func(t *testing.T) {
+	t.Run("start oauth defaults to personal scopes", func(t *testing.T) {
 		provider := NewLinkedInProvider(LinkedInProviderConfig{})
 		if _, err := provider.StartOAuth(context.Background(), OAuthStartInput{State: "s", RedirectURL: "https://app/callback"}); err == nil {
 			t.Fatalf("expected oauth start to fail without credentials")
@@ -377,10 +377,43 @@ func TestLinkedInRefreshOAuthAndCallbackFlows(t *testing.T) {
 			t.Fatalf("unexpected query in auth url: %s", parsed.RawQuery)
 		}
 		scope := strings.Fields(query.Get("scope"))
-		expectedScopes := []string{"openid", "profile", "w_member_social", "rw_organization_admin", "w_organization_social"}
+		expectedScopes := []string{"openid", "profile", "w_member_social"}
 		for _, expected := range expectedScopes {
 			if !slices.Contains(scope, expected) {
 				t.Fatalf("expected oauth scope %q in auth url, got %q", expected, query.Get("scope"))
+			}
+		}
+		rejectedScopes := []string{"rw_organization_admin", "w_organization_social"}
+		for _, rejected := range rejectedScopes {
+			if slices.Contains(scope, rejected) {
+				t.Fatalf("did not expect organization oauth scope %q in personal auth url, got %q", rejected, query.Get("scope"))
+			}
+		}
+	})
+
+	t.Run("start oauth can request organization scopes", func(t *testing.T) {
+		provider := NewLinkedInProvider(LinkedInProviderConfig{
+			ClientID:     "client-id",
+			ClientSecret: "client-secret",
+			AuthBaseURL:  "https://auth.example.com",
+		})
+		out, err := provider.StartOAuth(context.Background(), OAuthStartInput{
+			State:       "state-123",
+			RedirectURL: "https://app.example.com/callback",
+			AccountKind: domain.AccountKindOrganization,
+		})
+		if err != nil {
+			t.Fatalf("start oauth: %v", err)
+		}
+		parsed, err := url.Parse(out.AuthURL)
+		if err != nil {
+			t.Fatalf("parse auth url: %v", err)
+		}
+		scope := strings.Fields(parsed.Query().Get("scope"))
+		expectedScopes := []string{"openid", "profile", "w_member_social", "rw_organization_admin", "w_organization_social"}
+		for _, expected := range expectedScopes {
+			if !slices.Contains(scope, expected) {
+				t.Fatalf("expected oauth scope %q in auth url, got %q", expected, parsed.Query().Get("scope"))
 			}
 		}
 	})
