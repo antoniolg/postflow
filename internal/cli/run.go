@@ -624,7 +624,7 @@ Commands:
   posts edit             Edit an editable post via /posts/{id}/edit
   posts delete           Delete an editable post via /posts/{id}/delete
   posts cancel           Cancel scheduled post via /posts/{id}/cancel
-  posts quick            Quick create + schedule (automation-friendly)
+  posts quick            Quick create (optional schedule) (automation-friendly)
   accounts list          List accounts via /accounts
   accounts create-static Create/update static account via /accounts/static
   accounts connect       Mark account connected via /accounts/{id}/connect

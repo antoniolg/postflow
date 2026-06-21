@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -9,41 +10,21 @@ import (
 	"strings"
 )
 
-type quickCreateRequest struct {
-	AccountID   string `json:"account_id"`
-	Text        string `json:"text"`
-	ScheduledAt string `json:"scheduled_at,omitempty"`
-}
-
-type quickCreateResponse struct {
-	PostID      string `json:"post_id"`
-	AccountID   string `json:"account_id"`
-	Platform    string `json:"platform"`
-	Status      string `json:"status"`
-	Text        string `json:"text"`
-	ScheduledAt string `json:"scheduled_at,omitempty"`
-	CreatedAt   string `json:"created_at"`
-}
-
 // runPostsQuick handles "postflow posts quick" — a single-command way to
 // create and optionally schedule a post, designed for automation (Hermes,
 // cron jobs, shell scripts).
 //
 // Usage:
 //
-//	# Create and schedule for now (publish immediately)
+//	# Create a draft post
 //	postflow posts quick --account-id acc_xxx --text "Hello world"
 //
 //	# Create and schedule for later
 //	postflow posts quick --account-id acc_xxx --text "Hello world" --scheduled-at "2026-07-01T10:00:00Z"
 //
-//	# Use DISPLAY_NAME env var as account shortcut
-//	export PF_ACCOUNT=default
-//	postflow posts quick --text "Hello from $PF_ACCOUNT"
-//
-//	# Use ACCOUNT_MAP env var for named accounts
+//	# Use named accounts via ACCOUNT_MAP env var
 //	export ACCOUNT_MAP='default=acc_123 twitter=acc_456'
-//	postflow posts quick --account default --text "Tweet!"
+//	postflow posts quick --account twitter --text "Tweet!"
 func runPostsQuick(ctx context.Context, client *APIClient, cfg config, args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("posts quick", flag.ContinueOnError)
 	fs.SetOutput(stderr)
@@ -57,7 +38,7 @@ func runPostsQuick(ctx context.Context, client *APIClient, cfg config, args []st
 	fs.StringVar(&accountFlag, "account", "", "Account name (from ACCOUNT_MAP env var) or raw account ID")
 	fs.StringVar(&accountIDFlag, "account-id", "", "Direct account ID (overrides --account)")
 	fs.StringVar(&text, "text", "", "Post text content")
-	fs.StringVar(&scheduledAt, "scheduled-at", "", "Schedule time (RFC3339, e.g. 2026-07-01T10:00:00Z). Omit to publish immediately.")
+	fs.StringVar(&scheduledAt, "scheduled-at", "", "Schedule time (RFC3339, e.g. 2026-07-01T10:00:00Z). Omit to create a draft.")
 	fs.StringVar(&segmentsJSON, "segments-json", "", "Thread segments JSON (alternative to --text)")
 
 	if err := fs.Parse(args); err != nil {
@@ -67,7 +48,7 @@ func runPostsQuick(ctx context.Context, client *APIClient, cfg config, args []st
 	// Resolve account
 	resolvedAccountID := resolveAccount(accountFlag, accountIDFlag)
 	if resolvedAccountID == "" {
-		fmt.Fprintln(stderr, "error: --account or --account-id is required")
+		fmt.Fprintln(stderr, "--account or --account-id is required")
 		fmt.Fprintln(stderr, "")
 		fmt.Fprintln(stderr, "Usage:")
 		fmt.Fprintln(stderr, "  postflow posts quick --account-id acc_xxx --text 'Hello world'")
@@ -80,7 +61,7 @@ func runPostsQuick(ctx context.Context, client *APIClient, cfg config, args []st
 	}
 
 	if text == "" && segmentsJSON == "" {
-		fmt.Fprintln(stderr, "error: --text or --segments-json is required")
+		fmt.Fprintln(stderr, "--text or --segments-json is required")
 		return 2
 	}
 
@@ -88,11 +69,21 @@ func runPostsQuick(ctx context.Context, client *APIClient, cfg config, args []st
 	createReq := map[string]interface{}{
 		"account_id": resolvedAccountID,
 	}
-	if text != "" {
-		createReq["text"] = text
+	if strings.TrimSpace(text) != "" {
+		createReq["text"] = strings.TrimSpace(text)
 	}
-	if segmentsJSON != "" {
-		createReq["segments_json"] = segmentsJSON
+	if strings.TrimSpace(segmentsJSON) != "" {
+		// Parse segments JSON and send as a proper array (not a string)
+		var segments []interface{}
+		if err := json.Unmarshal([]byte(segmentsJSON), &segments); err != nil {
+			fmt.Fprintf(stderr, "invalid --segments-json: %v\n", err)
+			return 2
+		}
+		if len(segments) == 0 {
+			fmt.Fprintln(stderr, "--segments-json cannot be empty")
+			return 2
+		}
+		createReq["segments"] = segments
 	}
 
 	var createResp map[string]interface{}
@@ -103,7 +94,7 @@ func runPostsQuick(ctx context.Context, client *APIClient, cfg config, args []st
 
 	postID, _ := createResp["id"].(string)
 	if postID == "" {
-		fmt.Fprintln(stderr, "error: no post ID returned from create")
+		fmt.Fprintln(stderr, "no post ID returned from create")
 		return 1
 	}
 
@@ -116,26 +107,47 @@ func runPostsQuick(ctx context.Context, client *APIClient, cfg config, args []st
 			"scheduled_at": scheduledAt,
 		}
 		if err := client.Post(ctx, "/posts/"+postID+"/schedule", schedReq, nil); err != nil {
-			fmt.Fprintf(stderr, "Post created (%s) but scheduling failed: %v\n", postID, err)
+			fmt.Fprintf(stderr, "post created (%s) but scheduling failed: %v\n", postID, err)
+			printOutput(stdout, cfg.asJSON, map[string]interface{}{
+			"post_id":      postID,
+			"account_id":   resolvedAccountID,
+			"platform":     platform,
+			"status":       "created",
+			"text":         text,
+			"scheduled_at": scheduledAt,
+			"error":        err.Error(),
+		}, func() {
 			fmt.Fprintf(stdout, "post_id: %s\n", postID)
 			fmt.Fprintf(stdout, "account_id: %s\n", resolvedAccountID)
 			fmt.Fprintf(stdout, "platform: %s\n", platform)
 			fmt.Fprintf(stdout, "status: created (unscheduled)\n")
 			fmt.Fprintf(stdout, "text: %s\n", text)
+			fmt.Fprintf(stdout, "scheduled_at: %s\n", scheduledAt)
+		})
 			return 1
 		}
 		status = "scheduled"
 	}
 
 	// Output
-	fmt.Fprintf(stdout, "post_id: %s\n", postID)
-	fmt.Fprintf(stdout, "account_id: %s\n", resolvedAccountID)
-	fmt.Fprintf(stdout, "platform: %s\n", platform)
-	fmt.Fprintf(stdout, "status: %s\n", status)
-	fmt.Fprintf(stdout, "text: %s\n", text)
-	if scheduledAt != "" {
-		fmt.Fprintf(stdout, "scheduled_at: %s\n", scheduledAt)
-	}
+	printOutput(stdout, cfg.asJSON, map[string]interface{}{
+		"post_id":      postID,
+		"account_id":   resolvedAccountID,
+		"platform":     platform,
+		"status":       status,
+		"text":         text,
+		"created_at":   createResp["created_at"],
+		"scheduled_at": scheduledAt,
+	}, func() {
+		fmt.Fprintf(stdout, "post_id: %s\n", postID)
+		fmt.Fprintf(stdout, "account_id: %s\n", resolvedAccountID)
+		fmt.Fprintf(stdout, "platform: %s\n", platform)
+		fmt.Fprintf(stdout, "status: %s\n", status)
+		fmt.Fprintf(stdout, "text: %s\n", text)
+		if scheduledAt != "" {
+			fmt.Fprintf(stdout, "scheduled_at: %s\n", scheduledAt)
+		}
+	})
 
 	return 0
 }
@@ -158,11 +170,9 @@ func resolveAccount(accountFlag, accountIDFlag string) string {
 	// Check ACCOUNT_MAP env var
 	accountMap := os.Getenv("ACCOUNT_MAP")
 	if accountMap == "" {
-		// Maybe the flag value is already an account ID (starts with acc_)
-		if strings.HasPrefix(name, "acc_") {
-			return name
-		}
-		return ""
+		// If ACCOUNT_MAP is not set, treat the flag value as a raw account ID
+		// (e.g., "acc_123" or any string)
+		return name
 	}
 
 	// Parse ACCOUNT_MAP
@@ -171,6 +181,11 @@ func resolveAccount(accountFlag, accountIDFlag string) string {
 		if len(parts) == 2 && parts[0] == name {
 			return parts[1]
 		}
+	}
+
+	// Not found in ACCOUNT_MAP — if it looks like an account ID, use it anyway
+	if strings.HasPrefix(name, "acc_") {
+		return name
 	}
 
 	return ""
