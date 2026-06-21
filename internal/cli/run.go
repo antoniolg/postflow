@@ -264,8 +264,11 @@ func runPosts(ctx context.Context, client *APIClient, cfg config, args []string,
 		return runPostsDelete(ctx, client, cfg, args[1:], stdout, stderr)
 	case "cancel":
 		return runPostsCancel(ctx, client, cfg, args[1:], stdout, stderr)
+	case "quick":
+		return runPostsQuick(ctx, client, cfg, args[1:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "unknown posts subcommand: %s\n", args[0])
+		fmt.Fprintln(stderr, "Available subcommands: create, validate, schedule, edit, delete, cancel, quick")
 		return 2
 	}
 }
@@ -621,6 +624,7 @@ Commands:
   posts edit             Edit an editable post via /posts/{id}/edit
   posts delete           Delete an editable post via /posts/{id}/delete
   posts cancel           Cancel scheduled post via /posts/{id}/cancel
+  posts quick            Quick create + schedule (automation-friendly)
   accounts list          List accounts via /accounts
   accounts create-static Create/update static account via /accounts/static
   accounts connect       Mark account connected via /accounts/{id}/connect
