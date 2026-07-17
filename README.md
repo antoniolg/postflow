@@ -13,7 +13,7 @@ This README is a **basic setup guide**.
 ## 1) Local Setup (5 minutes)
 
 ### Requirements
-- Go 1.26.1+
+- Go 1.26.5+
 - Optional: Homebrew (for installing CLI binary)
 
 ### Start locally
