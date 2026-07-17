@@ -87,6 +87,14 @@ func (s Server) newMCPHandler() http.Handler {
 	}, s.mcpDisconnectAccountTool)
 
 	mcp.AddTool(server, &mcp.Tool{
+		Name:        "postflow_reauthorize_account",
+		Description: "Start OAuth recovery for an OAuth account in error and return the authorization URL.",
+		Annotations: &mcp.ToolAnnotations{
+			IdempotentHint: false,
+		},
+	}, s.mcpReauthorizeAccountTool)
+
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "postflow_set_x_premium",
 		Description: "Set X premium flag for an X account.",
 		Annotations: &mcp.ToolAnnotations{

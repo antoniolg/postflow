@@ -45,7 +45,7 @@ func (s Server) handleOAuthStart(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, errors.New("oauth is not available for platform"))
 		return
 	}
-	accountKind, err := oauthStartAccountKind(r, platform)
+	params, err := parseOAuthStartRequest(r, platform)
 	if err != nil {
 		if isHTML {
 			http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", err.Error()), http.StatusSeeOther)
@@ -54,6 +54,24 @@ func (s Server) handleOAuthStart(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
+	accountKind := domain.AccountKind(params.AccountKind)
+	targetAccountID := strings.TrimSpace(params.AccountID)
+	if targetAccountID != "" {
+		target, err := s.oauthReauthorizationTarget(r.Context(), platform, targetAccountID)
+		if err != nil {
+			if isHTML {
+				http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", err.Error()), http.StatusSeeOther)
+				return
+			}
+			status := http.StatusBadRequest
+			if errors.Is(err, db.ErrAccountNotFound) {
+				status = http.StatusNotFound
+			}
+			writeError(w, status, err)
+			return
+		}
+		accountKind = target.AccountKind
+	}
 	state := mustID("state")
 	codeVerifier := newOAuthCodeVerifier()
 	slog.Info("oauth start requested",
@@ -61,13 +79,15 @@ func (s Server) handleOAuthStart(w http.ResponseWriter, r *http.Request) {
 		"state", oauthStateLabel(state),
 		"return_to", returnTo,
 		"account_kind", accountKind,
+		"target_account_id", targetAccountID,
 		"is_html", isHTML,
 	)
 	recorded, err := s.Store.CreateOAuthState(r.Context(), domain.OauthState{
-		Platform:     platform,
-		State:        state,
-		CodeVerifier: codeVerifier,
-		ExpiresAt:    time.Now().UTC().Add(10 * time.Minute),
+		Platform:        platform,
+		State:           state,
+		CodeVerifier:    codeVerifier,
+		TargetAccountID: targetAccountID,
+		ExpiresAt:       time.Now().UTC().Add(10 * time.Minute),
 	})
 	if err != nil {
 		if isHTML {
@@ -97,40 +117,72 @@ func (s Server) handleOAuthStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"platform": platform,
-		"auth_url": out.AuthURL,
-		"state":    recorded.State,
-		"expires":  recorded.ExpiresAt.UTC().Format(time.RFC3339),
+		"platform":   platform,
+		"account_id": recorded.TargetAccountID,
+		"auth_url":   out.AuthURL,
+		"state":      recorded.State,
+		"expires":    recorded.ExpiresAt.UTC().Format(time.RFC3339),
 	})
 }
 
 type oauthStartRequest struct {
 	AccountKind string `json:"account_kind,omitempty"`
+	AccountID   string `json:"account_id,omitempty"`
 }
 
-func oauthStartAccountKind(r *http.Request, platform domain.Platform) (domain.AccountKind, error) {
-	if platform != domain.PlatformLinkedIn {
-		return "", nil
+func parseOAuthStartRequest(r *http.Request, platform domain.Platform) (oauthStartRequest, error) {
+	req := oauthStartRequest{
+		AccountKind: strings.TrimSpace(r.URL.Query().Get("account_kind")),
+		AccountID:   strings.TrimSpace(r.URL.Query().Get("account_id")),
 	}
-	raw := strings.TrimSpace(r.URL.Query().Get("account_kind"))
-	if raw == "" && strings.Contains(strings.ToLower(r.Header.Get("Content-Type")), "application/json") {
-		var req oauthStartRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
-			return "", fmt.Errorf("invalid json body: %w", err)
+	if strings.Contains(strings.ToLower(r.Header.Get("Content-Type")), "application/json") {
+		var body oauthStartRequest
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil && !errors.Is(err, io.EOF) {
+			return oauthStartRequest{}, fmt.Errorf("invalid json body: %w", err)
 		}
-		raw = strings.TrimSpace(req.AccountKind)
-	}
-	if raw == "" {
+		if req.AccountKind == "" {
+			req.AccountKind = strings.TrimSpace(body.AccountKind)
+		}
+		if req.AccountID == "" {
+			req.AccountID = strings.TrimSpace(body.AccountID)
+		}
+	} else {
 		if err := r.ParseForm(); err != nil {
-			return "", fmt.Errorf("invalid form body: %w", err)
+			return oauthStartRequest{}, fmt.Errorf("invalid form body: %w", err)
 		}
-		raw = strings.TrimSpace(r.Form.Get("account_kind"))
+		if req.AccountKind == "" {
+			req.AccountKind = strings.TrimSpace(r.Form.Get("account_kind"))
+		}
+		if req.AccountID == "" {
+			req.AccountID = strings.TrimSpace(r.Form.Get("account_id"))
+		}
 	}
-	accountKind := domain.NormalizeAccountKind(platform, domain.AccountKind(raw))
-	if accountKind == "" {
-		return "", errors.New("account_kind is invalid for platform")
+	if platform == domain.PlatformLinkedIn {
+		req.AccountKind = string(domain.NormalizeAccountKind(platform, domain.AccountKind(req.AccountKind)))
+		if req.AccountKind == "" {
+			return oauthStartRequest{}, errors.New("account_kind is invalid for platform")
+		}
+	} else {
+		req.AccountKind = ""
 	}
-	return accountKind, nil
+	return req, nil
+}
+
+func (s Server) oauthReauthorizationTarget(ctx context.Context, platform domain.Platform, accountID string) (domain.SocialAccount, error) {
+	account, err := s.Store.GetAccount(ctx, strings.TrimSpace(accountID))
+	if err != nil {
+		return domain.SocialAccount{}, err
+	}
+	if account.Platform != platform {
+		return domain.SocialAccount{}, errors.New("account platform does not match oauth platform")
+	}
+	if account.AuthMethod != domain.AuthMethodOAuth {
+		return domain.SocialAccount{}, errors.New("only oauth accounts can be reauthorized")
+	}
+	if account.Status != domain.AccountStatusError {
+		return domain.SocialAccount{}, errors.New("only accounts in error can be reauthorized")
+	}
+	return account, nil
 }
 
 func (s Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
@@ -210,6 +262,16 @@ func (s Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
+	if recorded.Platform != platform {
+		err := errors.New("oauth callback platform does not match authorization request")
+		rememberOAuthCallbackOutcome(recorded.State, false, err.Error(), "")
+		if isHTML {
+			http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", err.Error()), http.StatusSeeOther)
+			return
+		}
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
 	connected, err := provider.HandleOAuthCallback(callbackCtx, postflow.OAuthCallbackInput{
 		Code:         code,
 		State:        recorded.State,
@@ -228,6 +290,36 @@ func (s Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if strings.TrimSpace(recorded.TargetAccountID) != "" {
+		reauthorized, err := s.persistReauthorizedAccount(callbackCtx, recorded.TargetAccountID, connected)
+		if err != nil {
+			rememberOAuthCallbackOutcome(recorded.State, false, err.Error(), "")
+			slog.Error("oauth callback reauthorization failed",
+				"platform", platform,
+				"state", oauthStateLabel(recorded.State),
+				"target_account_id", recorded.TargetAccountID,
+				"error", err.Error(),
+			)
+			if isHTML {
+				http.Redirect(w, r, withQueryValue(returnTo, "accounts_error", err.Error()), http.StatusSeeOther)
+				return
+			}
+			writeError(w, http.StatusConflict, err)
+			return
+		}
+		msg := "account reauthorized"
+		rememberOAuthCallbackOutcome(recorded.State, true, msg, "")
+		if isHTML {
+			http.Redirect(w, r, withQueryValue(returnTo, "accounts_success", msg), http.StatusSeeOther)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"platform": platform,
+			"count":    1,
+			"items":    []domain.SocialAccount{reauthorized},
+		})
 		return
 	}
 	if shouldPromptOAuthAccountSelection(isHTML, connected) {

@@ -103,12 +103,24 @@ func TestSaveAccountCredentialsValidation(t *testing.T) {
 
 func TestConsumeOAuthStateSuccessDeletesState(t *testing.T) {
 	store := openTestStore(t)
+	account, err := store.UpsertAccount(t.Context(), UpsertAccountParams{
+		Platform:          domain.PlatformLinkedIn,
+		AccountKind:       domain.AccountKindPersonal,
+		DisplayName:       "LinkedIn Test",
+		ExternalAccountID: "linkedin-test",
+		AuthMethod:        domain.AuthMethodOAuth,
+		Status:            domain.AccountStatusError,
+	})
+	if err != nil {
+		t.Fatalf("create target account: %v", err)
+	}
 
 	created, err := store.CreateOAuthState(context.Background(), domain.OauthState{
-		Platform:     domain.PlatformLinkedIn,
-		State:        "state_success_" + strings.ReplaceAll(t.Name(), "/", "_"),
-		CodeVerifier: "verifier-success",
-		ExpiresAt:    time.Now().UTC().Add(5 * time.Minute),
+		Platform:        domain.PlatformLinkedIn,
+		State:           "state_success_" + strings.ReplaceAll(t.Name(), "/", "_"),
+		CodeVerifier:    "verifier-success",
+		TargetAccountID: account.ID,
+		ExpiresAt:       time.Now().UTC().Add(5 * time.Minute),
 	})
 	if err != nil {
 		t.Fatalf("create oauth state: %v", err)
@@ -118,7 +130,7 @@ func TestConsumeOAuthStateSuccessDeletesState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("consume oauth state: %v", err)
 	}
-	if consumed.ID != created.ID || consumed.State != created.State || consumed.Platform != created.Platform {
+	if consumed.ID != created.ID || consumed.State != created.State || consumed.Platform != created.Platform || consumed.TargetAccountID != account.ID {
 		t.Fatalf("unexpected consumed state: got=%+v want=%+v", consumed, created)
 	}
 

@@ -17,6 +17,7 @@ func ExposedCapabilities() map[string]struct{} {
 		capabilities.CapabilityAccountsCreateStatic: {},
 		capabilities.CapabilityAccountsConnect:      {},
 		capabilities.CapabilityAccountsDisconnect:   {},
+		capabilities.CapabilityAccountsReauthorize:  {},
 		capabilities.CapabilityAccountsDelete:       {},
 		capabilities.CapabilityAccountsSetXPremium:  {},
 		capabilities.CapabilityFailedList:           {},

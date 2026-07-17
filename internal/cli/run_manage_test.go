@@ -274,6 +274,42 @@ func TestRunAccountsCreateStaticRejectsX(t *testing.T) {
 	}
 }
 
+func TestRunAccountsReauthorizePrintsAuthorizationURL(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/accounts":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"count": 1,
+				"items": []map[string]any{{"id": "acc_x", "platform": "x", "auth_method": "oauth", "status": "error"}},
+			})
+		case r.Method == http.MethodPost && r.URL.Path == "/oauth/x/start":
+			var payload map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode payload: %v", err)
+			}
+			if got := strings.TrimSpace(anyString(payload["account_id"])); got != "acc_x" {
+				t.Fatalf("expected account_id acc_x, got %q", got)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"platform": "x", "account_id": "acc_x", "auth_url": "https://x.example/authorize", "state": "state_1",
+			})
+		default:
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := Run(context.Background(), []string{"--base-url", server.URL, "accounts", "reauthorize", "--id", "acc_x"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d, stderr=%s", code, stderr.String())
+	}
+	if strings.TrimSpace(stdout.String()) != "https://x.example/authorize" {
+		t.Fatalf("expected authorization URL, got %q", stdout.String())
+	}
+}
+
 func TestRunSettingsSetTimezone(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/settings/timezone" {

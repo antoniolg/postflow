@@ -233,7 +233,7 @@ func runPostsCancel(ctx context.Context, client *APIClient, cfg config, args []s
 
 func runAccounts(ctx context.Context, client *APIClient, cfg config, args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(stderr, "usage: postflow accounts <list|create-static|connect|disconnect|x-premium|delete> [flags]")
+		fmt.Fprintln(stderr, "usage: postflow accounts <list|create-static|connect|disconnect|reauthorize|x-premium|delete> [flags]")
 		return 2
 	}
 	switch args[0] {
@@ -261,6 +261,8 @@ func runAccounts(ctx context.Context, client *APIClient, cfg config, args []stri
 		return runAccountStatusMutation(ctx, client, cfg, args[1:], stdout, stderr, "connect")
 	case "disconnect":
 		return runAccountStatusMutation(ctx, client, cfg, args[1:], stdout, stderr, "disconnect")
+	case "reauthorize":
+		return runAccountReauthorize(ctx, client, cfg, args[1:], stdout, stderr)
 	case "x-premium":
 		return runAccountSetXPremium(ctx, client, cfg, args[1:], stdout, stderr)
 	case "delete":
@@ -269,6 +271,51 @@ func runAccounts(ctx context.Context, client *APIClient, cfg config, args []stri
 		fmt.Fprintf(stderr, "unknown accounts subcommand: %s\n", args[0])
 		return 2
 	}
+}
+
+func runAccountReauthorize(ctx context.Context, client *APIClient, cfg config, args []string, stdout, stderr io.Writer) int {
+	fs := flag.NewFlagSet("accounts reauthorize", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	id := fs.String("id", "", "OAuth account ID in error")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	accountID := strings.TrimSpace(*id)
+	if accountID == "" {
+		fmt.Fprintln(stderr, "--id is required")
+		return 2
+	}
+	var accounts accountsListResponse
+	if err := client.Get(ctx, "/accounts", nil, &accounts); err != nil {
+		fmt.Fprintln(stderr, err.Error())
+		return 1
+	}
+	platform := ""
+	for _, account := range accounts.Items {
+		if strings.TrimSpace(account.ID) == accountID {
+			platform = strings.TrimSpace(account.Platform)
+			break
+		}
+	}
+	if platform == "" {
+		fmt.Fprintln(stderr, "account not found")
+		return 1
+	}
+	var out struct {
+		Platform  string `json:"platform"`
+		AccountID string `json:"account_id"`
+		AuthURL   string `json:"auth_url"`
+		State     string `json:"state"`
+		Expires   string `json:"expires"`
+	}
+	if err := client.Post(ctx, "/oauth/"+platform+"/start", map[string]any{"account_id": accountID}, &out); err != nil {
+		fmt.Fprintln(stderr, err.Error())
+		return 1
+	}
+	printOutput(stdout, cfg.asJSON, out, func() {
+		fmt.Fprintln(stdout, out.AuthURL)
+	})
+	return 0
 }
 
 func runAccountsCreateStatic(ctx context.Context, client *APIClient, cfg config, args []string, stdout, stderr io.Writer) int {

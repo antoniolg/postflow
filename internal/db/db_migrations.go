@@ -55,6 +55,16 @@ var dbMigrations = []migration{
 		Name:    "local_auth",
 		Up:      migrationAddLocalAuth,
 	},
+	{
+		Version: 8,
+		Name:    "oauth_state_target_account",
+		Up:      migrationAddOAuthStateTargetAccount,
+	},
+}
+
+func migrationAddOAuthStateTargetAccount(ctx context.Context, tx *sql.Tx) error {
+	_, err := tx.ExecContext(ctx, `ALTER TABLE oauth_states ADD COLUMN target_account_id TEXT REFERENCES accounts(id) ON DELETE CASCADE`)
+	return err
 }
 
 func (s *Store) hasPendingMigrations(ctx context.Context) (bool, error) {

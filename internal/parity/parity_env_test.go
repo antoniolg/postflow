@@ -58,11 +58,12 @@ func newParityEnv(t *testing.T) *parityEnv {
 		DefaultMaxRetries: 3,
 		APIToken:          token,
 		Registry: postflow.NewProviderRegistry(
-			postflow.NewXProvider(postflow.XConfig{}),
+			postflow.NewXProvider(postflow.XConfig{ClientID: "parity-client-id"}),
 			postflow.NewLinkedInProvider(postflow.LinkedInProviderConfig{}),
 			postflow.NewFacebookProvider(postflow.MetaProviderConfig{}),
 			postflow.NewInstagramProvider(postflow.MetaProviderConfig{}),
 		),
+		PublicBaseURL: "https://postflow.example",
 	}
 	httpServer := httptest.NewServer(srv.Handler())
 	t.Cleanup(httpServer.Close)

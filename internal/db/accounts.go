@@ -347,10 +347,14 @@ func (s *Store) CreateOAuthState(ctx context.Context, state domain.OauthState) (
 		state.ExpiresAt = time.Now().UTC().Add(10 * time.Minute)
 	}
 	state.CreatedAt = time.Now().UTC()
+	var targetAccountID any
+	if strings.TrimSpace(state.TargetAccountID) != "" {
+		targetAccountID = strings.TrimSpace(state.TargetAccountID)
+	}
 	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO oauth_states (id, platform, state, code_verifier, expires_at, created_at)
-		VALUES (?, ?, ?, ?, ?, ?)
-	`, state.ID, strings.TrimSpace(string(state.Platform)), strings.TrimSpace(state.State), strings.TrimSpace(state.CodeVerifier), state.ExpiresAt.Format(time.RFC3339Nano), state.CreatedAt.Format(time.RFC3339Nano))
+		INSERT INTO oauth_states (id, platform, state, code_verifier, target_account_id, expires_at, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`, state.ID, strings.TrimSpace(string(state.Platform)), strings.TrimSpace(state.State), strings.TrimSpace(state.CodeVerifier), targetAccountID, state.ExpiresAt.Format(time.RFC3339Nano), state.CreatedAt.Format(time.RFC3339Nano))
 	if err != nil {
 		return domain.OauthState{}, err
 	}
@@ -369,17 +373,19 @@ func (s *Store) ConsumeOAuthState(ctx context.Context, stateRaw string) (domain.
 	defer tx.Rollback()
 
 	var state domain.OauthState
+	var targetAccountID sql.NullString
 	var expires, created string
 	err = tx.QueryRowContext(ctx, `
-		SELECT id, platform, state, code_verifier, expires_at, created_at
+		SELECT id, platform, state, code_verifier, target_account_id, expires_at, created_at
 		FROM oauth_states
 		WHERE state = ?
-	`, stateRaw).Scan(&state.ID, &state.Platform, &state.State, &state.CodeVerifier, &expires, &created)
+	`, stateRaw).Scan(&state.ID, &state.Platform, &state.State, &state.CodeVerifier, &targetAccountID, &expires, &created)
 	if err != nil {
 		return domain.OauthState{}, err
 	}
 	state.ExpiresAt, _ = time.Parse(time.RFC3339Nano, expires)
 	state.CreatedAt, _ = time.Parse(time.RFC3339Nano, created)
+	state.TargetAccountID = strings.TrimSpace(targetAccountID.String)
 	if state.ExpiresAt.Before(time.Now().UTC()) {
 		if _, err := tx.ExecContext(ctx, `DELETE FROM oauth_states WHERE id = ?`, state.ID); err != nil {
 			return domain.OauthState{}, err

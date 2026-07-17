@@ -625,6 +625,7 @@ Commands:
   accounts create-static Create/update static account via /accounts/static
   accounts connect       Mark account connected via /accounts/{id}/connect
   accounts disconnect    Mark account disconnected via /accounts/{id}/disconnect
+  accounts reauthorize   Start OAuth recovery for an account in error
   accounts x-premium     Set X premium via /accounts/{id}/x-premium
   accounts delete        Delete disconnected account via /accounts/{id}
   settings set-timezone  Set UI timezone via /settings/timezone

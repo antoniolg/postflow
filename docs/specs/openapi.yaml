@@ -161,7 +161,7 @@ paths:
   /oauth/{platform}/start:
     post:
       summary: Start OAuth for a supported platform
-      description: Supported OAuth platforms are x, linkedin, facebook, and instagram. For LinkedIn, omit `account_kind` or set `personal` for profile-only OAuth; set `organization` to request company page scopes.
+      description: Supported OAuth platforms are x, linkedin, facebook, and instagram. For LinkedIn, omit `account_kind` or set `personal` for profile-only OAuth; set `organization` to request company page scopes. Set `account_id` to reauthorize a specific OAuth account in error; the callback rejects a different network identity.
       parameters:
         - $ref: '#/components/parameters/PlatformPath'
       requestBody:
@@ -180,6 +180,9 @@ paths:
                 properties:
                   platform:
                     $ref: '#/components/schemas/OAuthPlatform'
+                  account_id:
+                    type: string
+                    description: Target account ID when this is a reauthorization flow.
                   auth_url:
                     type: string
                   state:
@@ -1196,7 +1199,10 @@ components:
       properties:
         account_kind:
           $ref: '#/components/schemas/AccountKind'
-      description: Optional for LinkedIn OAuth. Defaults to `personal`; use `organization` to request company page scopes.
+        account_id:
+          type: string
+          description: OAuth account in error to reauthorize. The authorized network identity must match this account.
+      description: `account_kind` is optional for LinkedIn OAuth and defaults to `personal`; use `organization` to request company page scopes. Use `account_id` for targeted account recovery.
 
     CreatePostRequest:
       type: object

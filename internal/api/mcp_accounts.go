@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/antoniolg/postflow/internal/db"
 	"github.com/antoniolg/postflow/internal/domain"
+	"github.com/antoniolg/postflow/internal/postflow"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -37,6 +39,13 @@ type mcpAccountMutationInput struct {
 type mcpAccountStatusOutput struct {
 	AccountID string `json:"account_id"`
 	Status    string `json:"status"`
+}
+
+type mcpReauthorizeAccountOutput struct {
+	AccountID string `json:"account_id"`
+	Platform  string `json:"platform"`
+	AuthURL   string `json:"auth_url"`
+	Expires   string `json:"expires"`
 }
 
 type mcpSetXPremiumInput struct {
@@ -153,6 +162,53 @@ func (s Server) mcpDisconnectAccountTool(ctx context.Context, _ *mcp.CallToolReq
 	return nil, mcpAccountStatusOutput{
 		AccountID: accountID,
 		Status:    string(domain.AccountStatusDisconnected),
+	}, nil
+}
+
+func (s Server) mcpReauthorizeAccountTool(ctx context.Context, _ *mcp.CallToolRequest, in mcpAccountMutationInput) (*mcp.CallToolResult, mcpReauthorizeAccountOutput, error) {
+	accountID := strings.TrimSpace(in.AccountID)
+	if accountID == "" {
+		return nil, mcpReauthorizeAccountOutput{}, errors.New("account_id is required")
+	}
+	account, err := s.Store.GetAccount(ctx, accountID)
+	if err != nil {
+		if errors.Is(err, db.ErrAccountNotFound) {
+			return nil, mcpReauthorizeAccountOutput{}, errors.New("account not found")
+		}
+		return nil, mcpReauthorizeAccountOutput{}, err
+	}
+	target, err := s.oauthReauthorizationTarget(ctx, account.Platform, accountID)
+	if err != nil {
+		return nil, mcpReauthorizeAccountOutput{}, err
+	}
+	provider, ok := s.providerRegistry().GetOAuth(target.Platform)
+	if !ok {
+		return nil, mcpReauthorizeAccountOutput{}, errors.New("oauth is not available for platform")
+	}
+	baseURL := strings.TrimRight(strings.TrimSpace(s.PublicBaseURL), "/")
+	if baseURL == "" {
+		return nil, mcpReauthorizeAccountOutput{}, errors.New("PUBLIC_BASE_URL is required to start oauth outside the web UI")
+	}
+	state := mustID("state")
+	codeVerifier := newOAuthCodeVerifier()
+	recorded, err := s.Store.CreateOAuthState(ctx, domain.OauthState{
+		Platform: target.Platform, State: state, CodeVerifier: codeVerifier,
+		TargetAccountID: target.ID, ExpiresAt: time.Now().UTC().Add(10 * time.Minute),
+	})
+	if err != nil {
+		return nil, mcpReauthorizeAccountOutput{}, err
+	}
+	out, err := provider.StartOAuth(ctx, postflow.OAuthStartInput{
+		State: recorded.State, CodeVerifier: recorded.CodeVerifier,
+		RedirectURL: baseURL + "/oauth/" + string(target.Platform) + "/callback",
+		AccountKind: target.AccountKind,
+	})
+	if err != nil {
+		return nil, mcpReauthorizeAccountOutput{}, err
+	}
+	return nil, mcpReauthorizeAccountOutput{
+		AccountID: target.ID, Platform: string(target.Platform), AuthURL: out.AuthURL,
+		Expires: recorded.ExpiresAt.UTC().Format(time.RFC3339),
 	}, nil
 }
 

@@ -58,6 +58,7 @@ func TestMCPStreamableHTTPExposesToolsAndCreatesPost(t *testing.T) {
 		"postflow_create_static_account",
 		"postflow_connect_account",
 		"postflow_disconnect_account",
+		"postflow_reauthorize_account",
 		"postflow_set_x_premium",
 		"postflow_delete_account",
 		"postflow_list_failed",

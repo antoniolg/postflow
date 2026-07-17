@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
@@ -20,6 +21,128 @@ import (
 type oauthReplayTestProvider struct {
 	callbackErr       error
 	connectedAccounts []postflow.ConnectedAccount
+}
+
+func TestOAuthCallbackReauthorizesOnlyMatchingAccount(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	provider := &oauthReplayTestProvider{}
+	srv := Server{
+		Store: store, DataDir: tempDir, DefaultMaxRetries: 3,
+		Registry: postflow.NewProviderRegistry(provider), PublicBaseURL: "https://postflow.example",
+	}
+	lastError := "expired token"
+	target, err := store.UpsertAccount(t.Context(), db.UpsertAccountParams{
+		Platform: domain.PlatformLinkedIn, AccountKind: domain.AccountKindPersonal,
+		DisplayName: "LinkedIn Test", ExternalAccountID: "linkedin_test_id",
+		AuthMethod: domain.AuthMethodOAuth, Status: domain.AccountStatusError, LastError: &lastError,
+	})
+	if err != nil {
+		t.Fatalf("create target account: %v", err)
+	}
+	state := "state_reauthorize_match"
+	_, err = store.CreateOAuthState(t.Context(), domain.OauthState{
+		Platform: domain.PlatformLinkedIn, State: state, CodeVerifier: "verifier",
+		TargetAccountID: target.ID, ExpiresAt: time.Now().UTC().Add(5 * time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("create oauth state: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/oauth/linkedin/callback?state="+url.QueryEscape(state)+"&code=auth_code", nil)
+	req.Header.Set("Accept", "text/html")
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusSeeOther || !strings.Contains(w.Header().Get("Location"), "accounts_success=account+reauthorized") {
+		t.Fatalf("expected successful reauthorization redirect, got status=%d location=%q", w.Code, w.Header().Get("Location"))
+	}
+	reauthorized, err := store.GetAccount(t.Context(), target.ID)
+	if err != nil {
+		t.Fatalf("get reauthorized account: %v", err)
+	}
+	if reauthorized.Status != domain.AccountStatusConnected || reauthorized.LastError != nil {
+		t.Fatalf("expected connected account with cleared error, got %+v", reauthorized)
+	}
+	if _, err := store.GetAccountCredentials(t.Context(), target.ID); err != nil {
+		t.Fatalf("expected refreshed credentials: %v", err)
+	}
+}
+
+func TestOAuthCallbackRejectsDifferentIdentityDuringReauthorization(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	provider := &oauthReplayTestProvider{connectedAccounts: []postflow.ConnectedAccount{{
+		Platform: domain.PlatformLinkedIn, AccountKind: domain.AccountKindPersonal,
+		DisplayName: "Someone Else", ExternalAccountID: "different_id",
+		Credentials: postflow.Credentials{AccessToken: "different-token"},
+	}}}
+	srv := Server{
+		Store: store, DataDir: tempDir, DefaultMaxRetries: 3,
+		Registry: postflow.NewProviderRegistry(provider), PublicBaseURL: "https://postflow.example",
+	}
+	lastError := "expired token"
+	target, err := store.UpsertAccount(t.Context(), db.UpsertAccountParams{
+		Platform: domain.PlatformLinkedIn, AccountKind: domain.AccountKindPersonal,
+		DisplayName: "LinkedIn Target", ExternalAccountID: "target_id",
+		AuthMethod: domain.AuthMethodOAuth, Status: domain.AccountStatusError, LastError: &lastError,
+	})
+	if err != nil {
+		t.Fatalf("create target account: %v", err)
+	}
+	if err := srv.saveCredentials(t.Context(), target.ID, postflow.Credentials{AccessToken: "old-token"}); err != nil {
+		t.Fatalf("save original credentials: %v", err)
+	}
+	original, err := store.GetAccountCredentials(t.Context(), target.ID)
+	if err != nil {
+		t.Fatalf("load original credentials: %v", err)
+	}
+	state := "state_reauthorize_mismatch"
+	_, err = store.CreateOAuthState(t.Context(), domain.OauthState{
+		Platform: domain.PlatformLinkedIn, State: state, CodeVerifier: "verifier",
+		TargetAccountID: target.ID, ExpiresAt: time.Now().UTC().Add(5 * time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("create oauth state: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/oauth/linkedin/callback?state="+url.QueryEscape(state)+"&code=auth_code", nil)
+	req.Header.Set("Accept", "text/html")
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusSeeOther || !strings.Contains(w.Header().Get("Location"), "accounts_error=authorized+identity+does+not+match") {
+		t.Fatalf("expected identity mismatch redirect, got status=%d location=%q", w.Code, w.Header().Get("Location"))
+	}
+	unchanged, err := store.GetAccount(t.Context(), target.ID)
+	if err != nil {
+		t.Fatalf("get target account: %v", err)
+	}
+	if unchanged.Status != domain.AccountStatusError || unchanged.LastError == nil || *unchanged.LastError != lastError {
+		t.Fatalf("expected target account to remain in error, got %+v", unchanged)
+	}
+	current, err := store.GetAccountCredentials(t.Context(), target.ID)
+	if err != nil {
+		t.Fatalf("load current credentials: %v", err)
+	}
+	if !bytes.Equal(current.Ciphertext, original.Ciphertext) || !bytes.Equal(current.Nonce, original.Nonce) {
+		t.Fatalf("expected credentials to remain unchanged")
+	}
+	accounts, err := store.ListAccounts(t.Context())
+	if err != nil {
+		t.Fatalf("list accounts: %v", err)
+	}
+	if len(accounts) != 1 {
+		t.Fatalf("expected no account created for mismatched identity, got %d", len(accounts))
+	}
 }
 
 func (p *oauthReplayTestProvider) Platform() domain.Platform {

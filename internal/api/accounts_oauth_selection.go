@@ -77,6 +77,51 @@ func (s Server) persistConnectedAccounts(ctx context.Context, connected []postfl
 	return created, nil
 }
 
+func (s Server) persistReauthorizedAccount(ctx context.Context, targetAccountID string, connected []postflow.ConnectedAccount) (domain.SocialAccount, error) {
+	target, err := s.Store.GetAccount(ctx, strings.TrimSpace(targetAccountID))
+	if err != nil {
+		return domain.SocialAccount{}, err
+	}
+	var matched *postflow.ConnectedAccount
+	for i := range connected {
+		candidate := &connected[i]
+		if candidate.Platform != target.Platform {
+			continue
+		}
+		if domain.NormalizeAccountKind(candidate.Platform, candidate.AccountKind) != target.AccountKind {
+			continue
+		}
+		if strings.TrimSpace(candidate.ExternalAccountID) != strings.TrimSpace(target.ExternalAccountID) {
+			continue
+		}
+		matched = candidate
+		break
+	}
+	if matched == nil {
+		return domain.SocialAccount{}, errors.New("authorized identity does not match the account being reauthorized")
+	}
+	if err := s.saveCredentials(ctx, target.ID, matched.Credentials); err != nil {
+		return domain.SocialAccount{}, fmt.Errorf("save reauthorized account credentials: %w", err)
+	}
+	xPremium := target.XPremium
+	account, err := s.Store.UpsertAccount(ctx, db.UpsertAccountParams{
+		Platform:          matched.Platform,
+		AccountKind:       matched.AccountKind,
+		DisplayName:       matched.DisplayName,
+		ExternalAccountID: matched.ExternalAccountID,
+		XPremium:          &xPremium,
+		AuthMethod:        domain.AuthMethodOAuth,
+		Status:            domain.AccountStatusConnected,
+	})
+	if err != nil {
+		return domain.SocialAccount{}, fmt.Errorf("persist reauthorized account: %w", err)
+	}
+	if account.ID != target.ID {
+		return domain.SocialAccount{}, errors.New("reauthorized identity resolved to a different account")
+	}
+	return account, nil
+}
+
 func oauthConnectedAccountsSuccessMessage(count int) string {
 	msg := fmt.Sprintf("%d accounts connected", count)
 	if count == 1 {

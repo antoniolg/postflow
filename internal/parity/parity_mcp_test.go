@@ -307,6 +307,11 @@ func (e *parityEnv) mcpDisconnectAccount(id string) {
 	_ = e.mcpCallTool("postflow_disconnect_account", map[string]any{"account_id": strings.TrimSpace(id)})
 }
 
+func (e *parityEnv) mcpReauthorizeAccount(id string) {
+	e.t.Helper()
+	_ = e.mcpCallTool("postflow_reauthorize_account", map[string]any{"account_id": strings.TrimSpace(id)})
+}
+
 func (e *parityEnv) mcpSetXPremium(id string, enabled bool) {
 	e.t.Helper()
 	_ = e.mcpCallTool("postflow_set_x_premium", map[string]any{"account_id": strings.TrimSpace(id), "x_premium": enabled})

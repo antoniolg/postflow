@@ -120,6 +120,14 @@ go run ./cmd/postflow dlq list --limit 50
 go run ./cmd/postflow dlq requeue --id dlq_xxx
 ```
 
+Start OAuth recovery for an account marked as error:
+
+```bash
+go run ./cmd/postflow accounts reauthorize --id acc_xxx
+```
+
+The command prints the provider authorization URL. Complete that browser flow before requeueing failed publications.
+
 ## Guidance
 
 - For operational inspection (`drafts list`, `schedule list`, status checks), use `--json` first, even for manual investigations. It avoids ambiguity around state, ids, timestamps, and per-platform entries.

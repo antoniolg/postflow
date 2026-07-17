@@ -450,6 +450,23 @@ func capabilityChecks() map[string]map[capabilities.Surface]parityCheck {
 				return nil
 			},
 		},
+		capabilities.CapabilityAccountsReauthorize: {
+			capabilities.SurfaceAPI: func(env *parityEnv) error {
+				id := env.seedXOAuthAccountInError("matrix_reauthorize_api")
+				env.apiReauthorizeAccount(id)
+				return nil
+			},
+			capabilities.SurfaceCLI: func(env *parityEnv) error {
+				id := env.seedXOAuthAccountInError("matrix_reauthorize_cli")
+				env.cliReauthorizeAccount(id)
+				return nil
+			},
+			capabilities.SurfaceMCP: func(env *parityEnv) error {
+				id := env.seedXOAuthAccountInError("matrix_reauthorize_mcp")
+				env.mcpReauthorizeAccount(id)
+				return nil
+			},
+		},
 		capabilities.CapabilityAccountsDelete: {
 			capabilities.SurfaceAPI: func(env *parityEnv) error {
 				id := env.apiCreateStaticAccount("linkedin", "matrix_delete_api", map[string]any{"access_token": "tok_delete_api"})

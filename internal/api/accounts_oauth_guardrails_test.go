@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -209,6 +210,52 @@ func TestHandleOAuthStartGeneratesPKCECompatibleVerifier(t *testing.T) {
 	}
 	if ok, _ := regexp.MatchString(`^[A-Za-z0-9._~-]{43,128}$`, provider.lastVerifier); !ok {
 		t.Fatalf("code_verifier contains invalid characters: %q", provider.lastVerifier)
+	}
+}
+
+func TestHandleOAuthStartBindsReauthorizationToErrorAccount(t *testing.T) {
+	store, err := db.Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+	target, err := store.UpsertAccount(t.Context(), db.UpsertAccountParams{
+		Platform: domain.PlatformX, AccountKind: domain.AccountKindDefault,
+		DisplayName: "@target", ExternalAccountID: "x-target",
+		AuthMethod: domain.AuthMethodOAuth, Status: domain.AccountStatusError,
+	})
+	if err != nil {
+		t.Fatalf("create target account: %v", err)
+	}
+
+	provider := &pkceCaptureProvider{}
+	srv := Server{
+		Store: store, DefaultMaxRetries: 3,
+		Registry: postflow.NewProviderRegistry(provider), PublicBaseURL: "https://postflow.example",
+	}
+	req := httptest.NewRequest(http.MethodPost, "/oauth/x/start", strings.NewReader(`{"account_id":"`+target.ID+`"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 starting targeted oauth, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var out struct {
+		AccountID string `json:"account_id"`
+		State     string `json:"state"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&out); err != nil {
+		t.Fatalf("decode oauth start response: %v", err)
+	}
+	if out.AccountID != target.ID {
+		t.Fatalf("expected account_id %s, got %s", target.ID, out.AccountID)
+	}
+	recorded, err := store.ConsumeOAuthState(t.Context(), out.State)
+	if err != nil {
+		t.Fatalf("consume oauth state: %v", err)
+	}
+	if recorded.TargetAccountID != target.ID {
+		t.Fatalf("expected target account binding %s, got %s", target.ID, recorded.TargetAccountID)
 	}
 }
 

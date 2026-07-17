@@ -22,6 +22,7 @@ const (
 	CapabilityAccountsCreateStatic = "accounts.create_static"
 	CapabilityAccountsConnect      = "accounts.connect"
 	CapabilityAccountsDisconnect   = "accounts.disconnect"
+	CapabilityAccountsReauthorize  = "accounts.reauthorize"
 	CapabilityAccountsDelete       = "accounts.delete"
 	CapabilityAccountsSetXPremium  = "accounts.set_x_premium"
 	CapabilityFailedList           = "failed.list"
@@ -53,6 +54,7 @@ func RequiredParityCapabilities() []Capability {
 		{ID: CapabilityAccountsCreateStatic, RequiredSurfaces: []Surface{SurfaceAPI, SurfaceMCP, SurfaceCLI}},
 		{ID: CapabilityAccountsConnect, RequiredSurfaces: []Surface{SurfaceAPI, SurfaceMCP, SurfaceCLI}},
 		{ID: CapabilityAccountsDisconnect, RequiredSurfaces: []Surface{SurfaceAPI, SurfaceMCP, SurfaceCLI}},
+		{ID: CapabilityAccountsReauthorize, RequiredSurfaces: []Surface{SurfaceAPI, SurfaceMCP, SurfaceCLI}},
 		{ID: CapabilityAccountsDelete, RequiredSurfaces: []Surface{SurfaceAPI, SurfaceMCP, SurfaceCLI}},
 		{ID: CapabilityAccountsSetXPremium, RequiredSurfaces: []Surface{SurfaceAPI, SurfaceMCP, SurfaceCLI}},
 		{ID: CapabilityFailedList, RequiredSurfaces: []Surface{SurfaceAPI, SurfaceMCP, SurfaceCLI}},

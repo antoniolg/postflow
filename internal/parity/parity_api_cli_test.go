@@ -380,6 +380,24 @@ func (e *parityEnv) seedXOAuthAccount(externalID string) string {
 	return account.ID
 }
 
+func (e *parityEnv) seedXOAuthAccountInError(externalID string) string {
+	e.t.Helper()
+	id := e.seedXOAuthAccount(externalID)
+	lastError := "expired token"
+	if err := e.store.UpdateAccountStatus(e.t.Context(), id, domain.AccountStatusError, &lastError); err != nil {
+		e.t.Fatalf("mark x oauth account as error: %v", err)
+	}
+	return id
+}
+
+func (e *parityEnv) apiReauthorizeAccount(id string) {
+	e.t.Helper()
+	raw, status := e.apiJSON(http.MethodPost, "/oauth/x/start", map[string]any{"account_id": strings.TrimSpace(id)}, "application/json")
+	if status != http.StatusOK {
+		e.t.Fatalf("reauthorize account status=%d body=%s", status, string(raw))
+	}
+}
+
 func (e *parityEnv) apiSetTimezone(timezone string) {
 	e.t.Helper()
 	raw, status := e.apiJSON(http.MethodPost, "/settings/timezone", map[string]any{"timezone": strings.TrimSpace(timezone)}, "application/json")
@@ -614,6 +632,11 @@ func (e *parityEnv) cliConnectAccount(id string) {
 func (e *parityEnv) cliDisconnectAccount(id string) {
 	e.t.Helper()
 	_ = e.runCLI("accounts", "disconnect", "--id", strings.TrimSpace(id))
+}
+
+func (e *parityEnv) cliReauthorizeAccount(id string) {
+	e.t.Helper()
+	e.runCLI("accounts", "reauthorize", "--id", strings.TrimSpace(id))
 }
 
 func (e *parityEnv) cliDeleteAccount(id string) {
