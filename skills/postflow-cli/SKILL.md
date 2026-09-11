@@ -1,6 +1,6 @@
 ---
 name: postflow-cli
-description: Use the postflow CLI to manage scheduled posts, validate/create posts, and operate DLQ entries against the PostFlow HTTP API. Use when the user asks to inspect schedule, create posts, or requeue failed publications quickly from terminal.
+description: "Manage PostFlow posts, schedules, validation, and failed-publication retries through its CLI."
 ---
 
 # PostFlow CLI
@@ -15,118 +15,11 @@ For Antonio's workflows, this is the canonical/default path for social publishin
 - Do not go hunting for env vars or API config up front.
 - If the CLI fails because base URL / token / env is missing, then ask the user to configure it or point out what is missing.
 
-## Quick Start
+## Select the operation
 
-```bash
-go run ./cmd/postflow --help
-```
+Read [commands](references/commands.md) for the specific operation. Use the installed CLI; `go run ./cmd/postflow` examples assume the PostFlow repository root. Secret-dependent commands run through `oprun`.
 
-Global defaults:
-- Base URL: `POSTFLOW_BASE_URL` or `http://localhost:8080`
-- Token: `POSTFLOW_API_TOKEN`
-
-## Core Commands
-
-For inspection commands, use `--json` by default so states, ids, and timestamps are unambiguous. This applies especially to `schedule list`, `drafts list`, and any status lookup. Only fall back to human-readable output if the user explicitly wants it.
-
-List schedule:
-
-```bash
-go run ./cmd/postflow --json schedule list \
-  --from 2026-03-01T00:00:00Z \
-  --to 2026-03-31T23:59:59Z
-
-go run ./cmd/postflow --json schedule list \
-  --view posts \
-  --from 2026-03-01T00:00:00Z \
-  --to 2026-03-31T23:59:59Z
-```
-
-Create a scheduled post:
-
-```bash
-go run ./cmd/postflow posts create \
-  --account-id acc_xxx \
-  --text "New launch post" \
-  --scheduled-at 2026-03-10T09:00:00Z \
-  --idempotency-key launch-2026-03-10
-```
-
-Create a scheduled post with media:
-
-```bash
-go run ./cmd/postflow media upload --file /path/to/card.jpg --kind image
-
-go run ./cmd/postflow posts create \
-  --account-id acc_xxx \
-  --text "New launch post" \
-  --media-id med_xxx \
-  --scheduled-at 2026-03-10T09:00:00Z \
-  --idempotency-key launch-2026-03-10
-```
-
-Create a multi-step post (root + follow-up/comment):
-
-```bash
-go run ./cmd/postflow posts create \
-  --account-id acc_xxx \
-  --segments-json '[{"text":"root post","media_ids":["med_x"]},{"text":"follow-up link https://example.com"}]' \
-  --scheduled-at 2026-03-10T09:00:00Z \
-  --idempotency-key launch-2026-03-10-thread
-```
-
-Validate payload without persisting:
-
-```bash
-go run ./cmd/postflow posts validate \
-  --account-id acc_xxx \
-  --text "Check this content" \
-  --scheduled-at 2026-03-10T09:00:00Z
-```
-
-Validate a multi-step post:
-
-```bash
-go run ./cmd/postflow posts validate \
-  --account-id acc_xxx \
-  --segments-json '[{"text":"root post"},{"text":"follow-up link https://example.com"}]' \
-  --scheduled-at 2026-03-10T09:00:00Z
-```
-
-Edit a scheduled post:
-
-```bash
-go run ./cmd/postflow posts edit \
-  --id pst_xxx \
-  --text "Updated post text" \
-  --intent schedule \
-  --scheduled-at 2026-03-10T09:30:00Z
-```
-
-Replace a scheduled post with multi-step segments:
-
-```bash
-go run ./cmd/postflow posts edit \
-  --id pst_xxx \
-  --segments-json '[{"text":"root updated"},{"text":"follow-up updated"}]' \
-  --intent schedule \
-  --scheduled-at 2026-03-10T09:30:00Z
-```
-
-Inspect and requeue dead letters:
-
-```bash
-go run ./cmd/postflow dlq list --limit 50
-go run ./cmd/postflow dlq requeue --id dlq_xxx
-```
-
-Start OAuth recovery for an account marked as error:
-
-```bash
-go run ./cmd/postflow accounts reauthorize --id acc_xxx
-```
-
-The command prints the provider authorization URL. Complete that browser flow before requeueing failed publications.
+Inspect live targets before any mutation and read them back afterward. A lookup or draft request does not authorize scheduling or publishing. Reuse explicit approval only for the same reviewed destination and payload. If authentication fails, report the redacted error and block that account's dependent work; [OAuth recovery](references/reauthorize.md) is a separate explicitly authorized operation.
 
 ## Guidance
 
