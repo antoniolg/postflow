@@ -45,16 +45,16 @@ Prefer tests that validate behavior and contracts, not implementation internals.
 
 When fixing bugs, add a regression test for the failure path when feasible.
 
-## 3) Required Validation After Each Change
+## 3) Validation by Change Risk
 
-At minimum, run:
+For Go changes, format the changed files and run focused package tests while iterating. Before handing off a completed code change, run:
 
 ```bash
 gofmt -w <changed-go-files>
 go test ./...
 ```
 
-For significant changes (new feature, refactor, infra, worker, auth, persistence), run full gate:
+Documentation-only edits need documentation/link checks and `git diff --check`, not Go test runs. For significant code changes (new feature, refactor, infra, worker, auth, persistence), run the full gate once at the handoff boundary:
 
 ```bash
 go test ./...
