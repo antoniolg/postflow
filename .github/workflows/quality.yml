@@ -22,10 +22,10 @@ jobs:
       COVERAGE_MIN_POSTFLOW: "50"
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
@@ -52,7 +52,7 @@ jobs:
           git diff --exit-code go.mod go.sum
 
       - name: Lint (golangci-lint)
-        uses: golangci/golangci-lint-action@v7
+        uses: golangci/golangci-lint-action@v9
         with:
           version: v2.9.0
           args: --config .golangci.yml --timeout=5m
