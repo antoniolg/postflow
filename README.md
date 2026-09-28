@@ -106,6 +106,7 @@ Important:
 - OAuth account connection is available for X, LinkedIn, Facebook, and Instagram.
 - LinkedIn OAuth connects personal profiles by default. Use the LinkedIn organization connection action, or `account_kind=organization` on `/oauth/linkedin/start`, to request company page scopes.
 - LinkedIn root posts with a first `http(s)` link and no attached media are published as article posts at publish time so PostFlow can send explicit unfurl metadata. If media is attached, media wins and link unfurl is skipped.
+- LinkedIn article posts send their text in LinkedIn's "little" text format, so PostFlow backslash-escapes its reserved characters (links included) and the post renders exactly as written, while `#hashtags` stay clickable. Other LinkedIn posts and comments are sent as plain text.
 - In the web UI, if an OAuth provider returns multiple accounts, PostFlow shows a selection step before saving them.
 - OAuth accounts in error show a reauthorize action. Recovery is bound to the existing account identity, and credentials are replaced only when the provider returns the same account.
 - Publish failure emails are configured from Settings, the CLI, or MCP. SMTP passwords are stored encrypted with `POSTFLOW_MASTER_KEY`.

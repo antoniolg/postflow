@@ -498,7 +498,7 @@ func (p *LinkedInProvider) publishArticlePost(ctx context.Context, actorURN, acc
 	}
 	payload := map[string]any{
 		"author":     strings.TrimSpace(actorURN),
-		"commentary": strings.TrimSpace(postText),
+		"commentary": escapeLinkedInLittleText(strings.TrimSpace(postText)),
 		"visibility": "PUBLIC",
 		"distribution": map[string]any{
 			"feedDistribution":               "MAIN_FEED",
