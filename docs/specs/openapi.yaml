@@ -381,7 +381,7 @@ paths:
   /media:
     post:
       summary: Upload a media file
-      description: Uploads are capped at 512 MiB.
+      description: Uploads are capped at 512 MiB and must finish within 15 minutes.
       requestBody:
         required: true
         content:

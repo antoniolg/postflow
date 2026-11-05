@@ -411,6 +411,11 @@ func (r *responseRecorder) WriteHeader(statusCode int) {
 	r.ResponseWriter.WriteHeader(statusCode)
 }
 
+// Unwrap lets http.ResponseController reach the connection, for per-route deadlines.
+func (r *responseRecorder) Unwrap() http.ResponseWriter {
+	return r.ResponseWriter
+}
+
 func generateRequestID() string {
 	var b [12]byte
 	if _, err := rand.Read(b[:]); err != nil {
