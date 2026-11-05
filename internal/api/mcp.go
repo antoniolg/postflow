@@ -194,6 +194,15 @@ func (s Server) newMCPHandler() http.Handler {
 	}, s.mcpDeleteMediaTool)
 
 	mcp.AddTool(server, &mcp.Tool{
+		Name:        "postflow_prune_media",
+		Description: "Delete every media item that no pending post uses: media attached only to published or canceled posts, plus media attached to no post. Files are removed permanently. Use dry_run first to see what would be deleted.",
+		Annotations: &mcp.ToolAnnotations{
+			DestructiveHint: boolPtr(true),
+			IdempotentHint:  true,
+		},
+	}, s.mcpPruneMediaTool)
+
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "postflow_requeue_failed",
 		Description: "Requeue one failed dead-letter post back to scheduled.",
 		Annotations: &mcp.ToolAnnotations{

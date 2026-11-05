@@ -891,3 +891,97 @@ func TestUploadMediaIgnoresLegacyPlatformField(t *testing.T) {
 		t.Fatalf("expected uploaded media file to be persisted")
 	}
 }
+
+func TestMediaPruneAPIDryRunThenPrune(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	makeMedia := func(name string) domain.Media {
+		path := filepath.Join(tempDir, name)
+		if err := os.WriteFile(path, []byte(name), 0o644); err != nil {
+			t.Fatalf("seed media file %s: %v", name, err)
+		}
+		item, err := store.CreateMedia(t.Context(), domain.Media{
+			Kind: "image", OriginalName: name, StoragePath: path, MimeType: "image/png", SizeBytes: int64(len(name)),
+		})
+		if err != nil {
+			t.Fatalf("create media %s: %v", name, err)
+		}
+		return item
+	}
+	orphan := makeMedia("orphan.png")
+	publishedOnly := makeMedia("published-only.png")
+	draft := makeMedia("draft.png")
+	account := createTestAccount(t, store)
+	for _, p := range []struct {
+		status domain.PostStatus
+		media  domain.Media
+	}{
+		{domain.PostStatusPublished, publishedOnly},
+		{domain.PostStatusDraft, draft},
+	} {
+		if _, err := store.CreatePost(t.Context(), db.CreatePostParams{
+			Post:     domain.Post{AccountID: account.ID, Text: string(p.status), Status: p.status, MaxAttempts: 3},
+			MediaIDs: []string{p.media.ID},
+		}); err != nil {
+			t.Fatalf("create %s post: %v", p.status, err)
+		}
+	}
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3}
+	h := srv.Handler()
+	prune := func(body string) pruneMediaResponse {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPost, "/media/prune", strings.NewReader(body))
+		req.Header.Set("content-type", "application/json")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+		var out pruneMediaResponse
+		if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+			t.Fatalf("decode prune response: %v", err)
+		}
+		return out
+	}
+	wantBytes := orphan.SizeBytes + publishedOnly.SizeBytes
+
+	preview := prune(`{"dry_run":true}`)
+	if !preview.DryRun || preview.Count != 2 || preview.FreedBytes != wantBytes {
+		t.Fatalf("unexpected dry run result: %+v", preview)
+	}
+	for _, m := range []domain.Media{orphan, publishedOnly, draft} {
+		if _, err := os.Stat(m.StoragePath); err != nil {
+			t.Fatalf("dry run must keep %s: %v", m.OriginalName, err)
+		}
+	}
+
+	done := prune(``)
+	if done.DryRun || done.Count != 2 || done.FreedBytes != wantBytes {
+		t.Fatalf("unexpected prune result: %+v", done)
+	}
+	for _, m := range []domain.Media{orphan, publishedOnly} {
+		if _, err := os.Stat(m.StoragePath); !os.IsNotExist(err) {
+			t.Fatalf("expected %s to be deleted, got err=%v", m.OriginalName, err)
+		}
+	}
+	if _, err := os.Stat(draft.StoragePath); err != nil {
+		t.Fatalf("media of a pending post must remain: %v", err)
+	}
+
+	mcpOut := func() mcpPruneMediaOutput {
+		_, out, err := srv.mcpPruneMediaTool(t.Context(), nil, mcpPruneMediaInput{DryRun: true})
+		if err != nil {
+			t.Fatalf("mcp prune: %v", err)
+		}
+		return out
+	}()
+	if mcpOut.Count != 0 {
+		t.Fatalf("expected nothing left to prune, got %+v", mcpOut)
+	}
+}

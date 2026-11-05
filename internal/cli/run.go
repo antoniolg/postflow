@@ -85,6 +85,13 @@ type deadLetterDTO struct {
 	LastError string `json:"last_error"`
 }
 
+type mediaPruneResponse struct {
+	DryRun     bool       `json:"dry_run"`
+	Count      int        `json:"count"`
+	FreedBytes int64      `json:"freed_bytes"`
+	Items      []mediaDTO `json:"items"`
+}
+
 type mediaListResponse struct {
 	Count int        `json:"count"`
 	Items []mediaDTO `json:"items"`
@@ -494,7 +501,7 @@ func runDLQ(ctx context.Context, client *APIClient, cfg config, args []string, s
 
 func runMedia(ctx context.Context, client *APIClient, cfg config, args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(stderr, "usage: postflow media <list|upload|delete> [flags]")
+		fmt.Fprintln(stderr, "usage: postflow media <list|upload|delete|prune> [flags]")
 		return 2
 	}
 	switch args[0] {
@@ -561,6 +568,29 @@ func runMedia(ctx context.Context, client *APIClient, cfg config, args []string,
 		}
 		printOutput(stdout, cfg.asJSON, out, func() {
 			fmt.Fprintf(stdout, "deleted media: %s\n", strings.TrimSpace(*id))
+		})
+		return 0
+	case "prune":
+		fs := flag.NewFlagSet("media prune", flag.ContinueOnError)
+		fs.SetOutput(stderr)
+		dryRun := fs.Bool("dry-run", false, "List what would be deleted without deleting anything")
+		if err := fs.Parse(args[1:]); err != nil {
+			return 2
+		}
+		var out mediaPruneResponse
+		if err := client.Post(ctx, "/media/prune", map[string]any{"dry_run": *dryRun}, &out); err != nil {
+			fmt.Fprintln(stderr, err.Error())
+			return 1
+		}
+		printOutput(stdout, cfg.asJSON, out, func() {
+			verb := "deleted"
+			if out.DryRun {
+				verb = "would delete"
+			}
+			fmt.Fprintf(stdout, "%s %d media (%d bytes)\n", verb, out.Count, out.FreedBytes)
+			for _, item := range out.Items {
+				fmt.Fprintf(stdout, "- %s kind=%s size=%d name=%s\n", item.ID, item.Kind, item.SizeBytes, item.OriginalName)
+			}
 		})
 		return 0
 	default:
@@ -636,6 +666,7 @@ Commands:
   media list             List media via /media
   media upload           Upload media via /media (multipart)
   media delete           Delete media via /media/{id}
+  media prune            Delete media no pending post uses via /media/prune (--dry-run to preview)
 
 Examples:
   postflow schedule list --from 2026-03-01T00:00:00Z --to 2026-03-31T23:59:59Z

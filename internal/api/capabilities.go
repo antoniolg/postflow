@@ -26,6 +26,7 @@ func HTTPExposedCapabilities() map[string]struct{} {
 		capabilities.CapabilityMediaUpload:          {},
 		capabilities.CapabilityMediaList:            {},
 		capabilities.CapabilityMediaDelete:          {},
+		capabilities.CapabilityMediaPrune:           {},
 		capabilities.CapabilitySettingsTimezone:     {},
 	}
 }
@@ -54,6 +55,7 @@ func MCPExposedCapabilities() map[string]struct{} {
 		capabilities.CapabilityMediaUpload:          {},
 		capabilities.CapabilityMediaList:            {},
 		capabilities.CapabilityMediaDelete:          {},
+		capabilities.CapabilityMediaPrune:           {},
 		capabilities.CapabilitySettingsTimezone:     {},
 	}
 }

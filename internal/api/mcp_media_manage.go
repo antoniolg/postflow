@@ -83,3 +83,36 @@ func (s Server) mcpDeleteMediaTool(ctx context.Context, _ *mcp.CallToolRequest, 
 		Media:   toMCPMediaSummary(deleted),
 	}, nil
 }
+
+type mcpPruneMediaInput struct {
+	DryRun bool `json:"dry_run,omitempty" jsonschema:"List what would be deleted without deleting anything."`
+}
+
+type mcpPruneMediaOutput struct {
+	DryRun     bool              `json:"dry_run"`
+	Count      int               `json:"count"`
+	FreedBytes int64             `json:"freed_bytes"`
+	Items      []mcpMediaSummary `json:"items"`
+}
+
+func (s Server) mcpPruneMediaTool(ctx context.Context, _ *mcp.CallToolRequest, in mcpPruneMediaInput) (*mcp.CallToolResult, mcpPruneMediaOutput, error) {
+	items, err := s.pruneMedia(ctx, in.DryRun, time.UTC)
+	if err != nil {
+		return nil, mcpPruneMediaOutput{}, err
+	}
+	summary := newPruneMediaResponse(in.DryRun, items)
+	out := mcpPruneMediaOutput{
+		DryRun:     summary.DryRun,
+		Count:      summary.Count,
+		FreedBytes: summary.FreedBytes,
+		Items:      make([]mcpMediaSummary, 0, len(items)),
+	}
+	for _, item := range items {
+		out.Items = append(out.Items, toMCPMediaSummary(item))
+	}
+	return nil, out, nil
+}
+
+func boolPtr(v bool) *bool {
+	return &v
+}

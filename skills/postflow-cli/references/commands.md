@@ -96,3 +96,10 @@ Inspect and requeue dead letters:
 go run ./cmd/postflow dlq list --limit 50
 go run ./cmd/postflow dlq requeue --id dlq_xxx
 ```
+
+Clean up media that no pending post uses (published or canceled posts, or no post). Deletion is permanent, so preview first:
+
+```bash
+go run ./cmd/postflow media prune --dry-run
+go run ./cmd/postflow media prune
+```

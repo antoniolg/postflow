@@ -147,13 +147,18 @@ func (s *Store) DeleteMediaIfUnused(ctx context.Context, mediaID string) (domain
 	return media, nil
 }
 
-func (s *Store) DeleteMediaUnusedByPendingPosts(ctx context.Context) ([]domain.Media, error) {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback()
-	rows, err := tx.QueryContext(ctx, `
+// ListMediaUnusedByPendingPosts returns the media that DeleteMediaUnusedByPendingPosts
+// would delete, without deleting anything.
+func (s *Store) ListMediaUnusedByPendingPosts(ctx context.Context) ([]domain.Media, error) {
+	return queryMediaUnusedByPendingPosts(ctx, s.db)
+}
+
+type mediaQueryer interface {
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+}
+
+func queryMediaUnusedByPendingPosts(ctx context.Context, q mediaQueryer) ([]domain.Media, error) {
+	rows, err := q.QueryContext(ctx, `
 		SELECT
 			m.id,
 			m.kind,
@@ -177,8 +182,7 @@ func (s *Store) DeleteMediaUnusedByPendingPosts(ctx context.Context) ([]domain.M
 	}
 	defer rows.Close()
 
-	deleted := make([]domain.Media, 0, 32)
-	ids := make([]string, 0, 32)
+	items := make([]domain.Media, 0, 32)
 	for rows.Next() {
 		var created string
 		var item domain.Media
@@ -194,11 +198,27 @@ func (s *Store) DeleteMediaUnusedByPendingPosts(ctx context.Context) ([]domain.M
 			return nil, err
 		}
 		item.CreatedAt, _ = time.Parse(time.RFC3339Nano, created)
-		deleted = append(deleted, item)
-		ids = append(ids, item.ID)
+		items = append(items, item)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
+	}
+	return items, nil
+}
+
+func (s *Store) DeleteMediaUnusedByPendingPosts(ctx context.Context) ([]domain.Media, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	deleted, err := queryMediaUnusedByPendingPosts(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]string, 0, len(deleted))
+	for _, item := range deleted {
+		ids = append(ids, item.ID)
 	}
 	if len(ids) == 0 {
 		if err := tx.Commit(); err != nil {

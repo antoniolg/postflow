@@ -478,9 +478,25 @@ func TestDeleteMediaUnusedByPendingPosts(t *testing.T) {
 		t.Fatalf("create failed post: %v", err)
 	}
 
+	preview, err := store.ListMediaUnusedByPendingPosts(ctx)
+	if err != nil {
+		t.Fatalf("preview purge: %v", err)
+	}
+	if before, err := store.ListMedia(ctx, 20); err != nil || len(before) != 8 {
+		t.Fatalf("preview must not delete media: count=%d err=%v", len(before), err)
+	}
+
 	deleted, err := store.DeleteMediaUnusedByPendingPosts(ctx)
 	if err != nil {
 		t.Fatalf("purge media: %v", err)
+	}
+	if len(preview) != len(deleted) {
+		t.Fatalf("preview listed %d media, purge deleted %d", len(preview), len(deleted))
+	}
+	for i := range preview {
+		if preview[i].ID != deleted[i].ID {
+			t.Fatalf("preview and purge differ at %d: %s vs %s", i, preview[i].ID, deleted[i].ID)
+		}
 	}
 	if len(deleted) != 3 {
 		t.Fatalf("expected 3 media files to be purged, got %d", len(deleted))

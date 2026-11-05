@@ -159,6 +159,7 @@ Main MCP tools available:
 - `postflow_upload_media`
 - `postflow_list_media`
 - `postflow_delete_media`
+- `postflow_prune_media`
 - `postflow_requeue_failed`
 - `postflow_delete_failed`
 - `postflow_set_timezone`
@@ -245,7 +246,11 @@ postflow accounts reauthorize --id acc_xxx
 postflow settings set-timezone --timezone Europe/Madrid
 postflow settings set-smtp --host smtp.sendgrid.net --port 587 --username apikey --password "$SMTP_PASSWORD" --from postflow@example.com --to owner@example.com
 postflow media list --limit 20
+postflow media prune --dry-run
+postflow media prune
 ```
+
+`media prune` deletes every media file that no pending post uses: media attached only to published or canceled posts, plus media attached to no post. Files are removed permanently, so run it with `--dry-run` first. It matches the "clean unused media" button in Settings, and is also available as `POST /media/prune` and the `postflow_prune_media` MCP tool.
 
 `--text` and `--segments-json` are mutually exclusive on `posts create`, `posts validate`, and `posts edit`.
 

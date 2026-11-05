@@ -34,6 +34,13 @@ func (f *fakeStore) DeleteMediaIfUnused(_ context.Context, mediaID string) (doma
 	return f.deleteOutput, nil
 }
 
+func (f *fakeStore) ListMediaUnusedByPendingPosts(_ context.Context) ([]domain.Media, error) {
+	if f.purgeErr != nil {
+		return nil, f.purgeErr
+	}
+	return f.purgeOutput, nil
+}
+
 func (f *fakeStore) DeleteMediaUnusedByPendingPosts(_ context.Context) ([]domain.Media, error) {
 	if f.purgeErr != nil {
 		return nil, f.purgeErr

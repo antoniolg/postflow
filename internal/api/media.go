@@ -3,8 +3,10 @@ package api
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -108,8 +110,21 @@ func (s Server) deleteMediaByID(ctx context.Context, mediaID string, loc *time.L
 }
 
 func (s Server) purgeMediaUnusedByPendingPosts(ctx context.Context, loc *time.Location) ([]mediaListItem, error) {
+	return s.pruneMedia(ctx, false, loc)
+}
+
+// pruneMedia deletes the media that no pending post uses: media attached only to
+// published or canceled posts, plus media attached to no post. With dryRun it only
+// lists them.
+func (s Server) pruneMedia(ctx context.Context, dryRun bool, loc *time.Location) ([]mediaListItem, error) {
 	svc := mediaapp.Service{Store: s.Store}
-	deleted, err := svc.PurgeUnusedByPendingPosts(ctx)
+	var deleted []domain.Media
+	var err error
+	if dryRun {
+		deleted, err = svc.PreviewUnusedByPendingPosts(ctx)
+	} else {
+		deleted, err = svc.PurgeUnusedByPendingPosts(ctx)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -247,6 +262,42 @@ func (s Server) handleDeleteMediaForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, withQueryValue(returnTo, "media_success", "media deleted"), http.StatusSeeOther)
+}
+
+type pruneMediaRequest struct {
+	DryRun bool `json:"dry_run"`
+}
+
+type pruneMediaResponse struct {
+	DryRun     bool            `json:"dry_run"`
+	Count      int             `json:"count"`
+	FreedBytes int64           `json:"freed_bytes"`
+	Items      []mediaListItem `json:"items"`
+}
+
+func newPruneMediaResponse(dryRun bool, items []mediaListItem) pruneMediaResponse {
+	out := pruneMediaResponse{DryRun: dryRun, Count: len(items), Items: items}
+	for _, item := range items {
+		out.FreedBytes += item.SizeBytes
+	}
+	return out
+}
+
+func (s Server) handlePruneMedia(w http.ResponseWriter, r *http.Request) {
+	var req pruneMediaRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("invalid json body: %w", err))
+		return
+	}
+	if raw := strings.TrimSpace(r.URL.Query().Get("dry_run")); raw == "true" || raw == "1" {
+		req.DryRun = true
+	}
+	items, err := s.pruneMedia(r.Context(), req.DryRun, time.UTC)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, newPruneMediaResponse(req.DryRun, items))
 }
 
 func (s Server) handlePurgeMediaForm(w http.ResponseWriter, r *http.Request) {

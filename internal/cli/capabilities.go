@@ -26,6 +26,7 @@ func ExposedCapabilities() map[string]struct{} {
 		capabilities.CapabilityMediaUpload:          {},
 		capabilities.CapabilityMediaList:            {},
 		capabilities.CapabilityMediaDelete:          {},
+		capabilities.CapabilityMediaPrune:           {},
 		capabilities.CapabilitySettingsTimezone:     {},
 	}
 }

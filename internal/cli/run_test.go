@@ -573,3 +573,44 @@ func TestRunMediaUploadInvalidJSONResponse(t *testing.T) {
 		t.Fatalf("expected invalid-json decode error, got %s", stderr.String())
 	}
 }
+
+func TestRunMediaPrune(t *testing.T) {
+	var gotDryRun []bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/media/prune" {
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		var body struct {
+			DryRun bool `json:"dry_run"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode body: %v", err)
+		}
+		gotDryRun = append(gotDryRun, body.DryRun)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"dry_run": body.DryRun, "count": 1, "freed_bytes": 12,
+			"items": []map[string]any{{"id": "med_1", "kind": "video", "size_bytes": 12, "original_name": "clip.mp4"}},
+		})
+	}))
+	defer server.Close()
+
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"media", "prune", "--dry-run"}, "would delete 1 media (12 bytes)"},
+		{[]string{"media", "prune"}, "deleted 1 media (12 bytes)"},
+	} {
+		var stdout, stderr bytes.Buffer
+		code := Run(context.Background(), append([]string{"--base-url", server.URL}, tc.args...), &stdout, &stderr)
+		if code != 0 {
+			t.Fatalf("%v: exit %d, stderr=%s", tc.args, code, stderr.String())
+		}
+		if !strings.Contains(stdout.String(), tc.want) || !strings.Contains(stdout.String(), "med_1") {
+			t.Fatalf("%v: unexpected output %s", tc.args, stdout.String())
+		}
+	}
+	if len(gotDryRun) != 2 || !gotDryRun[0] || gotDryRun[1] {
+		t.Fatalf("expected dry_run true then false, got %v", gotDryRun)
+	}
+}

@@ -31,6 +31,7 @@ const (
 	CapabilityMediaUpload          = "media.upload"
 	CapabilityMediaList            = "media.list"
 	CapabilityMediaDelete          = "media.delete"
+	CapabilityMediaPrune           = "media.prune"
 	CapabilitySettingsTimezone     = "settings.timezone"
 )
 
@@ -63,6 +64,7 @@ func RequiredParityCapabilities() []Capability {
 		{ID: CapabilityMediaUpload, RequiredSurfaces: []Surface{SurfaceAPI, SurfaceMCP, SurfaceCLI}},
 		{ID: CapabilityMediaList, RequiredSurfaces: []Surface{SurfaceAPI, SurfaceMCP, SurfaceCLI}},
 		{ID: CapabilityMediaDelete, RequiredSurfaces: []Surface{SurfaceAPI, SurfaceMCP, SurfaceCLI}},
+		{ID: CapabilityMediaPrune, RequiredSurfaces: []Surface{SurfaceAPI, SurfaceMCP, SurfaceCLI}},
 		{ID: CapabilitySettingsTimezone, RequiredSurfaces: []Surface{SurfaceAPI, SurfaceMCP, SurfaceCLI}},
 	}
 }

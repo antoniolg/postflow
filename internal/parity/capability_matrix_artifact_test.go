@@ -657,6 +657,29 @@ func capabilityChecks() map[string]map[capabilities.Surface]parityCheck {
 				return nil
 			},
 		},
+		capabilities.CapabilityMediaPrune: {
+			// Dry runs, so the other checks keep their media.
+			capabilities.SurfaceAPI: func(env *parityEnv) error {
+				_, status := env.apiJSON(http.MethodPost, "/media/prune", map[string]any{"dry_run": true}, "")
+				if status != http.StatusOK {
+					return fmt.Errorf("expected 200, got %d", status)
+				}
+				return nil
+			},
+			capabilities.SurfaceCLI: func(env *parityEnv) error {
+				code, _, stderr := env.runCLIResult("media", "prune", "--dry-run")
+				if code != 0 {
+					return fmt.Errorf("exit %d: %s", code, strings.TrimSpace(stderr))
+				}
+				return nil
+			},
+			capabilities.SurfaceMCP: func(env *parityEnv) error {
+				if msg := env.mcpCallToolError("postflow_prune_media", map[string]any{"dry_run": true}); msg != "" {
+					return errors.New(msg)
+				}
+				return nil
+			},
+		},
 		capabilities.CapabilitySettingsTimezone: {
 			capabilities.SurfaceAPI: func(env *parityEnv) error {
 				env.apiSetTimezone("Europe/Madrid")

@@ -71,6 +71,7 @@ func TestMCPStreamableHTTPExposesToolsAndCreatesPost(t *testing.T) {
 		"postflow_upload_media",
 		"postflow_list_media",
 		"postflow_delete_media",
+		"postflow_prune_media",
 		"postflow_requeue_failed",
 		"postflow_delete_failed",
 		"postflow_set_timezone",
