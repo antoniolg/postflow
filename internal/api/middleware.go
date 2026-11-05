@@ -161,6 +161,25 @@ func isPublicUploadPath(path string) bool {
 	return strings.HasPrefix(trimmed, "/uploads/")
 }
 
+// isMediaContentRead reports whether r reads a media file's bytes. Pages with many media
+// previews fire one request per file, so these reads stay out of the rate limit. Auth
+// still applies to them.
+func isMediaContentRead(r *http.Request) bool {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		return false
+	}
+	path := strings.TrimSpace(r.URL.Path)
+	if isPublicUploadPath(path) {
+		return true
+	}
+	rest, ok := strings.CutPrefix(path, "/media/")
+	if !ok {
+		return false
+	}
+	id, tail, ok := strings.Cut(rest, "/")
+	return ok && id != "" && (tail == "content" || strings.HasPrefix(tail, "content/"))
+}
+
 func isLocalAuthPublicPath(path string) bool {
 	trimmed := strings.TrimSpace(path)
 	switch trimmed {
@@ -230,7 +249,7 @@ func (s Server) rateLimitMiddleware(next http.Handler) http.Handler {
 	}
 	limiter := newInMemoryRateLimiter(s.RateLimitRPM, time.Minute)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/healthz" {
+		if r.URL.Path == "/healthz" || isMediaContentRead(r) {
 			next.ServeHTTP(w, r)
 			return
 		}

@@ -103,6 +103,52 @@ func TestRateLimitMiddlewareLimitsRequests(t *testing.T) {
 	}
 }
 
+// A page with many media previews must not spend the rate limit that other requests need.
+func TestRateLimitMiddlewareSkipsMediaContentReads(t *testing.T) {
+	tempDir := t.TempDir()
+	store, err := db.Open(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	srv := Server{Store: store, DataDir: tempDir, DefaultMaxRetries: 3, RateLimitRPM: 1}
+	h := srv.Handler()
+
+	for _, path := range []string{
+		"/media/med_a/content",
+		"/media/med_b/content/clip.mp4",
+		"/media/med_c/content/123/sig/clip.mp4",
+		"/uploads/med_d/clip.mp4",
+	} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.RemoteAddr = "127.0.0.1:5555"
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+		if w.Code == http.StatusTooManyRequests {
+			t.Fatalf("media read %s was rate limited", path)
+		}
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/schedule", nil)
+	req.RemoteAddr = "127.0.0.1:5555"
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected the next request to keep its budget, got %d", w.Code)
+	}
+
+	for _, tc := range []struct{ method, path string }{
+		{http.MethodGet, "/media"},
+		{http.MethodPost, "/media/purge"},
+		{http.MethodDelete, "/media/med_a"},
+	} {
+		if isMediaContentRead(httptest.NewRequest(tc.method, tc.path, nil)) {
+			t.Fatalf("%s %s must count against the rate limit", tc.method, tc.path)
+		}
+	}
+}
+
 func TestRequestClientLabelDoesNotExposeCredentials(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/schedule", nil)
 	req.Header.Set("Authorization", "Bearer secret-token")
