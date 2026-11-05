@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/antoniolg/postflow/internal/db"
 )
@@ -17,9 +18,21 @@ import (
 const (
 	maxUploadFieldBytes  = 8 << 10
 	uploadCopyBufferSize = 256 << 10
+	// mediaUploadWindow is how long POST /media may take. The server-wide timeouts are
+	// meant for small requests: at 10 MB/s, the 15 s read timeout stops at about 150 MB.
+	mediaUploadWindow = 15 * time.Minute
 )
 
 var maxMediaUploadBytes int64 = 512 << 20
+
+// extendUploadDeadlines gives this request mediaUploadWindow to send the file and get its
+// response. The call fails only for writers without deadlines, such as test recorders.
+func extendUploadDeadlines(w http.ResponseWriter) {
+	rc := http.NewResponseController(w)
+	deadline := time.Now().Add(mediaUploadWindow)
+	_ = rc.SetReadDeadline(deadline)
+	_ = rc.SetWriteDeadline(deadline)
+}
 
 type mediaUpload struct {
 	MediaID      string

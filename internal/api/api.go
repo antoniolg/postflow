@@ -108,6 +108,7 @@ func (s Server) appVersion() string {
 }
 
 func (s Server) handleUploadMedia(w http.ResponseWriter, r *http.Request) {
+	extendUploadDeadlines(w)
 	upload, status, err := s.saveUploadToDisk(r)
 	if err != nil {
 		writeError(w, status, err)

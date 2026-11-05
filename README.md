@@ -284,7 +284,7 @@ Full production runbook:
   - verify `PUBLIC_BASE_URL` is public/reachable from the internet (not `localhost` in production)
   - for image posts, upload JPEG or PNG (`.jpg` / `.jpeg` / `.png`)
   - for video posts, use MP4 or MOV
-  - media uploads are capped at 512 MiB
+  - media uploads are capped at 512 MiB and must finish within 15 minutes
 - CLI auth errors:
   - verify `POSTFLOW_API_TOKEN` matches server `API_TOKEN`
 
