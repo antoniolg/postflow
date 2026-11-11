@@ -86,7 +86,7 @@ func (p *LinkedInProvider) ValidateDraft(_ context.Context, _ domain.SocialAccou
 }
 
 func (p *LinkedInProvider) Publish(ctx context.Context, account domain.SocialAccount, credentials Credentials, post domain.Post, opts PublishOptions) (PublishResult, error) {
-	postText := formatPostTextForPublish(post.Text)
+	postText := formatPostTextForPublishKeeping(post.Text, linkedInMentionPattern)
 	token := strings.TrimSpace(credentials.AccessToken)
 	if token == "" {
 		return PublishResult{}, fmt.Errorf("linkedin access token missing")

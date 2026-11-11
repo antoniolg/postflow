@@ -105,3 +105,45 @@ func TestLinkedInPlainTextPathsSendMentionsAsAttributes(t *testing.T) {
 		})
 	}
 }
+
+func TestLinkedInMentionsSurviveMarkdownEmphasis(t *testing.T) {
+	tests := []struct {
+		name      string
+		in        string
+		wantText  string
+		wantAttrs string
+	}{
+		{
+			name:      "mention inside bold",
+			in:        "**Gracias @[Antonio Leiva](urn:li:person:Ab_1)** por venir",
+			wantText:  "𝗚𝗿𝗮𝗰𝗶𝗮𝘀 Antonio Leiva por venir",
+			wantAttrs: `[{"length":13,"start":15,"value":{"com.linkedin.common.MemberAttributedEntity":{"member":"urn:li:person:Ab_1"}}}]`,
+		},
+		{
+			name:      "mention wrapped in underscore italic with underscores in the id",
+			in:        "Con _@[Antonio](urn:li:person:a_b_c)_ y _más_",
+			wantText:  "Con Antonio y 𝑚á𝑠",
+			wantAttrs: `[{"length":7,"start":4,"value":{"com.linkedin.common.MemberAttributedEntity":{"member":"urn:li:person:a_b_c"}}}]`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			formatted := formatPostTextForPublishKeeping(tt.in, linkedInMentionPattern)
+			text, attrs := linkedInMentionsToAttributes(formatted)
+			if text != tt.wantText {
+				t.Fatalf("text\n got %q\nwant %q", text, tt.wantText)
+			}
+			raw, _ := json.Marshal(attrs)
+			if string(raw) != tt.wantAttrs {
+				t.Fatalf("attributes\n got %s\nwant %s", raw, tt.wantAttrs)
+			}
+		})
+	}
+}
+
+func TestFormatPostTextForPublishKeepingLeavesExistingPlaceholdersAlone(t *testing.T) {
+	in := "**hola** \U000F0000 @[A](urn:li:person:1)"
+	if got, want := formatPostTextForPublishKeeping(in, linkedInMentionPattern), formatPostTextForPublish(in); got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
