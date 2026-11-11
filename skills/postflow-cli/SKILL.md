@@ -27,6 +27,7 @@ Inspect live targets before any mutation and read them back afterward. A lookup 
 - `schedule list` returns grouped publications by default. Use `--view posts` when you need raw per-post thread metadata (`thread_group_id`, `thread_position`, `parent_post_id`, `root_post_id`).
 - Prefer `--json` when output is consumed by scripts or further tooling.
 - PostFlow preserves classic Markdown emphasis in post text. When the copy needs emphasis, keep `**bold**` and `*italic*` in the payload instead of stripping them.
+- To mention someone on LinkedIn, write `@[Name](urn:li:person:ID)` or `@[Name](urn:li:organization:ID)` in the text. `Name` must match the member's first, last or full name, or the page's full name, case sensitive, or LinkedIn shows it as plain text.
 - Use `--idempotency-key` for retries/replays of `posts create`.
 - Keep timestamps in RFC3339 for CLI/API consistency.
 - Use `--segments-json` when the user asks for "first comment", "next comment", "thread", or multiple steps in one publication.

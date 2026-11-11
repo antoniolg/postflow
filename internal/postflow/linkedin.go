@@ -145,6 +145,7 @@ func (p *LinkedInProvider) publishUGCRootPost(ctx context.Context, token, actorU
 		}
 		assetURNs = append(assetURNs, assetURN)
 	}
+	commentary, commentaryText := linkedInAttributedText(postText)
 	shareCategory := "NONE"
 	mediaPayload := make([]map[string]any, 0, len(assetURNs))
 	if len(assetURNs) > 0 {
@@ -156,7 +157,7 @@ func (p *LinkedInProvider) publishUGCRootPost(ctx context.Context, token, actorU
 			mediaPayload = append(mediaPayload, map[string]any{
 				"status": "READY",
 				"media":  urn,
-				"title":  map[string]any{"text": firstNonEmpty(strings.TrimSpace(postText), "LinkedIn media post")},
+				"title":  map[string]any{"text": firstNonEmpty(strings.TrimSpace(commentaryText), "LinkedIn media post")},
 			})
 		}
 	}
@@ -165,7 +166,7 @@ func (p *LinkedInProvider) publishUGCRootPost(ctx context.Context, token, actorU
 		"lifecycleState": "PUBLISHED",
 		"specificContent": map[string]any{
 			"com.linkedin.ugc.ShareContent": map[string]any{
-				"shareCommentary":    map[string]any{"text": postText},
+				"shareCommentary":    commentary,
 				"shareMediaCategory": shareCategory,
 				"media":              mediaPayload,
 			},
@@ -220,10 +221,11 @@ func (p *LinkedInProvider) publishComment(ctx context.Context, accessToken, acto
 		return PublishResult{}, fmt.Errorf("linkedin comment target is required")
 	}
 	objectURN := target
+	message, _ := linkedInAttributedText(strings.TrimSpace(text))
 	payload := map[string]any{
 		"actor":   strings.TrimSpace(actorURN),
 		"object":  target,
-		"message": map[string]any{"text": strings.TrimSpace(text)},
+		"message": message,
 	}
 	if parentCommentURN, ok := linkedinParentCommentURN(target); ok {
 		payload["parentComment"] = parentCommentURN
