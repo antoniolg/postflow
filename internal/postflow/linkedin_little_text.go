@@ -26,7 +26,23 @@ var linkedInLittleTextURLPattern = regexp.MustCompile(`(?i)\b(?:https?://|www\.)
 // An escape such as `\_` parses back to "_", so the detected link keeps the
 // original URL. The only URL-specific rule is that '#' is always escaped inside
 // a URL, so a fragment like "/docs#setup" does not turn into a hashtag.
+//
+// Mentions written as @[Name](urn:li:person:ID) or
+// @[Name](urn:li:organization:ID) are kept as MentionElements, with only the
+// display name escaped, so they render as links to the mentioned entity.
 func escapeLinkedInLittleText(text string) string {
+	var out strings.Builder
+	last := 0
+	for _, m := range linkedInMentionPattern.FindAllStringSubmatchIndex(text, -1) {
+		out.WriteString(escapeLinkedInLittleTextPlain(text[last:m[0]]))
+		out.WriteString("@[" + escapeLinkedInLittleTextPlain(text[m[2]:m[3]]) + "](" + text[m[4]:m[5]] + ")")
+		last = m[1]
+	}
+	out.WriteString(escapeLinkedInLittleTextPlain(text[last:]))
+	return out.String()
+}
+
+func escapeLinkedInLittleTextPlain(text string) string {
 	if !strings.ContainsAny(text, linkedInLittleTextReserved) {
 		return text
 	}
