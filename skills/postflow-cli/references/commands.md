@@ -103,3 +103,9 @@ Clean up media that no pending post uses (published or canceled posts, or no pos
 go run ./cmd/postflow media prune --dry-run
 go run ./cmd/postflow media prune
 ```
+
+Find the URN to mention a LinkedIn member: someone mentions the person by hand in a post published as a connected LinkedIn page, then read the mentions in that page's latest posts. Use the `urn` from the output in `@[Name](urn)`:
+
+```bash
+go run ./cmd/postflow --json linkedin mentions --account-id acc_page --limit 20
+```

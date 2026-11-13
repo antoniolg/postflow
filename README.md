@@ -108,6 +108,7 @@ Important:
 - LinkedIn root posts with a first `http(s)` link and no attached media are published as article posts at publish time so PostFlow can send explicit unfurl metadata. If media is attached, media wins and link unfurl is skipped.
 - LinkedIn article posts send their text in LinkedIn's "little" text format, so PostFlow backslash-escapes its reserved characters (links included) and the post renders exactly as written, while `#hashtags` stay clickable. Other LinkedIn posts and comments are sent as plain text.
 - LinkedIn mentions: write `@[Name](urn:li:person:ID)` or `@[Name](urn:li:organization:ID)` in the post text, on any LinkedIn post or comment. PostFlow publishes the name linked to that member or page. LinkedIn only links it when `Name` matches the member's first, last or full name, or the page's full name, case sensitive; otherwise the name shows as plain text.
+- The `ID` in `urn:li:person:ID` is the member id of this PostFlow LinkedIn app's API (short, like `Dk968RHxiO`), not the `ACoAA...` id from the LinkedIn website: LinkedIn gives every developer app its own member ids and rejects the others with `Invalid Urn format`. To get one, mention the person by hand in a post (or edit an existing one) published as a company page that PostFlow has connected, then run `postflow linkedin mentions --account-id acc_page` (or `GET /accounts/{id}/linkedin/mentions`, or the `postflow_list_linkedin_mentions` MCP tool). It lists the mentions in the page's latest posts with the URNs to use. Reading page posts needs the `r_organization_social` scope, so reauthorize pages connected before PostFlow requested it.
 - In the web UI, if an OAuth provider returns multiple accounts, PostFlow shows a selection step before saving them.
 - OAuth accounts in error show a reauthorize action. Recovery is bound to the existing account identity, and credentials are replaced only when the provider returns the same account.
 - Publish failure emails are configured from Settings, the CLI, or MCP. SMTP passwords are stored encrypted with `POSTFLOW_MASTER_KEY`.
@@ -149,6 +150,7 @@ Main MCP tools available:
 - `postflow_disconnect_account`
 - `postflow_reauthorize_account`
 - `postflow_set_x_premium`
+- `postflow_list_linkedin_mentions`
 - `postflow_delete_account`
 - `postflow_list_failed`
 - `postflow_create_post`
@@ -247,6 +249,7 @@ postflow accounts reauthorize --id acc_xxx
 postflow settings set-timezone --timezone Europe/Madrid
 postflow settings set-smtp --host smtp.sendgrid.net --port 587 --username apikey --password "$SMTP_PASSWORD" --from postflow@example.com --to owner@example.com
 postflow media list --limit 20
+postflow linkedin mentions --account-id acc_page --limit 20
 postflow media prune --dry-run
 postflow media prune
 ```

@@ -73,6 +73,7 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("POST /posts/validate", s.handleValidatePost)
 	mux.HandleFunc("GET /accounts", s.handleListAccounts)
 	mux.HandleFunc("POST /accounts/static", s.handleCreateStaticAccount)
+	mux.HandleFunc("GET /accounts/{id}/linkedin/mentions", s.handleListLinkedInMentions)
 	mux.HandleFunc("POST /accounts/", s.handleAccountActions)
 	mux.HandleFunc("DELETE /accounts/", s.handleDeleteAccount)
 	mux.HandleFunc("POST /oauth/select", s.handleOAuthSelect)

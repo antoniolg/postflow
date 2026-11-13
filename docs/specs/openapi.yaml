@@ -136,6 +136,65 @@ paths:
         '404':
           $ref: '#/components/responses/Error'
 
+  /accounts/{id}/linkedin/mentions:
+    get:
+      summary: List mentions in a LinkedIn page's recent posts
+      description: >-
+        Reads the latest posts of a LinkedIn organization account through the Posts API
+        and returns the people and organizations mentioned in them, most recent first and
+        without repeats. Each urn is the one this PostFlow LinkedIn app must use in
+        @[Name](urn) mentions: person ids are specific to each developer app, so a web
+        profile id (ACoAA...) is rejected. Mention the person by hand in a post from the
+        page on LinkedIn, then read it here. Needs the r_organization_social scope, so
+        pages connected before it was requested must be reauthorized.
+      parameters:
+        - $ref: '#/components/parameters/AccountID'
+        - in: query
+          name: limit
+          required: false
+          description: How many recent posts to read.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Mentions found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  account_id:
+                    type: string
+                  count:
+                    type: integer
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                          description: Display name as written in the post, unescaped.
+                          example: Ana López
+                        urn:
+                          type: string
+                          example: urn:li:person:Dk968RHxiO
+                        post_urn:
+                          type: string
+                          description: Most recent post where the mention appears.
+                          example: urn:li:share:7300000000000000000
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
+
   /accounts/{id}:
     delete:
       summary: Delete a disconnected account with no linked posts

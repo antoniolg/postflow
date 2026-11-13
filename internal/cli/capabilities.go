@@ -20,6 +20,7 @@ func ExposedCapabilities() map[string]struct{} {
 		capabilities.CapabilityAccountsReauthorize:  {},
 		capabilities.CapabilityAccountsDelete:       {},
 		capabilities.CapabilityAccountsSetXPremium:  {},
+		capabilities.CapabilityLinkedInMentions:     {},
 		capabilities.CapabilityFailedList:           {},
 		capabilities.CapabilityDLQRequeue:           {},
 		capabilities.CapabilityDLQDelete:            {},

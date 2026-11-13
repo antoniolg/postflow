@@ -103,6 +103,16 @@ func (s Server) newMCPHandler() http.Handler {
 	}, s.mcpSetXPremiumTool)
 
 	mcp.AddTool(server, &mcp.Tool{
+		Name:        "postflow_list_linkedin_mentions",
+		Description: "Read the latest posts of a LinkedIn organization account and return the people and organizations mentioned in them, with the URN this PostFlow app must use in @[Name](urn) mentions. A person's web profile id (ACoAA...) does not work: mention the person by hand in a post from the page on LinkedIn, then read it here.",
+		Annotations: &mcp.ToolAnnotations{
+			ReadOnlyHint:   true,
+			IdempotentHint: true,
+			OpenWorldHint:  boolPtr(true),
+		},
+	}, s.mcpListLinkedInMentionsTool)
+
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "postflow_delete_account",
 		Description: "Delete a disconnected account with no linked posts.",
 		Annotations: &mcp.ToolAnnotations{

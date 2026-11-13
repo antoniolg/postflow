@@ -152,6 +152,8 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return runDLQ(ctx, client, cfg, rest[1:], stdout, stderr)
 	case "media":
 		return runMedia(ctx, client, cfg, rest[1:], stdout, stderr)
+	case "linkedin":
+		return runLinkedIn(ctx, client, cfg, rest[1:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "unknown command: %s\n\n", rest[0])
 		printHelp(stderr)
@@ -667,6 +669,7 @@ Commands:
   media upload           Upload media via /media (multipart)
   media delete           Delete media via /media/{id}
   media prune            Delete media no pending post uses via /media/prune (--dry-run to preview)
+  linkedin mentions      List mentions (with their API URNs) in a LinkedIn page's recent posts
 
 Examples:
   postflow schedule list --from 2026-03-01T00:00:00Z --to 2026-03-31T23:59:59Z

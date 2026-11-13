@@ -25,6 +25,7 @@ const (
 	CapabilityAccountsReauthorize  = "accounts.reauthorize"
 	CapabilityAccountsDelete       = "accounts.delete"
 	CapabilityAccountsSetXPremium  = "accounts.set_x_premium"
+	CapabilityLinkedInMentions     = "linkedin.mentions"
 	CapabilityFailedList           = "failed.list"
 	CapabilityDLQRequeue           = "dlq.requeue"
 	CapabilityDLQDelete            = "dlq.delete"
@@ -58,6 +59,7 @@ func RequiredParityCapabilities() []Capability {
 		{ID: CapabilityAccountsReauthorize, RequiredSurfaces: []Surface{SurfaceAPI, SurfaceMCP, SurfaceCLI}},
 		{ID: CapabilityAccountsDelete, RequiredSurfaces: []Surface{SurfaceAPI, SurfaceMCP, SurfaceCLI}},
 		{ID: CapabilityAccountsSetXPremium, RequiredSurfaces: []Surface{SurfaceAPI, SurfaceMCP, SurfaceCLI}},
+		{ID: CapabilityLinkedInMentions, RequiredSurfaces: []Surface{SurfaceAPI, SurfaceMCP, SurfaceCLI}},
 		{ID: CapabilityFailedList, RequiredSurfaces: []Surface{SurfaceAPI, SurfaceMCP, SurfaceCLI}},
 		{ID: CapabilityDLQRequeue, RequiredSurfaces: []Surface{SurfaceAPI, SurfaceMCP, SurfaceCLI}},
 		{ID: CapabilityDLQDelete, RequiredSurfaces: []Surface{SurfaceAPI, SurfaceMCP, SurfaceCLI}},

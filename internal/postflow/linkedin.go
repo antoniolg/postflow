@@ -31,7 +31,7 @@ type LinkedInProvider struct {
 }
 
 const linkedInPersonalOAuthScope = "openid profile w_member_social"
-const linkedInOrganizationOAuthScope = linkedInPersonalOAuthScope + " rw_organization_admin w_organization_social"
+const linkedInOrganizationOAuthScope = linkedInPersonalOAuthScope + " rw_organization_admin w_organization_social r_organization_social"
 const linkedInRESTVersion = "202601"
 
 func NewLinkedInProvider(cfg LinkedInProviderConfig) *LinkedInProvider {

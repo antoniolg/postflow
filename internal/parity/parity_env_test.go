@@ -51,6 +51,9 @@ func newParityEnv(t *testing.T) *parityEnv {
 		t.Fatalf("upsert account: %v", err)
 	}
 
+	linkedInAPI := httptest.NewServer(fakeLinkedInPostsHandler())
+	t.Cleanup(linkedInAPI.Close)
+
 	token := "tok_parity"
 	srv := api.Server{
 		Store:             store,
@@ -59,7 +62,7 @@ func newParityEnv(t *testing.T) *parityEnv {
 		APIToken:          token,
 		Registry: postflow.NewProviderRegistry(
 			postflow.NewXProvider(postflow.XConfig{ClientID: "parity-client-id"}),
-			postflow.NewLinkedInProvider(postflow.LinkedInProviderConfig{}),
+			postflow.NewLinkedInProvider(postflow.LinkedInProviderConfig{APIBaseURL: linkedInAPI.URL}),
 			postflow.NewFacebookProvider(postflow.MetaProviderConfig{}),
 			postflow.NewInstagramProvider(postflow.MetaProviderConfig{}),
 		),

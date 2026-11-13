@@ -383,7 +383,7 @@ func TestLinkedInRefreshOAuthAndCallbackFlows(t *testing.T) {
 				t.Fatalf("expected oauth scope %q in auth url, got %q", expected, query.Get("scope"))
 			}
 		}
-		rejectedScopes := []string{"rw_organization_admin", "w_organization_social"}
+		rejectedScopes := []string{"rw_organization_admin", "w_organization_social", "r_organization_social"}
 		for _, rejected := range rejectedScopes {
 			if slices.Contains(scope, rejected) {
 				t.Fatalf("did not expect organization oauth scope %q in personal auth url, got %q", rejected, query.Get("scope"))
@@ -410,7 +410,7 @@ func TestLinkedInRefreshOAuthAndCallbackFlows(t *testing.T) {
 			t.Fatalf("parse auth url: %v", err)
 		}
 		scope := strings.Fields(parsed.Query().Get("scope"))
-		expectedScopes := []string{"openid", "profile", "w_member_social", "rw_organization_admin", "w_organization_social"}
+		expectedScopes := []string{"openid", "profile", "w_member_social", "rw_organization_admin", "w_organization_social", "r_organization_social"}
 		for _, expected := range expectedScopes {
 			if !slices.Contains(scope, expected) {
 				t.Fatalf("expected oauth scope %q in auth url, got %q", expected, parsed.Query().Get("scope"))

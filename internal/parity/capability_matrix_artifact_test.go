@@ -504,6 +504,30 @@ func capabilityChecks() map[string]map[capabilities.Surface]parityCheck {
 				return nil
 			},
 		},
+		capabilities.CapabilityLinkedInMentions: {
+			capabilities.SurfaceAPI: func(env *parityEnv) error {
+				id := env.seedLinkedInOrganizationAccount("matrix_mentions_api")
+				if _, status := env.apiJSON(http.MethodGet, "/accounts/"+id+"/linkedin/mentions", nil, ""); status != http.StatusOK {
+					return fmt.Errorf("expected 200, got %d", status)
+				}
+				return nil
+			},
+			capabilities.SurfaceCLI: func(env *parityEnv) error {
+				id := env.seedLinkedInOrganizationAccount("matrix_mentions_cli")
+				code, _, stderr := env.runCLIResult("linkedin", "mentions", "--account-id", id)
+				if code != 0 {
+					return fmt.Errorf("exit %d: %s", code, strings.TrimSpace(stderr))
+				}
+				return nil
+			},
+			capabilities.SurfaceMCP: func(env *parityEnv) error {
+				id := env.seedLinkedInOrganizationAccount("matrix_mentions_mcp")
+				if msg := env.mcpCallToolError("postflow_list_linkedin_mentions", map[string]any{"account_id": id}); msg != "" {
+					return errors.New(msg)
+				}
+				return nil
+			},
+		},
 		capabilities.CapabilityFailedList: {
 			capabilities.SurfaceAPI: func(env *parityEnv) error {
 				_, status := env.apiJSON(http.MethodGet, "/dlq?limit=10", nil, "")
