@@ -5101,10 +5101,10 @@
                   </button>
                 </form>
                 {{end}}
-                {{if and (eq .Status "error") (eq .AuthMethod "oauth")}}
+                {{if and (ne .Status "disconnected") (eq .AuthMethod "oauth")}}
                 <form method="post" action="/oauth/{{.Platform}}/start">
                   <input type="hidden" name="account_id" value="{{.ID}}" />
-                  <button type="submit" class="btn-primary" aria-label="{{t "settings.reauthorize_account"}}" title="{{t "settings.reauthorize"}}">{{t "settings.reauthorize"}}</button>
+                  <button type="submit" class="{{if eq .Status "error"}}btn-primary{{else}}btn-secondary{{end}}" aria-label="{{t "settings.reauthorize_account"}}" title="{{t "settings.reauthorize"}}">{{t "settings.reauthorize"}}</button>
                 </form>
                 {{end}}
               </div>

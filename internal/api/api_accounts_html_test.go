@@ -92,6 +92,17 @@ func TestSettingsViewRendersAccountsBlockWithActions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create linkedin error account: %v", err)
 	}
+	connectedPage, err := store.UpsertAccount(t.Context(), db.UpsertAccountParams{
+		Platform:          domain.PlatformLinkedIn,
+		AccountKind:       domain.AccountKindOrganization,
+		DisplayName:       "LinkedIn Page",
+		ExternalAccountID: "li-page",
+		AuthMethod:        domain.AuthMethodOAuth,
+		Status:            domain.AccountStatusConnected,
+	})
+	if err != nil {
+		t.Fatalf("create connected linkedin page: %v", err)
+	}
 
 	req := httptest.NewRequest(http.MethodGet, "/?view=settings", nil)
 	w := httptest.NewRecorder()
@@ -117,6 +128,12 @@ func TestSettingsViewRendersAccountsBlockWithActions(t *testing.T) {
 	}
 	if !strings.Contains(body, "action=\"/oauth/linkedin/start\">") || !strings.Contains(body, "name=\"account_id\" value=\""+errorAccount.ID+"\"") {
 		t.Fatalf("expected targeted oauth reauthorization action for account in error")
+	}
+	if !strings.Contains(body, "name=\"account_id\" value=\""+connectedPage.ID+"\"") {
+		t.Fatalf("expected targeted oauth reauthorization action for connected oauth account")
+	}
+	if strings.Contains(body, "name=\"account_id\" value=\""+liAccount.ID+"\"") {
+		t.Fatalf("did not expect reauthorization action for disconnected account")
 	}
 	for _, oauthStartPath := range []string{
 		"action=\"/oauth/x/start\"",

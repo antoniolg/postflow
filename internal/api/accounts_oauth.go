@@ -179,8 +179,8 @@ func (s Server) oauthReauthorizationTarget(ctx context.Context, platform domain.
 	if account.AuthMethod != domain.AuthMethodOAuth {
 		return domain.SocialAccount{}, errors.New("only oauth accounts can be reauthorized")
 	}
-	if account.Status != domain.AccountStatusError {
-		return domain.SocialAccount{}, errors.New("only accounts in error can be reauthorized")
+	if account.Status == domain.AccountStatusDisconnected {
+		return domain.SocialAccount{}, errors.New("disconnected accounts cannot be reauthorized; connect them first")
 	}
 	return account, nil
 }

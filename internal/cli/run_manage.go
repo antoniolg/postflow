@@ -276,7 +276,7 @@ func runAccounts(ctx context.Context, client *APIClient, cfg config, args []stri
 func runAccountReauthorize(ctx context.Context, client *APIClient, cfg config, args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("accounts reauthorize", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	id := fs.String("id", "", "OAuth account ID in error")
+	id := fs.String("id", "", "OAuth account ID (connected or in error)")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}

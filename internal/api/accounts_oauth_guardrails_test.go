@@ -272,3 +272,38 @@ func resetRecentOAuthCallbackOutcomes(t *testing.T) {
 		})
 	})
 }
+
+func TestHandleOAuthStartReauthorizesConnectedButNotDisconnectedAccounts(t *testing.T) {
+	store, err := db.Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+	srv := Server{
+		Store: store, DefaultMaxRetries: 3,
+		Registry: postflow.NewProviderRegistry(&pkceCaptureProvider{}), PublicBaseURL: "https://postflow.example",
+	}
+	for _, tc := range []struct {
+		status domain.AccountStatus
+		want   int
+	}{
+		{domain.AccountStatusConnected, http.StatusOK},
+		{domain.AccountStatusDisconnected, http.StatusBadRequest},
+	} {
+		account, err := store.UpsertAccount(t.Context(), db.UpsertAccountParams{
+			Platform: domain.PlatformX, AccountKind: domain.AccountKindDefault,
+			DisplayName: "@" + string(tc.status), ExternalAccountID: "x-" + string(tc.status),
+			AuthMethod: domain.AuthMethodOAuth, Status: tc.status,
+		})
+		if err != nil {
+			t.Fatalf("create %s account: %v", tc.status, err)
+		}
+		req := httptest.NewRequest(http.MethodPost, "/oauth/x/start", strings.NewReader(`{"account_id":"`+account.ID+`"}`))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != tc.want {
+			t.Fatalf("%s account: expected %d, got %d body=%s", tc.status, tc.want, rec.Code, rec.Body.String())
+		}
+	}
+}
