@@ -107,16 +107,39 @@ func (c *XClient) uploadAppendOAuth2(ctx context.Context, mediaID string, media 
 	}
 	defer f.Close()
 
+	filename := filepath.Base(firstNonEmpty(strings.TrimSpace(media.OriginalName), media.StoragePath, mediaID+".bin"))
+	buf := make([]byte, uploadChunkSize)
+	for segment := 0; ; segment++ {
+		n, readErr := io.ReadFull(f, buf)
+		if readErr == io.EOF {
+			if segment == 0 {
+				return errors.New("x upload append: media file is empty")
+			}
+			return nil
+		}
+		if readErr != nil && readErr != io.ErrUnexpectedEOF {
+			return fmt.Errorf("x upload append segment %d: read media: %w", segment, readErr)
+		}
+		if err := c.uploadAppendSegmentOAuth2(ctx, mediaID, filename, segment, buf[:n]); err != nil {
+			return err
+		}
+		if readErr == io.ErrUnexpectedEOF {
+			return nil
+		}
+	}
+}
+
+func (c *XClient) uploadAppendSegmentOAuth2(ctx context.Context, mediaID, filename string, segment int, chunk []byte) error {
 	var body bytes.Buffer
 	mw := multipart.NewWriter(&body)
-	if err := mw.WriteField("segment_index", "0"); err != nil {
+	if err := mw.WriteField("segment_index", strconv.Itoa(segment)); err != nil {
 		return err
 	}
-	part, err := mw.CreateFormFile("media", filepath.Base(firstNonEmpty(strings.TrimSpace(media.OriginalName), media.StoragePath, mediaID+".bin")))
+	part, err := mw.CreateFormFile("media", filename)
 	if err != nil {
 		return err
 	}
-	if _, err := io.Copy(part, f); err != nil {
+	if _, err := part.Write(chunk); err != nil {
 		return err
 	}
 	if err := mw.Close(); err != nil {
@@ -132,12 +155,12 @@ func (c *XClient) uploadAppendOAuth2(ctx context.Context, mediaID string, media 
 	c.authorizeRequest(req)
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return err
+		return fmt.Errorf("x upload append segment %d: %w", segment, err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
-		return fmt.Errorf("x upload append failed: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
+		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+		return fmt.Errorf("x upload append failed: segment=%d status=%d body=%s", segment, resp.StatusCode, strings.TrimSpace(string(respBody)))
 	}
 	return nil
 }
