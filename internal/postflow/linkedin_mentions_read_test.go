@@ -52,6 +52,35 @@ func TestLinkedInListMentionsReadsOrganizationPosts(t *testing.T) {
 	}
 }
 
+// LinkedIn escapes reserved characters inside the URN too: a person id with an
+// underscore comes back as `\_`, and the mention must still be listed with the
+// plain URN that LinkedIn accepts when publishing.
+func TestLinkedInListMentionsUnescapesURNs(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, `{"elements":[
+			{"id":"urn:li:share:7528042579502940161","commentary":"Página: @[Welcome to La Secta](urn:li:organization:110315077)\nAntonio: @[Antonio Leiva](urn:li:person:DkWdxg\\_LWJ)\nJuanje: @[Juan Jesús Cilla Ugarte](urn:li:person:S37-9EET\\_x)\nMáximo: @[Maximo Fernandez Nuñez](urn:li:person:UDjAAWrxlv)"}
+		]}`)
+	}))
+	defer server.Close()
+
+	provider := NewLinkedInProvider(LinkedInProviderConfig{APIBaseURL: server.URL})
+	account := domain.SocialAccount{Platform: domain.PlatformLinkedIn, AccountKind: domain.AccountKindOrganization, ExternalAccountID: "110315077"}
+	got, err := provider.ListMentions(context.Background(), account, Credentials{AccessToken: "li-token"}, 5)
+	if err != nil {
+		t.Fatalf("list mentions: %v", err)
+	}
+	post := "urn:li:share:7528042579502940161"
+	want := []Mention{
+		{Name: "Welcome to La Secta", URN: "urn:li:organization:110315077", PostURN: post},
+		{Name: "Antonio Leiva", URN: "urn:li:person:DkWdxg_LWJ", PostURN: post},
+		{Name: "Juan Jesús Cilla Ugarte", URN: "urn:li:person:S37-9EET_x", PostURN: post},
+		{Name: "Maximo Fernandez Nuñez", URN: "urn:li:person:UDjAAWrxlv", PostURN: post},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("mentions\n got %+v\nwant %+v", got, want)
+	}
+}
+
 func TestLinkedInListMentionsRejectsPersonalAccounts(t *testing.T) {
 	provider := NewLinkedInProvider(LinkedInProviderConfig{APIBaseURL: "http://127.0.0.1:1"})
 	account := domain.SocialAccount{Platform: domain.PlatformLinkedIn, AccountKind: domain.AccountKindPersonal, ExternalAccountID: "DkWdxg_LWJ"}

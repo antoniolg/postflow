@@ -38,9 +38,11 @@ type MentionLister interface {
 
 // linkedInReadMentionPattern matches a MentionElement in the little text that
 // the Posts API returns as `commentary`. Unlike linkedInMentionPattern, which
-// matches what people write, the display name here is little text, so it may
-// hold escaped reserved characters such as `\_`, `\(` or `\]`.
-var linkedInReadMentionPattern = regexp.MustCompile(`@\[((?:\\.|[^\\\[\]\n])+)\]\((urn:li:(?:person|organization):[A-Za-z0-9_-]+)\)`)
+// matches what people write, both the display name and the URN here are little
+// text, so they may hold escaped reserved characters such as `\_`, `\(` or
+// `\]`: LinkedIn returns a person URN like `urn:li:person:Ab_1` as
+// `urn:li:person:Ab\_1`.
+var linkedInReadMentionPattern = regexp.MustCompile(`@\[((?:\\.|[^\\\[\]\n])+)\]\((urn:li:(?:person|organization):(?:\\[_-]|[A-Za-z0-9_-])+)\)`)
 
 // ListMentions reads the latest posts of a LinkedIn organization and returns
 // the people and organizations mentioned in them, most recent first and without
@@ -113,12 +115,12 @@ func (p *LinkedInProvider) ListMentions(ctx context.Context, account domain.Soci
 }
 
 // parseLinkedInLittleTextMentions returns the mentions in little text, with
-// the display names unescaped.
+// the display names and URNs unescaped.
 func parseLinkedInLittleTextMentions(text string) []Mention {
 	matches := linkedInReadMentionPattern.FindAllStringSubmatch(text, -1)
 	mentions := make([]Mention, 0, len(matches))
 	for _, m := range matches {
-		mentions = append(mentions, Mention{Name: unescapeLinkedInLittleText(m[1]), URN: m[2]})
+		mentions = append(mentions, Mention{Name: unescapeLinkedInLittleText(m[1]), URN: unescapeLinkedInLittleText(m[2])})
 	}
 	return mentions
 }
